@@ -75,24 +75,14 @@ class Image( BaseObject ):
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
-    _properties = dict(
-        filename = None,
-        data     = None,
-        header   = None,
-        variance = None,
-        )
-    
-    _side_properties = dict(
-        wcs      = None,
-        )
-    
-    _derived_properties = dict(
-        fits     = None,
-        )
+    _properties_keys         = ["filename","data","header",
+                                "variance"]
+    _side_properties_keys    = ["wcs"]
+    _derived_properties_keys = ["fits"]
     
     # Where in the fitsfile the data are
     _image_property = dict(
-        data_index = 0,
+        data_index = 0
         )
     
     # =========================== #
@@ -112,6 +102,7 @@ class Image( BaseObject ):
                                    (Careful with that)
                                    
         """
+        self.__build__()
         if empty:
             return
         
@@ -147,7 +138,7 @@ class Image( BaseObject ):
         # -- Check if you will not overwrite anything
         if self.data is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
-                                 " Set force_it to True if you really known what you are doing")
+                    " Set force_it to True if you really known what you are doing")
 
         # -------------------------- #
         #  Check The input           #
@@ -159,7 +150,7 @@ class Image( BaseObject ):
 
         data = fits[index].data
         if data is None:
-            raise ValueError("no 'data' in the given fits file for the given index (%d)"%index)
+            raise ValueError("no 'data' in the given fits file for the given index")
         
         # -------------------------- #
         #  Everythin looks good !    #
@@ -209,7 +200,7 @@ class Image( BaseObject ):
         
         
     def pixel_to_coords(self,pixel_x,pixel_y):
-        """Return the coordinate (ra,dec ; degree) associated to the given pixel (x,y)"""
+        """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
         
@@ -246,7 +237,8 @@ class Image( BaseObject ):
             fig = mpl.figure(figsize=[8,8])
             ax = fig.add_axes([0.1,0.1,0.8,0.8])
         elif "imshow" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. no imshow available")
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
 
         # ----------- #
         # -  What
@@ -353,10 +345,6 @@ class Image( BaseObject ):
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded")
         return self.wcs.getImageMinMaxWCSCoords()
-    
-#        xmin,ymin = self.pixel_to_coords(0,0)
-#        xmax,ymax = self.pixel_to_coords(self.width,self.height)
-#        return [xmin,xmax,ymin,ymax]
 
     @property
     def _worldcoords_bbox(self):
@@ -379,9 +367,6 @@ class Aperture( Image ):
     a position in a sky and a redshift. This combination enables
     to derive aperture photometry around this AstroObject. 
     """
-
-    #_properties = Image._properties
-    #_properties["object"] = None
     
     @_autogen_docstring_inheritance(Image.__init__,"Image.__init__")
     def __init__(self,astrobject,*args,**kwargs):
@@ -389,6 +374,7 @@ class Aperture( Image ):
         # - Add the astrobject associated tools
         #
         super(Aperture,self).__init__(*args,**kwargs)
+        self._properties_keys.append("object")
         self.change_object(astrobject)
 
 
@@ -459,11 +445,14 @@ class Aperture( Image ):
         # - Is that a relevant one ?
         if test_inclusion:
             if self.has_wcs() is False:
-                print "WARNING: because there is no wcs solution, I can't test the inclusion of the new astrobject"
+                print "WARNING: because there is no wcs solution, "+\
+                  "I can't test the inclusion of the new astrobject"
             else:
                 if not self.wcs.coordsAreInImage(*newastrobject.radec):
-                    raise ValueError("The new 'astrobject' is not inside the image boundaries"+ "\n"+\
-                                     "--> object radec: %.3f,%.4f"%(newastrobject.ra,newastrobject.dec))
+                    raise ValueError("The new 'astrobject' is not inside the image "+\
+                                      " boundaries"+ "\n"+\
+                                     "--> object radec: %.3f,%.4f"%(newastrobject.ra,
+                                                                    newastrobject.dec))
         # -- Seems Ok -- #
         self._properties["object"] = newastrobject.copy()
         

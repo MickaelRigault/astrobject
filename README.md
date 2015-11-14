@@ -9,6 +9,7 @@ Python
 **Requirements:**
 
 - numpy
+- scipy
 - pyfits
 - pickle
 - matplotlib

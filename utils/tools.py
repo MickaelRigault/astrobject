@@ -39,3 +39,31 @@ def dump_pkl(data,filename,**kwargs):
     
     dump(data, outfile,**kwargs)
     outfile.close()
+
+
+def shape_ajustment(X,Y,model_X,k=4,verbose=False):
+    """
+    return  Y /w the same binning as model_X  in their commun wavelength
+    """
+    def  commun_wavelength(x1,x2):
+        """
+        """
+        flagx1 = (x1>=x2.min()) & (x1<=x2.max())
+        flagx2 = (x2>=x1.min()) & (x2<=x1.max())
+        return flagx1,flagx2
+        
+    from scipy.interpolate import UnivariateSpline
+    flagX,flagmodel = commun_wavelength(X,model_X)
+    Yrebin = UnivariateSpline(X[flagX], Y[flagX],k=k,s=0)(model_X)
+    
+    if len(Yrebin)==len(model_X):
+        return Yrebin
+    else:
+        if verbose:
+            print 'WARNING [shape_adjustment] non-mached shape ... I am fixing that'
+        
+        YrebinOK = N.empty((len(Yrebin)+1),)
+        YrebinOK[1:] = Yrebin
+        YrebinOK[0]  = Yrebin[0]
+        
+        return YrebinOK

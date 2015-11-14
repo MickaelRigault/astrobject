@@ -42,7 +42,8 @@ def astrobject(name,zcmb,ra,dec,
     type_:[string]             type of the astro-object (galaxy, sn, Ia, Ibc...)
                                (no predifined list type so far, but this could append)
 
-    forced_mwebmv: [float]      Force the Milky way extinction for this object. Otherwise this
+    forced_mwebmv: [float]     Force the Milky way extinction for this object.
+                               Otherwise this
                                extinction depend on the object *radec*.
                                ->Use this use Caution<-
                                    
@@ -75,17 +76,35 @@ def astrobject(name,zcmb,ra,dec,
 
 class BaseObject( object ):
     """The zero Level Structure that has the basic tools"""
-    _properties         = {}
-    _side_properties    = {}
-    _derived_properties = {}
+    _properties_keys         = []
+    _side_properties_keys    = []
+    _derived_properties_keys = []
 
+    def __init__(self):
+        self.__build__()
+        
+    def __build__(self):
+        """Create the properties dictionary"""
+        self._properties = {}
+        for k in self._properties_keys:
+            self._properties[k] = None
+            
+        self._side_properties = {}
+        for k in self._side_properties_keys:
+            self._side_properties[k] = None
+
+        self._derived_properties = {}
+        for k in self._derived_properties_keys:
+            self._derived_properties[k] = None
+            
+    
     def copy(self):
         """returns an independent copy of the current object"""
         newobject = copy.deepcopy(self)
         # -- This to be 100% sure
-        newobject._properties         = self._properties.copy()
-        newobject._side_properties    = self._side_properties.copy()
-        newobject._derived_properties = self._derived_properties.copy()
+        newobject._properties         = copy.deepcopy(self._properties)
+        newobject._side_properties    = copy.deepcopy(self._side_properties)
+        newobject._derived_properties = copy.deepcopy(self._derived_properties)
         newobject._update_()
         
         return newobject
@@ -114,32 +133,19 @@ class AstroObject( BaseObject ):
     """
     # -- This is set to ease inheritance and tests -- #
     # If you change that, function that needs astrobject
-    # could crash (i.e. astroimages.Aperture) 
+    # could crash (i.e. astroimages.Aperture)
+     
     __nature__ = "AstroObject"
     
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
-    _properties = dict(
-        zcmb   = None,
-        ra     = None,
-        dec    = None,
-        name   = None,
-        )
+    _properties_keys         = ["zcmb","ra","dec","name"]
+    _side_properties_keys    = ["cosmology","litrature_name",
+                                "type","mwebmv"]
+    _derived_properties_keys = ["distmeter","distmpc",
+                                "arc_per_kpc"]
     
-    # --- If you have it good 
-    _side_properties = dict(
-        cosmology = COSMO_DEFAULT,
-        _litrature_name = None, # could move to derived
-        type   = None,
-        mwebmv = None, # could move to derived
-        )
-    # --- Derived from the others
-    _derived_properties = dict(
-        distmeter   = None,
-        distmpc     = None,
-        arc_per_kpc = None,
-        )
 
     # =========================== #
     # = Initialization          = #
@@ -181,6 +187,8 @@ class AstroObject( BaseObject ):
         -------
         Void
         """
+        self.__build__()
+        
         if empty:
             return
         
@@ -214,19 +222,7 @@ class AstroObject( BaseObject ):
                                side_properties={}):
         """
         """
-        
-    #def copy(self):
-    #    """Copy the current object and return a new one"""
-    #    newobject = AstroObject(empty=True)
-    #    # copy of *all* properties are needed to avoid
-    #    # the new object to still be bound with this one.
-    #    
-    #    newobject._properties = self._properties.copy()
-    #    newobject._side_properties = self._side_properties.copy()
-    #    newobject._derived_properties = self._derived_properties.copy()
-    #    newobject._update_()
-    #    
-    #    return newobject
+        pass
         
     def writeto(self,output_file,**kwargs):
         """
@@ -246,7 +242,8 @@ class AstroObject( BaseObject ):
             
         for k in self._fundamental_parameters:
             if k not in candidatepkl.keys():
-                raise AttributeError("'%s' is a requested fundamental parameter and is not in the input dictionnary"%k)
+                raise AttributeError("'%s' is a requested fundamental "+\
+                                     "parameter and is not in the input dictionnary"%k)
 
         self.define(candidatepkl["name"],candidatepkl["zcmb"],
                     candidatepkl["ra"],candidatepkl["dec"],
@@ -267,7 +264,7 @@ class AstroObject( BaseObject ):
     
     @property
     def _litrature_name(self):
-        return self._side_properties["_litrature_name"]
+        return self._side_properties["litrature_name"]
     
     @name.setter
     def name(self,value):
@@ -316,8 +313,9 @@ class AstroObject( BaseObject ):
     
     def set_mwebmv(self,value,force_it=False):
         if force_it is False:
-            raise AssertionError("You should not manually change mwebmv, it is bound to the object coordinate."+\
-                                 "Set force_it to True if you really know what you are doing.")
+            raise AssertionError("You should not manually change mwebmv, "+\
+                                 "it is bound to the object coordinate."+\
+                    "Set force_it to True if you really know what you are doing.")
         self._side_properties["mwebmv"] = value
     
     # ------------------ #
@@ -380,7 +378,7 @@ class AstroObject( BaseObject ):
     def _check_litrature_name_(self,verbose=False):
         if verbose:print "_check_litrature_name_ to be done"
         if self.name is None:
-            self._side_properties["_litrature_name"] = None
+            self._side_properties["litrature_name"] = None
         
     def _update_distance_(self):
         if self.cosmo is None:
