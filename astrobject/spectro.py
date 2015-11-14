@@ -125,8 +125,10 @@ class Spectrum( BaseObject ):
         
     _side_properties_keys = ["astrobject"]
 
-    
 
+    # =========================== #
+    # = Constructor             = #
+    # =========================== #
     def __init__(self,filename=None,empty=False,**kwargs):
         """
         """

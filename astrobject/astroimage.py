@@ -82,7 +82,7 @@ class Image( BaseObject ):
     
     # Where in the fitsfile the data are
     # =========================== #
-    # = Initialization          = #
+    # = Constructor             = #
     # =========================== #
     def __init__(self,filename,empty=False,**kwargs):
         """
@@ -149,6 +149,7 @@ class Image( BaseObject ):
 
         index = self._build_property["data_index"] if index is None \
           else index
+          
         # -------------------------- #
         #  Check The input           #
         # -------------------------- #
@@ -170,16 +171,32 @@ class Image( BaseObject ):
         except:
             wcs_ = None
             
-        self.define(data,None,fits[index].header,wcs_,
+        self.create(data,None,fits[index].header,wcs_,
                     filename,fits)
         
-    def define(self,data,variance,header,wcs,
-               filename,fits):
+    def create(self,data,variance,header,wcs,
+               filename,fits,force_it=False):
         """
-        Define image using by filling its different component. Each of them
-        can be None, but in that case, their corresponding method and derived
-        values won't be avialable.
+        Create the image-object using by filling its different component.
+        Each of them can be None, but in that case, their corresponding method
+        and derived values won't be avialable.
+
+        Parameters
+        ----------
+        force_it: [bool]           If the data already exist, this method
+                                   will raise an execption except if you set
+                                   *force_it* to True. Be Careful with this.
+
+        Return
+        ------
+        Void
         """
+        # -- Check if you will not overwrite anything
+        if self.data is not None and force_it is False:
+            raise AttributeError("'data' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+            
+        # -- Setup the object
         self._properties["filename"]     = filename
         self._derived_properties["fits"] = fits
         # basics data and wcs
@@ -205,7 +222,7 @@ class Image( BaseObject ):
         """
         """
         # - This should be moved in a c-lib
-        weight = np.zeros(self.shape)
+        raise NotImplementedError("this will be kyle's SEP. Soon.")
         
         
     def pixel_to_coords(self,pixel_x,pixel_y):
