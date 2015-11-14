@@ -100,11 +100,15 @@ class BaseObject( object ):
     
     def copy(self):
         """returns an independent copy of the current object"""
-        newobject = copy.deepcopy(self)
+        
+        #newobject = copy.deepcopy(self)
+        newobject = self.__class__(empty=True)
         # -- This to be 100% sure
         newobject._properties         = copy.deepcopy(self._properties)
         newobject._side_properties    = copy.deepcopy(self._side_properties)
         newobject._derived_properties = copy.deepcopy(self._derived_properties)
+        if "_build_properties" in dir(self):
+            newobject._build_properties = copy.deepcopy(self._build_properties)
         newobject._update_()
         
         return newobject

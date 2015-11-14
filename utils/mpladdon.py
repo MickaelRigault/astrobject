@@ -9,7 +9,7 @@ from .tools import kwargs_update
 from .decorators import make_method
 
 
-__all__ = ["specplot"]
+__all__ = ["specplot","figout"]
 
 # ========================== #
 # =  Axes Add-on           = #
@@ -45,7 +45,6 @@ def specplot(ax,x,y,var=None,
             zorder=3,label="_no_legend_"
             )
         bandprop = kwargs_update(default_band,**bandprop)
-        
         # -- Band
         fill = ax.fill_between(x,y+np.sqrt(var),y-np.sqrt(var),
                         **bandprop)

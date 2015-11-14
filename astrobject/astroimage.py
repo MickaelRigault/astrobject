@@ -81,10 +81,6 @@ class Image( BaseObject ):
     _derived_properties_keys = ["fits"]
     
     # Where in the fitsfile the data are
-    _image_property = dict(
-        data_index = 0
-        )
-    
     # =========================== #
     # = Initialization          = #
     # =========================== #
@@ -111,8 +107,18 @@ class Image( BaseObject ):
             self.load(filename,force_it=force_it,
                       **kwargs)
             
+    def __build__(self):
+        #
+        # Improvement of BaseObject
+        # including the _object_properties
+        #
+        super(Image,self).__build__()
+        # -- How to read the image
+        self._build_property = dict(
+                data_index = 0
+                )
         
-    def load(self,filename,index=_image_property["data_index"],
+    def load(self,filename,index=None,
              force_it=False):
         """
         This enables to load a fitsfile image and will create
@@ -127,6 +133,7 @@ class Image( BaseObject ):
         - options -
         
         index: [int]               The fits entry that contains the data
+                                   If None, this will fetch it in the build_properties
 
         force_it: [bool]           If the data already exist, this method
                                    will raise an execption except if you set
@@ -140,6 +147,8 @@ class Image( BaseObject ):
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
+        index = self._build_property["data_index"] if index is None \
+          else index
         # -------------------------- #
         #  Check The input           #
         # -------------------------- #
@@ -221,7 +230,8 @@ class Image( BaseObject ):
         """
         print "to be done"
 
-    def show(self,logscale=True,ax=None,show=True,
+    def show(self,savefile=None,logscale=True,
+             ax=None,show=True,
              wcs_coords=False,
              **kwargs):
         """
@@ -230,6 +240,7 @@ class Image( BaseObject ):
             raise AttributeError("no 'data' to show")
         
         # -- Setting -- #
+        from ..utils.mpladdon import figout
         import matplotlib.pyplot as mpl
         self._plot = {}
         
@@ -243,11 +254,8 @@ class Image( BaseObject ):
             fig = ax.figure
         # ----------- #
         # -  What
-        if logscale:
-            x = np.log10(self.data)
-        else:
-            x = self.data
-            
+        x = np.log10(self.data) if logscale else self.data
+        
         # ----------- #
         # - How
         default_prop = {
@@ -278,8 +286,10 @@ class Image( BaseObject ):
         self._plot["imshow"] = im
         self._plot["prop"]   = prop
         self._plot["wcs_coords"] = wcs_coords
-        if show:
-            fig.show()
+        
+        fig.figout(savefile=savefile,show=show)
+        
+        return self._plot
         
     # =========================== #
     # = Properties and Settings = #

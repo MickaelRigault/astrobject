@@ -43,7 +43,7 @@ def dump_pkl(data,filename,**kwargs):
 
 
 def shape_ajustment(X,Y,model_X,k=4,verbose=False):
-    """
+    """ DOC TO BE DONE
     return  Y /w the same binning as model_X  in their commun wavelength
     """
     def  commun_wavelength(x1,x2):

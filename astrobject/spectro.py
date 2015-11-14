@@ -6,7 +6,8 @@ import pyfits as pf
 from .baseobject import BaseObject
 
 
-__all__ = ["spectrum","cube"]
+__all__ = ["spectrum","cube",
+           "merge_spectra"]
 
 
 def spectrum(filename,**kwargs):
@@ -16,6 +17,59 @@ def cube():
     raise NotImplementedError("Not ready yet")
 
 
+# -------------------- #
+# - Useful tools     - #
+# -------------------- #
+def merge_spectra(spectrum1,spectrum2):
+    """This will merge the two given spectra. They must be Spectrum-object"""
+    #
+    # Tested
+    #
+    new_step  = np.min([spectrum1.step,  spectrum2.step ])
+    new_start = np.min([spectrum1.start, spectrum2.start ])
+    new_end   = np.max([np.max(spectrum1.lbda), np.max(spectrum2.lbda) ])
+    # - The new lbda
+    new_lbda  = np.arange(new_start,new_end,new_step)
+
+    # - Copy the spectrum not to affect them
+    copyspec1 = spectrum1.get_reshaped(new_lbda)
+    copyspec2 = spectrum2.get_reshaped(new_lbda)
+
+    # - weight merging
+    if copyspec1.has_var() is False or copyspec2.has_var() is False:
+        merging_w1,merging_w2 = np.ones(copyspec1.npix), np.ones(copyspec2.npix)
+        both_has_var = False
+    else:
+        merging_w1,merging_w2 = 1./copyspec1.v, 1./copyspec2.v
+        both_has_var = True
+    # - clean the nans
+    # nanflags
+    flagout1  = (copyspec1.lbda > spectrum1.lbda[-1]) +\
+       (copyspec1.lbda < spectrum1.lbda[0])
+    flagout2  = (copyspec2.lbda > spectrum2.lbda[-1]) + \
+      (copyspec2.lbda < spectrum2.lbda[0])
+    flagout1 = (copyspec1.y != copyspec1.y) + flagout1
+    flagout2 = (copyspec2.y != copyspec2.y) + flagout2
+    # technic, data = 1 ; weight = 0
+    copyspec1.y[flagout1] = 1 ; merging_w1[flagout1] = 0
+    copyspec2.y[flagout2] = 1 ; merging_w2[flagout2] = 0
+    # clean total weight
+    total_w = merging_w1+merging_w2
+    flagzero = (total_w<=0)
+    total_w[flagzero] = np.NaN
+    # -----------------
+    # - actual merging
+    merged_data = (copyspec1.y*merging_w1 + copyspec2.y*merging_w2) / total_w
+    merged_var = 1/np.sum([merging_w1,merging_w2], axis=0) if both_has_var \
+        else None
+    merged_spec = Spectrum(empty=True)
+    merged_spec.create(new_lbda,merged_data,
+                        header=copyspec1.header,
+                        variance=merged_var,
+                        force_it=True)
+    return merged_spec
+        
+    
 # -------------------- #
 # - Inside tools     - #
 # -------------------- #
@@ -72,7 +126,6 @@ class Spectrum( BaseObject ):
     _side_properties_keys = ["astrobject"]
 
     
-   
 
     def __init__(self,filename=None,empty=False,**kwargs):
         """
@@ -86,11 +139,14 @@ class Spectrum( BaseObject ):
             self.load(filename,**kwargs)
 
     def __build__(self):
-        """
-        """
+        #
+        # Improvement of BaseObject
+        # including the _build_properties
+        #
         super(Spectrum,self).__build__()
+        
          # -- How to read the image
-        self._spectro_properties = dict(
+        self._build_properties = dict(
             header_step   = "CDELT1",
             header_start  = "CRVAL1",
             header_npix   = "NAXIS1",
@@ -152,10 +208,13 @@ class Spectrum( BaseObject ):
         ------
         Void
         """
-
+        print "To Be Done"
+        
     def truncate(self,min_lbda=None,max_lbda=None):
-        """The trunctates the wavelength of the spectrum to match the given
-        value (*not in log scale*) and will reshape the object consequently"""
+        """
+        The trunctates the wavelength of the spectrum to match the given
+        value (*not in log scale*) and will reshape the object consequently
+        """
         # ---------------
         # - Input test
         if self.lbda is None:
@@ -176,6 +235,31 @@ class Spectrum( BaseObject ):
     # ----------------------- #
     # - Return a Spectrum   - #
     # ----------------------- #
+    def get_reshaped(self,x_model,**kwargs):
+        """This will copy the current object and reshape it following the
+        given x_model. This calls 'reshape' to do so.
+
+        Parameter
+        ---------
+
+        x_model:[array]            The wavelength array to which the object should be
+                                   projected. Important, the step of the array must be
+                                   constant. You can give the array in log scale
+                                   (velocity_step)
+
+        - kwargs options ; potentially non-exhaustive ; goes to 'reshape' -
+
+        k: [int]                   Interpolation parameter of scipy's UnivariateSpline
+
+        Return
+        ------
+        Spectrum
+        """
+        
+        newspec = self.copy()
+        newspec.reshape(x_model,**kwargs)
+        return newspec
+        
     def get_reshuffled(self):
         """The will redraw the current spectrum based on the flux and variance
         of the current object. It won't affect this object but will return an
@@ -237,10 +321,10 @@ class Spectrum( BaseObject ):
                     
         # -------------------
         # - Parse the input
-        index = self._spectro_properties["data_index"] if index is None \
+        index = self._build_properties["data_index"] if index is None \
           else index
           
-        variance_index = self._spectro_properties["variance_index"] \
+        variance_index = self._build_properties["variance_index"] \
           if variance_index is None \
           else variance_index
           
@@ -258,9 +342,9 @@ class Spectrum( BaseObject ):
         # -------------
         # - wavelength
         tmp_lbda = headerparameter2lbda(
-            header.get(self._spectro_properties["header_npix"] ),
-            header.get(self._spectro_properties["header_step"] ),
-            header.get(self._spectro_properties["header_start"]),
+            header.get(self._build_properties["header_npix"] ),
+            header.get(self._build_properties["header_step"] ),
+            header.get(self._build_properties["header_start"]),
             ).copy()
 
         # -------------
@@ -310,7 +394,6 @@ class Spectrum( BaseObject ):
                                    hazardous to reload it. Hence this function will
                                    raise an exception in that case except if
                                    *force_it* is set to True.
-
                                    
         Return
         ------
@@ -343,14 +426,41 @@ class Spectrum( BaseObject ):
             
         # ------------
         # - Checkout 
-        if name is None:
-            if "OBJECT" in header.keys():
-                self.name = header["OBJECT"]
+        self.name = header["OBJECT"] if name is None and "OBJECT" in header.keys() \
+          else name
+
+                
+    def writeto(self,savefile,saveerror=False,
+                overwrite=False):
+        """
+        save the object in a fitsfile (*savefile*).
+
+        Parameters
+        ----------
+        savefile: [str]            The name (including its Path) of
+                                   the file where you wish to register
+                                   the spectrum (.fits)                                   
+        - options -
+                                       
+        saveerror:  [bool]         Set this to True if you wish to record the error
+                                   and not the variance in you first hdu-table.
+                                   if False, the table will be called VARIANCE and
+                                   have self.v; if True, the table will be called
+                                   ERROR and have sqrt(self.v)
+                                   
+        overwrite: [bool]          If the file already exist, saving it in the same
+                                   file will overwrite it. Set True to allow that.
+
+
+        Return
+        ------
+        Void 
+        """
+        hdu     = self._get_hdu_array_(use_error=saveerror)
+        hdulist = pf.HDUList(hdu)
+        hdulist.writeto(savefile,clobber=overwrite)
         
-    def writeto(self):
-        """
-        """
-        print "to be done"
+        
 
     def show(self,savefile=None,ax=None,show=True,
              add_thumbnails=False,**kwargs):
@@ -465,9 +575,9 @@ class Spectrum( BaseObject ):
 
         # ----------------
         # - Input Tests
-        self.header.update(self._spectro_properties['header_npix'],  npix, "")
-        self.header.update(self._spectro_properties['header_step'],  step, "")
-        self.header.update(self._spectro_properties['header_start'], start,"")
+        self.header.update(self._build_properties['header_npix'],  npix, "")
+        self.header.update(self._build_properties['header_step'],  step, "")
+        self.header.update(self._build_properties['header_start'], start,"")
         self._load_lbda_()
 
         
@@ -544,6 +654,34 @@ class Spectrum( BaseObject ):
         if self.header is not None:
             self._load_lbda_()
 
+    def _get_hdu_array_(self,use_error):
+        """
+        This method create the current object's hdu containing
+        the primary-hdu (self.y) and the error/variance if it exists.
+        Do pyfits.HDUList(return_of_this) to have an hdulist.
+        
+        Parameter
+        ---------
+
+        use_error: [bool]          Shall this register the error (set True) or
+                                   the variance (set False) in the *hdu*.
+
+        Return
+        ------
+        pyfits hdu 2darray (primary, [extension])
+        """
+        self._hdu = [pf.PrimaryHDU(self.y,self.header)]
+        # - If there is error, saveit
+        if self.has_var():
+            if use_error:
+                extention = pf.ImageHDU(np.sqrt(self.v), name='ERROR')
+            else:
+                extention = pf.ImageHDU(self.v, name='VARIANCE')
+            self._hdu.append(extention)
+            
+        # -- Return the current object's hdu
+        return self._hdu
+            
         
     def _load_lbda_(self):
         """This function reads the header to create the lbda-array"""
@@ -551,11 +689,11 @@ class Spectrum( BaseObject ):
             raise AttributeError("no header loaded, can't load the wavelength")
         
         self._properties["npix"] = \
-          self.header.get(self._spectro_properties['header_npix'])
+          self.header.get(self._build_properties['header_npix'])
         self._properties["step"] = \
-          self.header.get(self._spectro_properties['header_step'])
+          self.header.get(self._build_properties['header_step'])
         self._properties["start"] = \
-          self.header.get(self._spectro_properties['header_start'])
+          self.header.get(self._build_properties['header_start'])
 
         # -- This is the wavelength given by the header.
         #    Could be in velocity step.
@@ -569,7 +707,11 @@ class Spectrum( BaseObject ):
             self._derived_properties['lbda'] = \
               self._derived_properties['rawlbda']
 
-    
+
+
+
+
+              
 class Cube( BaseObject ):
     """
     """
