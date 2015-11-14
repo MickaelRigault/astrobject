@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """This module gather the basic tools used in a lot of methods"""
 
+import numpy as np
 
 __all__ = ["kwargs_update",
            "load_pkl","dump_pkl"]
@@ -62,7 +63,7 @@ def shape_ajustment(X,Y,model_X,k=4,verbose=False):
         if verbose:
             print 'WARNING [shape_adjustment] non-mached shape ... I am fixing that'
         
-        YrebinOK = N.empty((len(Yrebin)+1),)
+        YrebinOK = np.empty((len(Yrebin)+1),)
         YrebinOK[1:] = Yrebin
         YrebinOK[0]  = Yrebin[0]
         

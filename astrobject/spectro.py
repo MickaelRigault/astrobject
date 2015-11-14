@@ -89,7 +89,7 @@ class Spectrum( BaseObject ):
         """
         """
         super(Spectrum,self).__build__()
-         # -- Who to read the image
+         # -- How to read the image
         self._spectro_properties = dict(
             header_step   = "CDELT1",
             header_start  = "CRVAL1",
@@ -352,12 +352,41 @@ class Spectrum( BaseObject ):
         """
         print "to be done"
 
-    def show(self):
+    def show(self,savefile=None,ax=None,show=True,
+             add_thumbnails=False,**kwargs):
         """
         """
-        print "to be done"
+        from ..utils.mpladdon import specplot, figout
+        from matplotlib.pyplot import figure
+        if self.y is None:
+            raise AttributeError("no data to show")
 
-    
+        # --------------
+        # - Set the Figure
+        self._plot = {}
+        if ax is None:
+            
+            fig = figure(figsize=[8,5])
+            ax = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "plot" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. ")
+        else:
+            fig = ax.figure
+            
+        # --------------
+        # - Do the plot    
+        pl,fill = ax.specplot(self.lbda,self.y,var=self.v,**kwargs)
+        # --------------
+        # - output
+        self._plot['ax']     = ax
+        self._plot['figure'] = fig
+        self._plot['plot']   = pl
+        self._plot['band']   = fill
+        self._plot['prop']   = kwargs
+        
+        fig.figout(savefile=savefile,show=show,add_thumbnails=add_thumbnails)
+        
+        return self._plot
     # =========================== #
     # = Properties and Settings = #
     # =========================== #

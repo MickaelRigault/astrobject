@@ -239,7 +239,8 @@ class Image( BaseObject ):
         elif "imshow" not in dir(ax):
             raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
                              "No imshow available")
-
+        else:
+            fig = ax.figure
         # ----------- #
         # -  What
         if logscale:
