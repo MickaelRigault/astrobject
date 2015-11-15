@@ -55,10 +55,10 @@ class Image( BaseObject ):
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
-    _properties_keys         = ["filename","data","header",
-                                "var"]
+    _properties_keys         = ["filename","rawdata","header",
+                                "var","background"]
     _side_properties_keys    = ["wcs","target"]
-    _derived_properties_keys = ["fits"]
+    _derived_properties_keys = ["fits","data"]
     
     # Where in the fitsfile the data are
     # =========================== #
@@ -163,11 +163,13 @@ class Image( BaseObject ):
             wcs_ = None
             
         self.create(data,None,wcs_,
+                    background= None,
                     header=fits[index].header,
                     filename=filename,fits=fits,
                     force_it=True)
         
-    def create(self,data,variance,wcs,header=None,
+    def create(self,rawdata,variance,wcs,
+               background=None,header=None,
                filename=None,fits=None,force_it=False):
         """
         Create the image-object using by filling its different component.
@@ -188,14 +190,16 @@ class Image( BaseObject ):
         if self.data is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
-            
-        # -- Setup the object
+        # ********************* #
+        # * Create the object * #
+        # ********************* #
         self._properties["filename"]     = filename
         self._derived_properties["fits"] = fits
         # basics data and wcs
-        self._properties["data"]         = np.asarray(data,dtype="float")
+        self._properties["rawdata"]     = np.asarray(rawdata,dtype="float")
         self._properties["header"]       = pf.Header if header is None else header
         self._properties["var"]          = variance
+        self.set_background(background)
         if wcs is not None and wcs.__module__ != "astLib.astWCS":
             print "WARNING: only astLib.astWCS wcs solution is implemented"
             print " ----> No wcs solution loaded"
@@ -236,7 +240,49 @@ class Image( BaseObject ):
                                                                     newtarget.dec))
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
-    
+
+    def set_background(self,background,
+                       force_it=False,check=True):
+        """
+        # Might not make sense in image #
+        This is a method that might strongly depend on the instrument.
+        As a default (background = None) this uses Sextractor background
+        estimation from 'get_sep_background'. Give background or overwrite
+        this method for your specific instrument.
+
+        Parameters
+        ----------
+        background: [2d-array]     This is the float-array containing the background
+                                   level of the data.
+                                   *Important* if None is set, this method will call
+                                   Sextractor's sep-Background module to estimate it.
+
+        - option -
+        force_it: [bool]           If the data already exist, this method
+                                   will raise an execption except if you set
+                                   *force_it* to True. Be Careful with this.
+                                   
+        check: [bool]              If True, this will check tha the given background 
+                                   is consistant with the existing data (rawdata)
+                                   if any. Set that to False to avoid this check.
+
+        Return
+        ------
+        Void
+        """
+        # -- Check if you will not overwrite anything
+        if self.background is not None and force_it is False:
+            raise AttributeError("'background' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        background  = self.get_sep_background() if background is None else background
+        
+        # Shape test
+        if self.rawdata is not None and np.shape(background) != self.shape:
+            raise ValueError("The given background must have rawdata's shape")
+        # -- Looks good
+        self._properties['background'] = np.asarray(background)
+        self._update_data_()
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
@@ -245,7 +291,6 @@ class Image( BaseObject ):
         """
         # - This should be moved in a c-lib
         raise NotImplementedError("this will be kyle's SEP. Soon.")
-        
         
     def pixel_to_coords(self,pixel_x,pixel_y):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
@@ -260,7 +305,29 @@ class Image( BaseObject ):
             raise AttributeError("no wcs solution loaded.")
         
         return self.wcs.wcs2pix(ra,dec)
-    
+
+    # ------------------- #
+    # - SEP Tools       - #
+    # ------------------- #
+    def get_sep_background(self):
+        """
+        This module is based on K. Barbary's python module of Sextractor: sep.
+        
+        """
+        if "_background" not in dir(self):
+            if self.rawdata is None:
+                raise ValueError("no 'rawdata' loaded. Cannot get a background")
+            from sep import Background
+            self._background = Background(self.rawdata)
+
+        return self._background.back()
+        
+    def sep_extract(self):
+        """
+        This module is based on K. Barbary's python module of Sextractor SEP.
+        """
+        print "to be done"
+        
     # ------------------- #
     # - I/O Methods     - #
     # ------------------- #
@@ -270,13 +337,18 @@ class Image( BaseObject ):
         print "to be done"
 
     def show(self,savefile=None,logscale=True,
-             ax=None,show=True,
+             ax=None,show=True,toshow="data",
              wcs_coords=False,proptarget={},
              **kwargs):
         """
         """
-        if self.data is None:
-            raise AttributeError("no 'data' to show")
+        # ----------------
+        # - Input test
+        if toshow not in dir(self):
+            raise ValueError("'%s' is not a known image parameter"%toshow)
+        valuetoshow = eval("self.%s"%toshow)
+        if valuetoshow is None:
+            raise AttributeError("no '%s' to show (=None)"%toshow)
         
         # -- Setting -- #
         from ..utils.mpladdon import figout
@@ -285,7 +357,7 @@ class Image( BaseObject ):
         
         if ax is None:
             fig = mpl.figure(figsize=[8,8])
-            ax = fig.add_axes([0.1,0.1,0.8,0.8])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
         elif "imshow" not in dir(ax):
             raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
                              "No imshow available")
@@ -293,7 +365,7 @@ class Image( BaseObject ):
             fig = ax.figure
         # ----------- #
         # -  What
-        x = np.log10(self.data) if logscale else self.data
+        x = np.log10(valuetoshow) if logscale else valuetoshow
         
         # ----------- #
         # - How
@@ -372,25 +444,46 @@ class Image( BaseObject ):
     
     @property
     def data(self):
-        return self._properties["data"]
-    
-    @data.setter
-    def data(self,value):
-        if self.data is not None and np.shape(value) != self.shape:
-            raise ValueError("'data' cannot change shape using this setter. ")
+        return self._derived_properties["data"]
+    # -------
+    # -- This under defines the data
+    # Raw Data
+    @property
+    def rawdata(self):
+        return self._properties["rawdata"]
+
+    @rawdata.setter
+    def rawdata(self):
+        if self.rawdata is not None and np.shape(value) != self.shape:
+            raise ValueError("'rawdata' cannot change shape using this setter. ")
         
-        self._properties['data'] = np.asarray(value)
+        self._properties['rawdata'] = np.asarray(value)
+        self._update_data_()
+        
+    # Background
+    @property
+    def background(self):
+        return self._properties["background"]
+    
+    @background.setter
+    def background(self,value):
+        if self.background is not None and np.shape(value) != self.shape:
+            raise ValueError("'background' cannot change shape using this setter. ")
+        
+        self._properties['background'] = np.asarray(value)
+        self._update_data_()
+        
         
     @property
     def header(self):
         return self._properties["header"]
     
     # -- derived values
-    @property
+    @property # based on rawdata for pratical reason (like background check)
     def shape(self):
-        if self.data is None:
-            raise AttributeError("No data loaded.")
-        return np.shape(self.data)
+        if self.rawdata is None:
+            raise AttributeError("No rawdata loaded.")
+        return np.shape(self.rawdata)
     
     @property
     def width(self):
@@ -447,4 +540,17 @@ class Image( BaseObject ):
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
-    
+    def _update_(self):
+        """The module derives the 'derived_properties' based on the
+        fundamental once
+        """
+        # -- Make sure the fundamental update (if any) are made
+        super(Image,self)._update_()
+        # - Data
+        self._update_data_()
+
+    def _update_data_(self):
+        """
+        """
+        self._derived_properties["data"] = self.rawdata - self.background
+        
