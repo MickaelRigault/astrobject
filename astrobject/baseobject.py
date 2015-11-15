@@ -15,13 +15,13 @@ COSMO_DEFAULT = cosmology.Planck13
 
 
 __version__ = 0.1
-__all__     = ["astrobject"]
+__all__     = ["astrotarget"]
 
 
-def astrobject(name,zcmb,ra,dec,
-               type_=None,forced_mwebmv = None,**kwargs):
+def astrotarget(name,zcmb,ra,dec,
+               type_=None,forced_mwebmv=None,**kwargs):
     """
-    = Initialize the AstroObject Function =
+    = Initialize the AstroTarget Function =
 
     Parameters
     ----------
@@ -37,7 +37,7 @@ def astrobject(name,zcmb,ra,dec,
     dec: [float]               declination of the object. (degree favored)
                                *ra* and *dec* must have the same unit.
                                    
-        - options -
+    - options -
         
     type_:[string]             type of the astro-object (galaxy, sn, Ia, Ibc...)
                                (no predifined list type so far, but this could append)
@@ -47,7 +47,7 @@ def astrobject(name,zcmb,ra,dec,
                                extinction depend on the object *radec*.
                                ->Use this use Caution<-
                                    
-        - kwargs options, potentially non-exhaustive -
+    - kwargs options, potentially non-exhaustive ; kwargs goes to AstroTarget -
         
     cosmo:[astropy.cosmology]  the cosmology used to derive the distances and so on.
 
@@ -59,14 +59,12 @@ def astrobject(name,zcmb,ra,dec,
                                    
     Returns
     -------
-    AstroObject
+    AstroTarget
     """
-    return AstroObject(name=name,zcmb=zcmb,
+    return AstroTarget(name=name,zcmb=zcmb,
                        ra=ra, dec=dec,type_=type_,
                        forced_mwebmv=forced_mwebmv,
                        **kwargs).copy() # dont forget the copy
-    
-
 
 #######################################
 #                                     #
@@ -101,16 +99,21 @@ class BaseObject( object ):
     def copy(self):
         """returns an independent copy of the current object"""
         
-        #newobject = copy.deepcopy(self)
+        # Create an empty object
         newobject = self.__class__(empty=True)
-        # -- This to be 100% sure
-        newobject._properties         = copy.deepcopy(self._properties)
-        newobject._side_properties    = copy.deepcopy(self._side_properties)
-        newobject._derived_properties = copy.deepcopy(self._derived_properties)
-        if "_build_properties" in dir(self):
-            newobject._build_properties = copy.deepcopy(self._build_properties)
+        # And fill it !
+        for prop in ["_properties","_side_properties",
+                     "_derived_properties","_build_properties"
+                     ]:
+            if prop not in dir(self):
+                continue
+            try: # Try to deep copy because but some time it does not work (e.g. wcs) 
+                newobject.__dict__[prop] = copy.deepcopy(self.__dict__[prop])
+            except:
+                newobject.__dict__[prop] = copy.copy(self.__dict__[prop])
+        # This be sure things are correct
         newobject._update_()
-        
+        # and return it
         return newobject
         
                 
@@ -126,7 +129,7 @@ class BaseObject( object ):
         return self._properties.keys()
     
     
-class AstroObject( BaseObject ):
+class AstroTarget( BaseObject ):
     """
     This is the default astrophysical object that has basic
     information attached to it, like zcmb, ra, dec, mwebmv.
@@ -136,17 +139,19 @@ class AstroObject( BaseObject ):
     given cosmology and redshift (zcmb).
     """
     # -- This is set to ease inheritance and tests -- #
-    # If you change that, function that needs astrobject
+    # If you change that, function that needs astrotarget
     # could crash (i.e. astroimages.Aperture)
      
-    __nature__ = "AstroObject"
+    __nature__ = "AstroTarget"
     
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
     _properties_keys         = ["zcmb","ra","dec","name"]
+    
     _side_properties_keys    = ["cosmology","litrature_name",
                                 "type","mwebmv"]
+        
     _derived_properties_keys = ["distmeter","distmpc",
                                 "arc_per_kpc"]
     
@@ -160,7 +165,7 @@ class AstroObject( BaseObject ):
                  load_from=None,empty=False,**kwargs
                  ):
         """
-         = Initialize the AstroObject Function =
+         = Initialize the AstroTarget Function =
         
         Parameters
         ----------
@@ -218,7 +223,7 @@ class AstroObject( BaseObject ):
         self.zcmb = zcmb
         self.radec = ra,dec
         self.type  = type_
-        self.set_cosmo(COSMO_DEFAULT)
+        self.set_cosmo(cosmo)
         self.set_mwebmv(forced_mwebmv,force_it=True)
         self._update_()
 

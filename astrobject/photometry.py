@@ -1,21 +1,23 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""This module defines the photometric objects"""
+
+
 import numpy  as np
 import pyfits as pf
 
-from .baseobject import BaseObject 
 from astropy     import units
 from astLib      import astWCS
 
+from .baseobject   import BaseObject 
 from ..utils.tools import kwargs_update
-from ..utils.decorators import _autogen_docstring_inheritance
 
 
-__all__ = ["image","aperture"]
+__all__ = ["image"]
 
 
-def image(filename,**kwargs):
+def image(filename=None,astrotarget=None,**kwargs):
     """
     Initalize the image by giving its filelocation (*filename*). This
     will load it using the load() method.
@@ -23,10 +25,13 @@ def image(filename,**kwargs):
     Parameters
     ----------
 
-    filename: [string.fits]    fits file from where the image will be loaded
-
     - options -
 
+    filename: [string.fits]    fits file from where the image will be loaded
+
+    astrotarget: [AstroTarget] An AstroTarget object you which to associate
+                               to this image.
+                                                                  
     - kwargs options, potentially non-exhaustive -
     
     empty: [bool]              Set True to load an empty object.
@@ -35,33 +40,8 @@ def image(filename,**kwargs):
     ------
     Image
     """
-    return Image(filename,**kwargs).copy()
-    
-
-def aperture(astrobject_,filename,**kwargs):
-    """
-    Initalize the image by giving its filelocation (*filename*). This
-    will load it using the load() method.
-
-    Parameters
-    ----------
-
-    astrobject_: [AstroObject] An astrobject associated to the given image.
-    
-    filename: [string.fits]    fits file from where the image will be loaded
-
-    - options -
-
-    - kwargs options, potentially non-exhaustive -
-    
-    empty: [bool]              Set True to load an empty object.
-                               
-    Return
-    ------
-    Image
-    """
-    return Aperture(astrobject_,filename,**kwargs).copy()
-
+    return Image(filename,astrotarget=astrotarget,
+                 **kwargs)#.copy()
 
 
 #######################################
@@ -76,15 +56,17 @@ class Image( BaseObject ):
     # Internal Properties  #
     # -------------------- #
     _properties_keys         = ["filename","data","header",
-                                "variance"]
-    _side_properties_keys    = ["wcs"]
+                                "var"]
+    _side_properties_keys    = ["wcs","target"]
     _derived_properties_keys = ["fits"]
     
     # Where in the fitsfile the data are
     # =========================== #
     # = Constructor             = #
     # =========================== #
-    def __init__(self,filename,empty=False,**kwargs):
+    def __init__(self,filename=None,
+                 astrotarget=None,
+                 empty=False,**kwargs):
         """
         Initalize the image by giving its filelocation (*filename*). This
         will load it using the load() method.
@@ -93,7 +75,10 @@ class Image( BaseObject ):
         ----------
         filename: [string.fits]    fits file from where the image will be loaded
                                    - Trick - Set None and no image will be loaded
-        
+
+        astrotarget: [AstroTarget] An AstroTarget object you which to associate
+                                   to this image. 
+                                   
         empty: [bool]              Does not do anything, just loads an empty object.
                                    (Careful with that)
                                    
@@ -114,16 +99,22 @@ class Image( BaseObject ):
         #
         super(Image,self).__build__()
         # -- How to read the image
-        self._build_property = dict(
+        self._build_properties = dict(
                 data_index = 0
                 )
-        
+
+    # =========================== #
+    # = Main Methods            = #
+    # =========================== #
+    # ------------------- #
+    # - I/O Methods     - #
+    # ------------------- #
     def load(self,filename,index=None,
              force_it=False):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
-        *Variance* (error) and *background* has to be defined
+        *var* (error) and *background* has to be defined
         separately has this strongly depend on the instrument
 
         Parameters
@@ -147,7 +138,7 @@ class Image( BaseObject ):
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        index = self._build_property["data_index"] if index is None \
+        index = self._build_properties["data_index"] if index is None \
           else index
           
         # -------------------------- #
@@ -171,11 +162,13 @@ class Image( BaseObject ):
         except:
             wcs_ = None
             
-        self.create(data,None,fits[index].header,wcs_,
-                    filename,fits)
+        self.create(data,None,wcs_,
+                    header=fits[index].header,
+                    filename=filename,fits=fits,
+                    force_it=True)
         
-    def create(self,data,variance,header,wcs,
-               filename,fits,force_it=False):
+    def create(self,data,variance,wcs,header=None,
+               filename=None,fits=None,force_it=False):
         """
         Create the image-object using by filling its different component.
         Each of them can be None, but in that case, their corresponding method
@@ -201,8 +194,8 @@ class Image( BaseObject ):
         self._derived_properties["fits"] = fits
         # basics data and wcs
         self._properties["data"]         = np.asarray(data,dtype="float")
-        self._properties["header"]       = header
-        
+        self._properties["header"]       = pf.Header if header is None else header
+        self._properties["var"]          = variance
         if wcs is not None and wcs.__module__ != "astLib.astWCS":
             print "WARNING: only astLib.astWCS wcs solution is implemented"
             print " ----> No wcs solution loaded"
@@ -211,10 +204,39 @@ class Image( BaseObject ):
             self._side_properties["wcs"]     = wcs
 
         self._update_()
+
+    # ------------------- #
+    # - Target          - #
+    # ------------------- #
+    def set_target(self,newtarget,test_inclusion=True):
+        """
+        Change (or create) an object associated to the given image.
+        This function will test if the object is withing the image
+        boundaries (expect if *test_inclusion* is set to False).
+        Set newtarget to None to remove the association between this
+        object and a target
+        """
+        if newtarget is None:
+            self._side_properties['target'] = None
+            return
         
-    # =========================== #
-    # = Main Methods            = #
-    # =========================== #
+        # -- Input Test -- #
+        if newtarget.__nature__ != "AstroTarget":
+            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
+        
+        if test_inclusion:
+            if self.has_wcs() is False:
+                print "WARNING: because there is no wcs solution, "+\
+                  "I can't test the inclusion of the new astrotarget"
+            else:
+                if not self.wcs.coordsAreInImage(*newtarget.radec):
+                    raise ValueError("The new 'target' is not inside the image "+\
+                                      " boundaries"+ "\n"+\
+                                     "--> object radec: %.3f,%.4f"%(newtarget.ra,
+                                                                    newtarget.dec))
+        # -- Seems Ok -- #
+        self._side_properties["target"] = newtarget.copy()
+    
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
@@ -249,7 +271,7 @@ class Image( BaseObject ):
 
     def show(self,savefile=None,logscale=True,
              ax=None,show=True,
-             wcs_coords=False,
+             wcs_coords=False,proptarget={},
              **kwargs):
         """
         """
@@ -294,20 +316,49 @@ class Image( BaseObject ):
         # ----------- #
         # - Do It
         im = ax.imshow(x,**prop)
-
+        # - add target
+        pl_tgt = None if self.has_target() is False \
+          else self.display_target(ax,wcs_coords=wcs_coords,
+                                   **proptarget)
         # ----------- #
         # - Recordit
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
         self._plot["imshow"] = im
+        self._plot["target_plot"] = pl_tgt
         self._plot["prop"]   = prop
         self._plot["wcs_coords"] = wcs_coords
         
         fig.figout(savefile=savefile,show=show)
         
         return self._plot
-        
+
+    def display_target(self,ax,wcs_coords=True,**kwargs):
+        """If a target is loaded, use this to display the target on the
+        given ax"""
+        if self.has_target() is False:
+            print "No target to display"
+            return
+        # --------------------
+        # - Fancy
+        default_markerprop = {
+            "marker":"s",
+            "mfc":"w",
+            "mec":"k","mew":2,
+            "zorder":12,
+            "scalex":False,"scaley":False
+            }
+        prop = kwargs_update(default_markerprop,**kwargs)
+    
+        if wcs_coords:
+            pl = ax.plot(self.target.ra,self.target.dec,**prop)
+        else:
+            radec_pixel = self.coords_to_pixel(*self.target.radec)
+            pl = ax.plot(radec_pixel[0],radec_pixel[1],**prop)
+                
+        return pl
+
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -322,7 +373,14 @@ class Image( BaseObject ):
     @property
     def data(self):
         return self._properties["data"]
-
+    
+    @data.setter
+    def data(self,value):
+        if self.data is not None and np.shape(value) != self.shape:
+            raise ValueError("'data' cannot change shape using this setter. ")
+        
+        self._properties['data'] = np.asarray(value)
+        
     @property
     def header(self):
         return self._properties["header"]
@@ -343,11 +401,13 @@ class Image( BaseObject ):
 
     
     @property
-    def variance(self):
-        return self._properties["variance"]
-    def has_variance(self):
-        return False if self.variance is None \
+    def var(self):
+        return self._properties["var"]
+    
+    def has_var(self):
+        return False if self.var is None \
           else True
+
     # ------------      
     # -- wcs tools
     @property
@@ -373,114 +433,18 @@ class Image( BaseObject ):
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded")
         return self.wcs.getImageMinMaxWCSCoords()
-
+    
+    # ----------------      
+    # -- target tools
     @property
-    def _worldcoords_bbox(self):
-        from matplotlib.transforms  import Bbox
-        xmin,xmax,ymin,ymax = self.worldcoords_boundaries
-        bbox= Bbox([[xmin,ymin],[xmax,ymax]])
-        return bbox.rotated(self.wcs.getRotationDeg()*units.degree.in_units("radian"))
-        
+    def target(self):
+        return self._side_properties["target"]
+    
+    def has_target(self):
+        return False if self.target is None \
+          else True
+    
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
     
-
-
-
-    
-class Aperture( Image ):
-    """
-    An aperture is an Image connected to an AstroObject that has
-    a position in a sky and a redshift. This combination enables
-    to derive aperture photometry around this AstroObject. 
-    """
-    
-    @_autogen_docstring_inheritance(Image.__init__,"Image.__init__")
-    def __init__(self,astrobject,*args,**kwargs):
-        #
-        # - Add the astrobject associated tools
-        #
-        super(Aperture,self).__init__(*args,**kwargs)
-        self._properties_keys.append("object")
-        self.change_object(astrobject)
-
-
-    # =========================== #
-    # = Image Hack              = #
-    # =========================== #
-    @_autogen_docstring_inheritance(Image.show,"Image.show")
-    def show(self,markerprop={},**kwargs):
-        #
-        # Add object indication
-        #
-        show = kwargs.pop("show",True)
-        super(Aperture,self).show(show=False,**kwargs)
-        # --- Can you show the object location ?
-        if self.has_wcs() is False:
-            print "WARNING: no wcs solution so I cannot display the object location"
-            if show:
-                self._plot["figure"].show()
-            return
-        # ------------
-        # - Ok... then
-        # ---------------------
-        # - get back the values
-        fig,ax = self._plot["figure"],self._plot["ax"]
-
-        # ----------- #
-        # - Fancy
-        default_markerprop = {
-            "marker":"s",
-            "mfc":"w",
-            "mec":"k","mew":2,
-            "zorder":12,
-            "scalex":False,"scaley":False
-            }
-        prop = kwargs_update(default_markerprop,**markerprop)
-    
-        if self._plot["wcs_coords"]:
-            self._plot["object_marker"]      = \
-                ax.plot(self.object.ra,self.object.dec,**prop)
-        else:
-            radec_pixel = self.coords_to_pixel(*self.object.radec)
-            self._plot["object_marker"]      = \
-                ax.plot(radec_pixel[0],radec_pixel[1],**prop)
-                
-        self._plot["object_marker_prop"] = prop
-        
-        if show:
-            fig.show()
-        
-    # =========================== #
-    # = Properties and Settings = #
-    # =========================== #
-    @property
-    def object(self):
-        return self._properties["object"]
-    
-    def change_object(self,newastrobject,test_inclusion=True):
-        """
-        Change the object associated to the given image. This function
-        will test if the object is withing the image boundaries (expect if
-        *test_inclusion* is set to False).
-        """
-        # -- Input Test -- #
-        # - Is that even an AstroObject
-        if newastrobject.__nature__ != "AstroObject":
-            raise TypeError("'newastrobject' should be (or inherite) an AstroObject")
-        
-        # - Is that a relevant one ?
-        if test_inclusion:
-            if self.has_wcs() is False:
-                print "WARNING: because there is no wcs solution, "+\
-                  "I can't test the inclusion of the new astrobject"
-            else:
-                if not self.wcs.coordsAreInImage(*newastrobject.radec):
-                    raise ValueError("The new 'astrobject' is not inside the image "+\
-                                      " boundaries"+ "\n"+\
-                                     "--> object radec: %.3f,%.4f"%(newastrobject.ra,
-                                                                    newastrobject.dec))
-        # -- Seems Ok -- #
-        self._properties["object"] = newastrobject.copy()
-        

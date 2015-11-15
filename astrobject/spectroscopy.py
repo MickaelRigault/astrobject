@@ -23,7 +23,7 @@ def cube():
 def merge_spectra(spectrum1,spectrum2):
     """This will merge the two given spectra. They must be Spectrum-object"""
     #
-    # Tested
+    # Tested with variance
     #
     new_step  = np.min([spectrum1.step,  spectrum2.step ])
     new_start = np.min([spectrum1.start, spectrum2.start ])
@@ -123,7 +123,7 @@ class Spectrum( BaseObject ):
     _derived_properties_keys = ["fits","lbda",
                                "raw_lbda"]
         
-    _side_properties_keys = ["astrobject"]
+    _side_properties_keys = ["target"]
 
 
     # =========================== #
@@ -382,9 +382,13 @@ class Spectrum( BaseObject ):
                                    given in log scale (velocity_step).
 
         flux: [array]              The flux of the given object. It will define *y*
-        
+
         - options -
 
+        header: [pyfits.Header]    Give the header of the object. This will be recorded
+                                   when you save the object ('writeto'). If None, this
+                                   will be converted in an empty header.
+        
         variance: [array]          The variance associated to the object's flux (*y*).
                                    It will set *v*
 
@@ -416,18 +420,16 @@ class Spectrum( BaseObject ):
         # ************************ #
         #  Creation of the Object  #
         # ************************ #
-        self._properties['header']  = header
-        self._properties['y']       = np.asarray(flux).copy()
-        
+        # -- Header 
+        self._properties['header'] = pf.Header() if header is None else header
+        # -- Data
+        self._properties['y']      = np.asarray(flux).copy()
+        # -- Wavelength
         self.set_lbda(lbda)
-        self._properties['name']    = name
-        if variance is not None:
-            self._properties['var'] = np.asarray(variance).copy()
-        else:
-            self._properties['var'] = None
-            
-        # ------------
-        # - Checkout 
+        # -- Variance
+        self._properties['var']    = np.asarray(variance).copy() \
+          if variance is not None else None
+        # -- Name
         self.name = header["OBJECT"] if name is None and "OBJECT" in header.keys() \
           else name
 
@@ -521,9 +523,25 @@ class Spectrum( BaseObject ):
     def set_lbda(self, x, check=True):
         """
         Change the current wavelength (lbda) to *x*.
-        If this object has a flux (y), it will check that the new lbda
-        if consistant with the flux (y) struture except if *check* is
-        set to False. Most likely you do not want to do that.
+        If this object has a flux (y), this method will check that
+        the new lbda (*x*) if consistant with the struture of the
+        flux (*y*)  except if *check* is set to False.
+        (Most likely you do not want to do that.)
+
+        Parameter
+        ---------
+
+        x: [array]                 The new wavelength of the object. (1d array)
+                                   A log of wavelength array can be set (velocity_step)
+
+        - options -
+
+        check: [bool]              If True, this will check tha the new wavelength *x*
+                                   is consistant with the existing flux (*y*) if any.
+                                   Set that to False to avoid this check.
+        Return
+        ------
+        Void
         """
         if self.y is not None and check and len(x) != len(self.y):
             raise ValueError("'x' must have the length of self.y (%d)"%len(self.y))
@@ -726,7 +744,7 @@ class Cube( BaseObject ):
         )
     
     _side_properties = dict(
-        astroobject= None # an astrobject
+        target= None # an target
         )
     
     _derived_properties = dict(

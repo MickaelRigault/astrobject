@@ -1,8 +1,8 @@
 #
 # Init the astro objects
 #
-from baseobject import *
-from spectro    import *
-from astroimage import *
+from baseobject   import *
+from spectroscopy import *
+from photometry   import *
 
-__all__ = ['baseobject','spectro','astroimage']
+__all__ = ['baseobject','spectroscopy','photometry']
