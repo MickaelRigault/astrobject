@@ -57,7 +57,8 @@ class Image( BaseObject ):
     # -------------------- #
     _properties_keys         = ["filename","rawdata","header",
                                 "var","background"]
-    _side_properties_keys    = ["wcs","target"]
+    _side_properties_keys    = ["wcs","target",
+                                "exptime"]
     _derived_properties_keys = ["fits","data"]
     
     # Where in the fitsfile the data are
@@ -100,7 +101,8 @@ class Image( BaseObject ):
         super(Image,self).__build__()
         # -- How to read the image
         self._build_properties = dict(
-                data_index = 0
+                data_index = 0,
+                header_exptime = "EXPTIME"
                 )
 
     # =========================== #
@@ -169,7 +171,7 @@ class Image( BaseObject ):
                     force_it=True)
         
     def create(self,rawdata,variance,wcs,
-               background=None,header=None,
+               background=None,header=None,exptime=None,
                filename=None,fits=None,force_it=False):
         """
         Create the image-object using by filling its different component.
@@ -196,10 +198,15 @@ class Image( BaseObject ):
         self._properties["filename"]     = filename
         self._derived_properties["fits"] = fits
         # basics data and wcs
-        self._properties["rawdata"]     = np.asarray(rawdata,dtype="float")
+        self._properties["rawdata"]      = np.asarray(rawdata,dtype="float")
         self._properties["header"]       = pf.Header if header is None else header
         self._properties["var"]          = variance
         self.set_background(background)
+        # -- Side, exposure time
+        self._side_properties["exptime"] = \
+          self.header[self._build_properties["header_exptime"]] if exptime is None \
+          else exptime
+          
         if wcs is not None and wcs.__module__ != "astLib.astWCS":
             print "WARNING: only astLib.astWCS wcs solution is implemented"
             print " ----> No wcs solution loaded"
@@ -291,7 +298,7 @@ class Image( BaseObject ):
         """
         # - This should be moved in a c-lib
         raise NotImplementedError("this will be kyle's SEP. Soon.")
-        
+
     def pixel_to_coords(self,pixel_x,pixel_y):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
         if self.has_wcs() is False:
@@ -336,9 +343,8 @@ class Image( BaseObject ):
         """
         print "to be done"
 
-    def show(self,savefile=None,logscale=True,
-             ax=None,show=True,toshow="data",
-             wcs_coords=False,proptarget={},
+    def show(self,toshow="data",savefile=None,logscale=True,
+             ax=None,show=True,wcs_coords=False,proptarget={},
              **kwargs):
         """
         """
@@ -473,10 +479,15 @@ class Image( BaseObject ):
         self._properties['background'] = np.asarray(value)
         self._update_data_()
         
-        
+    # -- Header stuff
     @property
     def header(self):
         return self._properties["header"]
+    
+    @property
+    def exposuretime(self):
+        return float(self._side_properties['exptime']) \
+          if self._side_properties['exptime'] is not None else None
     
     # -- derived values
     @property # based on rawdata for pratical reason (like background check)
