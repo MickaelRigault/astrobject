@@ -1,18 +1,17 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import numpy as np
 from ..astrobject.photometry import Image
 
 
-__all__ = ["sdss"]
+__all__ = ["sdss","SDSS_INFO"]
 
-SDSS_INFO = {
-     "u":{"lbda":3551,"ABmag0":22.46},
-     "g":{"lbda":4686,"ABmag0":22.50},
-     "r":{"lbda":6166,"ABmag0":22.50},
-     "i":{"lbda":7480,"ABmag0":22.50},
-     "z":{"lbda":8932,"ABmag0":22.52},
-    }
+SDSS_INFO = {"u":{"lbda":3551,"ABmag0":22.46},
+             "g":{"lbda":4686,"ABmag0":22.50},
+             "r":{"lbda":6166,"ABmag0":22.50},
+             "i":{"lbda":7480,"ABmag0":22.50},
+             "z":{"lbda":8932,"ABmag0":22.52},
+            }
 # -------------------- #
 # - Instrument Info  - #
 # -------------------- #
@@ -89,19 +88,45 @@ def get_gain(camcol,band,run=None):
 #                                     #
 #######################################
 class SDSS( Image ):
-    """This is the image object custom for SDSS data"""
+    """
+    This is the image object custom for SDSS data
+    This method is based on
+    http://www.sdss.org/dr12/algorithms/magnitudes/
+    """
     def __build__(self):
         """
         """
         print "NOT READY YET"
         # -- Load the basic builds
+        
         self._derived_properties_keys.append("error")
+        self._derived_properties_keys.append("sky")
+        self._derived_properties_keys.append("skyparam")
         super(SDSS,self).__build__()
 
 
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
+    # --------------
+    # - Sky Data 
+    @property
+    def sky(self):
+        if self._derived_properties["sky"] is None:
+            self._define_sky_(force_it=True)
+        return self._derived_properties["sky"]
+
+    @property
+    def _rawsky_prop(self):
+        if self.fits is None:
+            raise AttributeError("no 'fits' loaded")
+        # -- if first time you call it, load it.
+        if self._derived_properties["skyparam"] is None:
+            self._derived_properties["skyparam"] = self.fits[2].data[0]
+        # -- return it
+        return self._derived_properties["skyparam"]
+    # --------------
+    # - Image Data    
     @property
     def band(self):
         if self.header is None:
@@ -130,11 +155,19 @@ class SDSS( Image ):
     # =========================== #
     # = Internal Tools          = #
     # =========================== #
-    def _update_error_(self):
-        """
-        This method follows the indication provided by SDSS' guide:
-        data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
-        """
-        nelect = self._gain*(self.rawdata / self._cimg + 0) # should be skyimg)
-        self._derived_properties["errors"] = None
+    # -----------------
+    # - Sky Background
+    def _define_sky_(self,force_it=False):
+        """This methods convert the sky background registered in the fits file
+        such that it maps the data values"""
+        from scipy import interpolate
         
+        if force_it is False and self.sky is not None:
+            return
+
+        rawsky,yinterpol,xinterpol = self._rawsky_prop
+        xshape,yshape = np.shape(rawsky)
+        XI, YI = np.meshgrid( range(xshape), range(yshape))
+        t = interpolate.bisplrep(XI,YI,rawsky.T)
+        self._derived_properties["sky"] = interpolate.bisplev(xinterpol,yinterpol,t)
+        return t

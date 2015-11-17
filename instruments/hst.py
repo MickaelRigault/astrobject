@@ -6,8 +6,8 @@ from ..astrobject.photometry import Image
 
 __all__ = ["hst"]
 
-SDSS_INFO {
-    "f225w":{"lbda":2359,"ABmag0":None,"instrument":"UVIS"},
+HST_INFO = {
+    "f225w":{"lbda":2359,"ABmag0":None,"instrument":"UVIS"}
     }
 
 def hst(*args,**kwargs):

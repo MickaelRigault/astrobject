@@ -92,6 +92,9 @@ class Image( BaseObject ):
             force_it = kwargs.pop("force_it",True)
             self.load(filename,force_it=force_it,
                       **kwargs)
+        # - Set the target if any
+        if astrotarget is not None:
+            self.set_target(astrotarget)
             
     def __build__(self):
         #
@@ -282,7 +285,8 @@ class Image( BaseObject ):
             raise AttributeError("'background' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        background  = self.get_sep_background() if background is None else background
+        background  = self._get_default_background_() if background is None \
+           else background
         
         # Shape test
         if self.rawdata is not None and np.shape(background) != self.shape:
@@ -290,15 +294,148 @@ class Image( BaseObject ):
         # -- Looks good
         self._properties['background'] = np.asarray(background)
         self._update_data_()
+
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
-    def get_pixels_around(self,pixel_x,pixel_y,radius_in_pixel):
+    
+    # ----------- #
+    #  Aperture   #
+    # ----------- #
+    def get_target_aperture(self,r_pixels,aptype="circle",subpix=5,**kwargs):
+        """If a target is loaded, this will get the target coords and run
+        'get_aperture'.
         """
+        if self.target is None:
+            raise AttributeError("No 'target' loaded")
+        xpix,ypix = self.coords_to_pixel(self.target.ra,self.target.dec)
+        return self.get_aperture(xpix,ypix,
+                                 r_pixels=r_pixels,aptype=aptype,
+                                 subpix=subpix,**kwargs)
+    
+    def get_aperture(self,x,y,r_pixels=None,aptype="circle",subpix=5,
+                     ellipse_args={"a":None,"b":None,"theta":None},
+                     annular_args={"rin":None,"rout":None},
+                     **kwargs):
         """
-        # - This should be moved in a c-lib
-        raise NotImplementedError("this will be kyle's SEP. Soon.")
+        This method uses K. Barary's Sextractor python module SEP
+        to measure the aperture photometry. See details here:
+        sep.readthedocs.org/en/v0.4.x/apertures.html
 
+        
+        Parameters
+        ----------
+
+        x:[float]                  Pixel coordinate of the second ("fast") axis
+                                   (so x in the in imshow). In pixels
+                                   
+        y:[float]                  Pixel coordinate of the first ("slow") axis
+                                   (so y in the in imshow). In pixels
+                                   
+        (other aperture arguments are required be depend on the type of
+        aperture photometry *aptype* is choosen)
+                                   
+        - options - 
+
+        aptype: [string]           Type of Aperture photometry used.
+                                   -circle  => set r_pixels
+                                   -ellipse => set all ellipse_args entries
+                                   -circan  => set all annulus_args entries
+                                   -ellipan => set all ellipse_args entries
+                                              set all annulus_args entries
+                                    (no other type allowed)
+                                               
+        
+        r_pixels: [float]          Size of the circle radius. In pixels.
+                                   (This is used only if aptype is circle)
+
+        subpix: [int]              Division of the real pixel to perform the
+                                   circle to square overlap.
+
+        ellipse_args: [dict]       The ellipse parameter that must be filled if
+                                   atype is ellipse of ellipan.
+
+        annular_args: [dict]       The annular parameter that must be filled if
+                                   atype is circan of ellipan.
+
+        
+        - other options ; not exhautive ; goes to sep.sum_*aptype* - 
+
+        gain: [float]              You can manually set the image gain. Otherwise
+                                   this method will look for the key 'self._gain'
+                                   and set None if it does not find it.
+
+        var: [2d-array/float]      You can manually set the variance of the image.
+                                   Otherwise, this will look for self.var. If this
+                                   is None and and sepbackground has been created
+                                   the sepbackground.rms()**2 will be used as a
+                                   variance proxy. If not, None is set to var.
+                                   
+        See other sep options like: 'mask=None, maskthresh=0.0, bkgann=None...'
+        
+        
+        Return
+        ------
+        sum, sumerr, flags (0 if no flag given)
+        """
+        import sep
+        # - This should be moved in a c-lib
+        if aptype not in ["circle","circann","ellipse","ellipan"]:
+            raise ValueError("the given aptype (%s) is not a "+\
+                             "known/implemeted sep aperture"%aptype)
+                             
+        # -------------
+        # - SEP Input 
+        gain = None if "_gain" not in dir(self) else self._gain
+        gain = kwargs.pop("gain",gain)
+        # -----------------
+        # - Variance Trick
+        var = self._sepbackground.rms()**2 if self.var is None \
+          and "_sepbackground" in dir(self) else None
+        var = kwargs.pop("var",var)
+
+        # ------------------------
+        # - Do the Aperture Photo
+        
+        # - Circle
+        if aptype == "circle":
+            return sep.sum_circle(self.data,x,y,r_pixels,subpix=subpix,
+                            var=var,gain=gain,**kwargs)
+        # - Annulus
+        if aptype == "circann":
+            if np.asarray([k is None for k in annular_args.values()]).any():
+                raise ValueError("You must set the annular arguments 'annular_arg'")
+            
+            rin,rout = [annular_args[k] for k in ["rin","rout"]]
+            return sep.sum_circann(self.data,x,y,rin,rout,
+                                  r_pixels,subpix=subpix,
+                                  var=var,gain=gain,**kwargs)
+        # - Ellipse
+        if aptype == "ellipse":
+            if np.asarray([k is None for k in ellipse_args.values()]).any():
+                raise ValueError("You must set the ellipse arguments 'ellipse_arg'")
+            
+            a,b,theta = [annular_args[k] for k in ["a","b","theta"]]
+            return sep.sum_ellipse(self.data,x,y,a,b,theta,
+                                    r_pixels,subpix=subpix,
+                                    var=var,gain=gain,**kwargs)
+        # - Elliptical Annulus
+        if aptype == "ellipan":
+            if np.asarray([k is None for k in ellipse_args.values()]).any():
+                raise ValueError("You must set the ellipse arguments 'ellipse_arg'")
+            if np.asarray([k is None for k in annular_args.values()]).any():
+                raise ValueError("You must set the annular arguments 'annular_arg'")
+            
+            rin,rout = [annular_args[k] for k in ["rin","rout"]]
+            a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
+            return sep.sum_ellipan(self.data,x,y,a,b,theta,rin,rout,
+                                    r_pixels,subpix=subpix,
+                                    var=var,gain=gain,**kwargs)
+            
+
+    # ------------------- #
+    # - WCS Tools       - #
+    # ------------------- #
     def pixel_to_coords(self,pixel_x,pixel_y):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
         if self.has_wcs() is False:
@@ -321,13 +458,13 @@ class Image( BaseObject ):
         This module is based on K. Barbary's python module of Sextractor: sep.
         
         """
-        if "_background" not in dir(self):
+        if "_sepbackground" not in dir(self):
             if self.rawdata is None:
                 raise ValueError("no 'rawdata' loaded. Cannot get a background")
             from sep import Background
-            self._background = Background(self.rawdata)
+            self._sepbackground = Background(self.rawdata)
 
-        return self._background.back()
+        return self._sepbackground.back()
         
     def sep_extract(self):
         """
@@ -551,6 +688,9 @@ class Image( BaseObject ):
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
+    def _get_default_background_(self,*args,**kwargs):
+        return self.get_sep_background(*args,**kwargs)
+        
     def _update_(self):
         """The module derives the 'derived_properties' based on the
         fundamental once
