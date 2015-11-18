@@ -14,7 +14,7 @@ from .baseobject   import BaseObject
 from ..utils.tools import kwargs_update
 
 
-__all__ = ["image"]
+__all__ = ["image","photopoint"]
 
 
 def image(filename=None,astrotarget=None,**kwargs):
@@ -43,15 +43,23 @@ def image(filename=None,astrotarget=None,**kwargs):
     return Image(filename,astrotarget=astrotarget,
                  **kwargs)#.copy()
 
+def photopoint(lbda,flux,var,source=None,
+               instrument_name=None,**kwargs):
+    """
+    """
+    return PhotoPoint(lbda,flux,var,source=source,
+                      instrument_name=instrument_name,
+                      **kwargs)
 
 #######################################
 #                                     #
-# Base Object Classes                 #
+# Base Object Classes: Image          #
 #                                     #
 #######################################
 class Image( BaseObject ):
     """
     """
+    __nature__ = "Image"
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
@@ -298,7 +306,6 @@ class Image( BaseObject ):
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
-    
     # ----------- #
     #  Aperture   #
     # ----------- #
@@ -705,3 +712,126 @@ class Image( BaseObject ):
         """
         self._derived_properties["data"] = self.rawdata - self.background
         
+#######################################
+#                                     #
+# Base Object Classes: PhotoPoint     #
+#                                     #
+#######################################
+class PhotoPoint( BaseObject ):
+    """This Class hold the basic information associated to
+    a photometric point"""
+
+    __nature__ = "PhotoPoint"
+
+    _properties_keys = ["lbda","flux","var"]
+    _side_properties_keys = ["source","intrument_name"]
+    _derived_properties_keys = []
+    # =========================== #
+    # = Constructor             = #
+    # =========================== #
+    def __init__(self,lbda,flux,var,
+                 empty=False,**kwargs):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+
+        self.create(lbda,flux,var,**kwargs)    
+        
+    # =========================== #
+    # = Main Methods            = #
+    # =========================== #
+    def create(self,lbda,flux,var,
+               source=None,instrument_name=None,
+               force_it=False):
+        """This method create the object"""
+        if self.flux is not None and not force_it:
+            raise AttributeError("object is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+        # ****************** #
+        # * Creation       * #
+        # ****************** #
+        self._properties["lbda"] = np.float(lbda)
+        self._properties["flux"] = np.float(flux)
+        self._properties["var"]  = np.float(var)
+
+        self._side_properties["source"] = source
+        self._side_properties["instrument_name"] = instrument_name
+        self._update_()
+
+    def display(self,ax,toshow="flux",**kwargs):
+        """This method enable to display the current point
+        in the given matplotlib axes"""
+        # - Test if there is data
+        if not self.has_data():
+            raise AttributeError("no data to display")
+        # -----------
+        # - Input
+        if toshow == "flux":
+            y = self.flux
+            dy= np.sqrt(self.var) if self.var is None else None
+        elif toshow == "mag":
+            y = self.mag
+            dy= np.sqrt(self.magvar) if self.magvar is None else None
+        else:
+            raise ValueError("%s is not a known parameter"%toshow)
+        # -----------
+        # - Fancy
+        default_prop = dict(marker="o",ecolor="0.7",
+                        zorder=3)
+        prop = kwargs_update(default_prop,**kwargs)
+        # -----------
+        # - Input
+        pl = ax.errorbar(self.lbda,y,yerr=dy,**prop)
+        self._plot = {}
+        self._plot["ax"] = ax
+        self._plot["marker"] = pl
+        self._plot["prop"] = prop
+        return self._plot
+    
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    
+    # =========================== #
+    # = Internal Methods        = #
+    # =========================== #
+    @property
+    def lbda(self):
+        return self._properties["lbda"]
+
+    @property
+    def flux(self):
+        return self._properties["flux"]
+
+    @property
+    def var(self):
+        return self._properties["var"]
+
+    def has_data(self):
+        return not self.flux is None
+    # ------------
+    # - Side
+    @property
+    def source(self):
+        return self._side_properties["source"]
+    @source.setter
+    def source(self,value):
+        self._side_properties["source"] = value
+
+    @property
+    def instrument_name(self):
+        return self._side_properties["instrument_name"]
+    @instrument_name.setter
+    def instrument_name(self,value):
+        self._side_properties["instrument_name"] = value
+        
+    # ------------
+    # - Derived 
+    @property
+    def mag(self):
+        return None
+    @property
+    def magvar(self):
+        return None

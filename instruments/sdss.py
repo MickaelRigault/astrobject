@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from ..astrobject.photometry import Image
-
+from ..astrobject.photometry import pf
+from .baseinstrument import Instrument
 
 __all__ = ["sdss","SDSS_INFO"]
 
@@ -19,6 +19,10 @@ SDSS_INFO = {"u":{"lbda":3551,"ABmag0":22.46},
 def sdss(*args,**kwargs):
     return SDSS(*args,**kwargs)
 
+def is_sdss_file(filename):
+    """This test if the input file is a SDSS one"""
+    return True if pf.getheader(filename).get("ORIGIN") == "SDSS" \
+      else False
 # -------------------- #
 # - Inside tools     - #
 # -------------------- #
@@ -28,17 +32,17 @@ def get_darkvariance(camcol,band,run=None):
     """
     DARK_VAR_CCD = {
             0:{"u":9.61,   "g":15.6025,"r":1.8225,
-               "i":7.84,"z":0.81},
+               "i":7.84,     "z":0.81},
             1:{"u":12.6025,"g":1.44,   "r":1.00,
                "i":[5.76,6.25],"z":1.0},
             2:{"u":8.7025, "g":1.3225, "r":1.3225,
-               "i":4.6225,"z":1.0},
+               "i":4.6225,   "z":1.0},
             3:{"u":12.6025,"g":1.96,   "r":1.3225,
                "i":[6.25,7.5625],"z":[9.61,12.6025]},
-            4:{"u":9.3025, "g":1.1025, "r":0.81,"i":7.84,
-               "z":[1.8225,2.1025]},
+            4:{"u":9.3025, "g":1.1025, "r":0.81,
+               "i":7.84,     "z":[1.8225,2.1025]},
             5:{"u":7.0225, "g":1.8225, "r":0.9025,
-               "i":5.0625,"z":1.21}
+               "i":5.0625,   "z":1.21}
             }
          
     dark = DARK_VAR_CCD[camcol-1][band]
@@ -87,12 +91,14 @@ def get_gain(camcol,band,run=None):
 #   SDSS Image Object                 #
 #                                     #
 #######################################
-class SDSS( Image ):
+class SDSS( Instrument ):
     """
     This is the image object custom for SDSS data
     This method is based on
     http://www.sdss.org/dr12/algorithms/magnitudes/
     """
+    instrument_name = "SDSS"
+    
     def __build__(self):
         """
         """
@@ -132,6 +138,15 @@ class SDSS( Image ):
         if self.header is None:
             raise AttributeError("no header loaded ")
         return self.header["FILTER"]
+
+    @property
+    def band_info(self):
+        return SDSS_INFO[self.band]
+
+    @property
+    def lbda(self):
+        return self.band_info["lbda"]
+    
     
     @property
     def _cimg(self):
