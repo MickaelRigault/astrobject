@@ -102,9 +102,7 @@ class SDSS( Instrument ):
     def __build__(self):
         """
         """
-        print "NOT READY YET"
         # -- Load the basic builds
-        
         self._derived_properties_keys.append("error")
         self._derived_properties_keys.append("sky")
         self._derived_properties_keys.append("skyparam")

@@ -4,5 +4,6 @@
 from baseobject   import *
 from spectroscopy import *
 from photometry   import *
-
-__all__ = ['baseobject','spectroscopy','photometry']
+from multiband    import *
+__all__ = ['baseobject','spectroscopy','photometry',
+           'multiband']

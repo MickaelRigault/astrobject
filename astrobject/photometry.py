@@ -46,6 +46,32 @@ def image(filename=None,astrotarget=None,**kwargs):
 def photopoint(lbda,flux,var,source=None,
                instrument_name=None,**kwargs):
     """
+    Get the basic object containing  photometric point information
+    
+    Parameters
+    ----------
+
+    lbda: [float]              The central wavelength associated to the photometric
+                               points.
+
+    flux: [float]              The flux (*not magnitude*) of the photometric point.
+
+    var: [float]               The variance associated to the point's flux.
+
+    - option -
+
+    empty: [bool]              Set True to return an empty object.
+
+    - other options ; not exhautive ; goes to 'create' -
+
+    source: [string]           Staten the origin of the point (e.g. image, ...)
+
+    instrument_name:[string]   Give a name of the intrument that enable to take the
+                               photometric point.
+
+    Return
+    ------
+    PhotoPoint
     """
     return PhotoPoint(lbda,flux,var,source=source,
                       instrument_name=instrument_name,
@@ -726,12 +752,39 @@ class PhotoPoint( BaseObject ):
     _properties_keys = ["lbda","flux","var"]
     _side_properties_keys = ["source","intrument_name"]
     _derived_properties_keys = []
+    
     # =========================== #
     # = Constructor             = #
     # =========================== #
     def __init__(self,lbda,flux,var,
                  empty=False,**kwargs):
         """
+        Initialize the PhotoPoint object
+
+        Parameters
+        ----------
+
+        lbda: [float]              The central wavelength associated to the photometric
+                                   points.
+
+        flux: [float]              The flux (*not magnitude*) of the photometric point.
+
+        var: [float]               The variance associated to the point's flux.
+        
+        - option -
+
+        empty: [bool]              Set True to return an empty object.
+        
+        - other options ; not exhautive ; goes to 'create' -
+
+        source: [string]           Staten the origin of the point (e.g. image, ...)
+
+        instrument_name:[string]   Give a name of the intrument that enable to take the
+                                   photometric point.
+        
+        Return
+        ------
+        Void
         """
         self.__build__()
         if empty:
@@ -770,10 +823,10 @@ class PhotoPoint( BaseObject ):
         # - Input
         if toshow == "flux":
             y = self.flux
-            dy= np.sqrt(self.var) if self.var is None else None
+            dy= np.sqrt(self.var) if self.var is not None else None
         elif toshow == "mag":
             y = self.mag
-            dy= np.sqrt(self.magvar) if self.magvar is None else None
+            dy= np.sqrt(self.magvar) if self.magvar is not None else None
         else:
             raise ValueError("%s is not a known parameter"%toshow)
         # -----------
