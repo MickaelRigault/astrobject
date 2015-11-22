@@ -15,4 +15,4 @@ Python
 - matplotlib
 - astropy
 - sep
-- astLib (no be moved to astropy)
+- astLib (to be moved to astropy)
