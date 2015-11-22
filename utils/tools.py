@@ -17,6 +17,10 @@ def kwargs_update(default,**kwargs):
         
     return k
 
+
+# --------------------------- #
+# - I/O Tools               - #
+# --------------------------- #
 def load_pkl(filename):
     """
     """
@@ -41,7 +45,33 @@ def dump_pkl(data,filename,**kwargs):
     dump(data, outfile,**kwargs)
     outfile.close()
 
+# --------------------------- #
+# - Conversion Tools        - #
+# --------------------------- #
+def flux_2_mag(flux,dflux,wavelength):
+    """
+    """
+    F_Lxlambda2  = flux * wavelength**2
+    if dflux is None:
+        return -2.5*np.log10(F_Lxlambda2) - 2.406, None
+    err = -2.5*np.log(10) * dflux / flux
+    return -2.5*np.log10(F_Lxlambda2) - 2.406, err
 
+
+def hourangle_2_degree(ra_hours,dec_hours,obstime="J2000"):
+    """given the coordinate of the target in hours units
+    (e.g. 10:58:59.072 +46:40:25.23) this will retour them
+    in degree"""
+    from astropy.coordinates import SkyCoord
+    from astropy import units as u
+    c = SkyCoord("%s %s"%(ra_hours,dec_hours),
+                 unit=(u.hourangle, u.deg), obstime=obstime)
+    return c.ra.value,c.dec.value
+
+
+# --------------------------- #
+# - Array Tools             - #
+# --------------------------- #
 def shape_ajustment(X,Y,model_X,k=4,verbose=False):
     """ DOC TO BE DONE
     return  Y /w the same binning as model_X  in their commun wavelength

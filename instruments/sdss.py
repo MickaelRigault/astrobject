@@ -99,14 +99,14 @@ class SDSS( Instrument ):
     """
     instrument_name = "SDSS"
     
-    def __build__(self):
+    def __build__(self,data_index=0):
         """
         """
         # -- Load the basic builds
         self._derived_properties_keys.append("error")
         self._derived_properties_keys.append("sky")
         self._derived_properties_keys.append("skyparam")
-        super(SDSS,self).__build__()
+        super(SDSS,self).__build__(data_index=data_index)
 
 
     # =========================== #

@@ -18,7 +18,7 @@ __version__ = 0.1
 __all__     = ["astrotarget"]
 
 
-def astrotarget(name,zcmb,ra,dec,
+def astrotarget(name,zcmb, ra, dec,
                type_=None,forced_mwebmv=None,**kwargs):
     """
     = Initialize the AstroTarget Function =
@@ -372,7 +372,15 @@ class AstroTarget( BaseObject ):
         
         self._side_properties["cosmology"] = astropycosmo
         self._update_distance_()
+
+    @property
+    def distance_onflight(self):
+        if self.zcmb is None:
+            raise AttributeError("no 'redshift' defined")
+        if self.cosmo is None:
+            raise AttributeError("no 'cosmo' defined")
         
+        return self.cosmo.luminosity_distance(self.zcmb).value
     # ========================= #
     # = Internal Tools        = #
     # ========================= #

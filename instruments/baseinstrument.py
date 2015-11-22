@@ -9,9 +9,9 @@ __all__ = ["Instrument"]
 class Instrument( Image ):
     """
     """
-    def __build__(self):
+    def __build__(self,data_index=0):
         """This is a slightly advanced Image object"""
-        super(Instrument,self).__build__()
+        super(Instrument,self).__build__(data_index=data_index)
 
     # ----------- #
     #  PhotoPoint #

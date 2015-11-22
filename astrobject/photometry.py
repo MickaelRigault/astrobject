@@ -11,10 +11,10 @@ from astropy     import units
 from astLib      import astWCS
 
 from .baseobject   import BaseObject 
-from ..utils.tools import kwargs_update
+from ..utils.tools import kwargs_update,flux_2_mag
 
 
-__all__ = ["image","photopoint"]
+__all__ = ["image","photopoint","lightcurve"]
 
 
 def image(filename=None,astrotarget=None,**kwargs):
@@ -77,6 +77,106 @@ def photopoint(lbda,flux,var,source=None,
                       instrument_name=instrument_name,
                       **kwargs)
 
+
+def lightcurve(datapoints,times,**kwargs):
+    """
+    This functions enables to create a lightcurve object
+    from the given datapoints and times. The datapoints can
+    either be a list of 'PhotoPoint' or a dictionnary having
+    {flux, variance, lbda_s}
+
+    Parameters
+    ----------
+    datapoints: [list/dict]        Two formes fo data can be given to this function.
+                                   1) datapoints = list-of-PhotoPoint
+                                   This is a simple list (or array) of astrobject
+                                   PhotoPoint. Its size must corresponds to 'times' one
+                                   2) a dictionnary having 3 parameters: lbda, fluxes,
+                                   and variances. Each have to have the size of 'times'
+                                   except lbda that could be simple float since all
+                                   must share the same lbda.
+
+    times: [array]                 This is the list/array of times corresponding to
+                                   each data points.
+
+    - options -
+
+    Return
+    ------
+    LightCurve
+    
+    """
+    if type(datapoints) is dict:
+        # this must be a dictsource:
+        datapoints = dictsource_2_photopoints(datapoints)
+        
+    if type(datapoints) is list or type(datapoints) is np.ndarray:
+        # - This should be a list of PhotoPoints, otherwise create will break
+        if len(times) != len(datapoints):
+            raise ValueError("'times and datapoints must have the same size")
+        return LightCurve(datapoints, times)
+    
+    raise TypeError("'datapoints' must be a list of photopoints or a dictsource")
+        
+
+def dictsource_2_photopoints(dictsource,**kwargs):
+    """This fuctions enable to convert a dictionnary
+    into a list of photopoints.
+    This uses 'photopoint' to load the list.
+
+    Parameters
+    ----------
+    dictsource: [dictionnary]      This dictionnary must have the following entries:
+                                   {
+                                   'flux': [list of fluxes],
+                                   'var': [list of associated variances],
+                                   'lbda': float-if-unique wavelength/[list of lbda]
+                                   - options -
+                                   'source': string/[list of sources],
+                                   'instrument_name': string/[list of instruments],
+                                   }
+                                   The array must all have the same size.
+
+                                   
+    - kwargs options goes to all the looped PhotoPoint __init__-
+    
+    Return
+    ------
+    list-of-PhotoPoints
+    """
+    if type(dictsource) is not dict:
+        raise TypeError("'dictsource' must be a dictionnary")
+    
+    # - Does is have the requiered basic information:
+    for musthave in ["fluxes","variances","lbda"]:
+        if musthave not in dictsource.keys():
+            raise TypeError("'dictsource' must have the following entries: "+ \
+                            "fluxes","variances","lbda")
+    # - Good.
+    # -------
+    # - array-data
+    fluxes,variances = dictsource["flux"],dictsource["var"]
+    # - potentially float or None
+    lbda = dictsource["lbda"]
+    source = dictsource["source"] if "source" in dictsource.keys() else None
+    instrument_name = dictsource["instrument_name"] \
+      if "instrument_name" in dictsource.keys() else None
+    
+    lbda = [lbda]*len(fluxes) if hasattr(lbda,'__iter__') is False else lbda
+    source = [source]*len(fluxes) if hasattr(source,'__iter__') is False else source
+    instrument_name = [instrument_name]*len(fluxes)\
+       if hasattr(instrument_name,'__iter__') is False else instrument_name
+
+    # -- Let's create the list of PhotoPoints
+    return [photopoint(lbda,flux,var,source=source,
+                      instrument_name=instrument_name,
+                      **kwargs)
+            for flux,var,lbda,source,ins in zip(fluxes,variances,lbda,
+                                                source,instrument_name)]
+
+    
+    
+    
 #######################################
 #                                     #
 # Base Object Classes: Image          #
@@ -100,7 +200,7 @@ class Image( BaseObject ):
     # = Constructor             = #
     # =========================== #
     def __init__(self,filename=None,
-                 astrotarget=None,
+                 astrotarget=None,data_index=0,
                  empty=False,**kwargs):
         """
         Initalize the image by giving its filelocation (*filename*). This
@@ -118,7 +218,8 @@ class Image( BaseObject ):
                                    (Careful with that)
                                    
         """
-        self.__build__()
+        self.__build__(data_index=data_index)
+
         if empty:
             return
         
@@ -130,7 +231,7 @@ class Image( BaseObject ):
         if astrotarget is not None:
             self.set_target(astrotarget)
             
-    def __build__(self):
+    def __build__(self,data_index=0):
         #
         # Improvement of BaseObject
         # including the _object_properties
@@ -138,7 +239,7 @@ class Image( BaseObject ):
         super(Image,self).__build__()
         # -- How to read the image
         self._build_properties = dict(
-                data_index = 0,
+                data_index = data_index,
                 header_exptime = "EXPTIME"
                 )
 
@@ -236,7 +337,7 @@ class Image( BaseObject ):
         self._derived_properties["fits"] = fits
         # basics data and wcs
         self._properties["rawdata"]      = np.asarray(rawdata,dtype="float")
-        self._properties["header"]       = pf.Header if header is None else header
+        self._properties["header"]       = pf.Header() if header is None else header
         self._properties["var"]          = variance
         self.set_background(background)
         # -- Side, exposure time
@@ -844,11 +945,11 @@ class PhotoPoint( BaseObject ):
         return self._plot
     
     # =========================== #
-    # = Properties and Settings = #
+    # = Internal Methods        = #
     # =========================== #
     
     # =========================== #
-    # = Internal Methods        = #
+    # = Properties and Settings = #
     # =========================== #
     @property
     def lbda(self):
@@ -884,7 +985,181 @@ class PhotoPoint( BaseObject ):
     # - Derived 
     @property
     def mag(self):
-        return None
+        return flux_2_mag(self.flux,self.dflux,self.lbda)[0]
     @property
     def magvar(self):
-        return None
+        return flux_2_mag(self.flux,self.dflux,self.lbda)[1] ** 2
+
+
+
+#######################################
+#                                     #
+# Base Object Classes: LightCurve     #
+#                                     #
+#######################################
+def LightCurve( BaseObject ):
+    """This object gather several PhotoPoint and there corresponding time
+    to forme a lightcurve"""
+    
+    __nature__ = "LightCurve"
+
+    _properties_keys = ["photopoints","times"]
+    _side_properties_keys = []
+    _derived_properties_keys = ["lbda"]
+    
+    # =========================== #
+    # = Constructor             = #
+    # =========================== #
+    def __init__(self,
+                 photopoints=None,
+                 times=None,
+                 empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        
+        if photopoints is not None or times is not None:
+            self.create(photopoints, times)
+            
+    # =========================== #
+    # = Main Methods            = #
+    # =========================== #
+    def create(self, photopoints, times):
+        """
+        """
+        if len(photopoints) != len(times):
+            raise ValueError("photopoints and times must have the same length")
+        
+        # ********************* #
+        # * Create the Object * #
+        # ********************* #
+        for p,t in zip(photopoints,times):
+            self.add_photopoint(p,t)
+            
+
+    # ------------------ #
+    # - I/O Photopoint - #
+    # ------------------ #
+    def create_new_photopoint(self,flux,var,lbda,time,
+                              **kwargs):
+        """
+        """
+        new_photopoint = photopoint(lbda,flux,var,**kwargs)
+        self.add_photopoint(new_photopoint,time)
+        
+        
+    def add_photopoint(self,photopoint,time):
+        """
+        """
+        # ----------------------- #
+        # - Test the bands      - #
+        # ----------------------- #
+        if "__nature__" not in photopoint or \
+          photopoint.__nature__ != "PhotoPoint":
+            raise TypeError("'photopoint' must be a list of astrobject PhotoPoint")
+        
+        self._test_lbda_(photopoint)
+        
+        if self.lbda is None:
+            self._derived_properties['lbda'] = photopoint.lbda
+            
+        if self._properties['photopoints'] is None:
+            self._properties['photopoints'] = []
+            self._properties['times'] = []
+            
+            
+        self._properties['photopoints'].append(photopoint)
+        self._properties['times'].append(time)
+
+
+    # ------------------ #
+    # - Show           - #
+    # ------------------ #
+    def show(self,savefile=None,ax=None,
+             inmag=False,show=True,**kwargs):
+        """
+        """
+        # -- Setting -- #
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if ax is None:
+            fig = mpl.figure(figsize=[8,8])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "imshow" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        pl = self.display(ax,inmag=inmag,**kwargs)
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['plot'] = pl
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
+        
+    def display(self,ax,inmag=False,**kwargs):
+        """
+        """
+        if inmag:
+            y,dy = self.mags,self.magsvar
+        else:
+            y,dy = self.fluxes,self.fluxesvar
+
+        default_prop = dict(marker="o",ms=15,mec="k",mfc="b",
+                            alpha=0.8,ecolor="0.7")
+        prop = kwargs_update(default_prop,**kwargs)
+        
+        pl = ax.errorbar(self.times,y,yerr=dy,**prop)
+        return pl
+    
+    # =========================== #
+    # = Internal Methods        = #
+    # =========================== #
+    def _test_lbda_(self,photopoint):
+        """This module check that the lbda in the given
+        photopoint is the same as the other ones.
+        Remark that is None won't be penalized. 
+        """
+        if self.lbda is None or photopoint.lbda is None:
+            return
+        if self.lbda != photopoint.lbda:
+            raise ValueError("the given 'photopoint' does not share the other's lbda")
+        
+        
+        
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def photopoints(self):
+        return self._properties['photopoints']
+    
+    @property
+    def times(self):
+        return self._properties['times']
+    
+    @property
+    def fluxes(self):
+        return [p.flux for p in self.photopoints]
+    
+    @property
+    def fluxesvar(self):
+        return [p.var for p in self.photopoints]
+
+    @property
+    def mags(self):
+        return [p.mag for p in self.photopoints]
+    
+    @property
+    def magsvar(self):
+        return [p.magvar for p in self.photopoints]
+    
+    @property
+    def lbda(self):
+        return self._derived_properties['lbda']
+    
