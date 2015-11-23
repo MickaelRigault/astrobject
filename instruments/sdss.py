@@ -23,6 +23,14 @@ def is_sdss_file(filename):
     """This test if the input file is a SDSS one"""
     return True if pf.getheader(filename).get("ORIGIN") == "SDSS" \
       else False
+
+def which_band_is_file(filename):
+    """This resuts the band of the given file if it is a
+    stella one"""
+    if not is_sdss_file(filename):
+        return None
+    return pf.getheader(filename).get("FILTER")
+
 # -------------------- #
 # - Inside tools     - #
 # -------------------- #
@@ -144,7 +152,16 @@ class SDSS( Instrument ):
     @property
     def lbda(self):
         return self.band_info["lbda"]
+
+    @property
+    def mjd_obstime(self):
+        if self.header is None:
+            raise AttributeError("no header loaded ")
+        from astropy import time
+        return time.Time("%sT%s"%(self.header["DATE-OBS"],self.header["TAIHMS"])).mjd
     
+    # ------------
+    # - Internal
     
     @property
     def _cimg(self):

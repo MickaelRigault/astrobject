@@ -114,6 +114,7 @@ def lightcurve(datapoints,times,**kwargs):
         # - This should be a list of PhotoPoints, otherwise create will break
         if len(times) != len(datapoints):
             raise ValueError("'times and datapoints must have the same size")
+        
         return LightCurve(datapoints, times)
     
     raise TypeError("'datapoints' must be a list of photopoints or a dictsource")
@@ -274,7 +275,7 @@ class Image( BaseObject ):
         Void
         """
         # -- Check if you will not overwrite anything
-        if self.data is not None and force_it is False:
+        if self.rawdata is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
@@ -327,7 +328,7 @@ class Image( BaseObject ):
         Void
         """
         # -- Check if you will not overwrite anything
-        if self.data is not None and force_it is False:
+        if self.rawdata is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
         # ********************* #
@@ -341,9 +342,7 @@ class Image( BaseObject ):
         self._properties["var"]          = variance
         self.set_background(background)
         # -- Side, exposure time
-        self._side_properties["exptime"] = \
-          self.header[self._build_properties["header_exptime"]] if exptime is None \
-          else exptime
+        self._side_properties["exptime"] = exptime
           
         if wcs is not None and wcs.__module__ != "astLib.astWCS":
             print "WARNING: only astLib.astWCS wcs solution is implemented"
@@ -615,7 +614,9 @@ class Image( BaseObject ):
         print "to be done"
 
     def show(self,toshow="data",savefile=None,logscale=True,
-             ax=None,show=True,wcs_coords=False,proptarget={},
+             ax=None,show=True,wcs_coords=False,
+             zoomon=None,zoompxl=200,
+             proptarget={},
              **kwargs):
         """
         """
@@ -663,12 +664,32 @@ class Image( BaseObject ):
         prop = kwargs_update(default_prop,**kwargs)
 
         # ----------- #
-        # - Do It
+        # - Do It     #
         im = ax.imshow(x,**prop)
         # - add target
         pl_tgt = None if self.has_target() is False \
           else self.display_target(ax,wcs_coords=wcs_coords,
                                    **proptarget)
+        # ----------- #
+        # - Zoom      #
+        if zoomon is not None:
+            # -- Zoom on target
+            if type(zoomon) is str and zoomon=="target" and self.has_target():
+                    coords_zoom = self.coords_to_pixel(*self.target.radec) if not wcs_coords \
+                    else self.target.radec
+            elif np.shape(zoomon) == (2,):
+                coords_zoom = zoomon
+            else:
+                print "WARNING can not parse to zoom on input"
+                coords_zoom = None
+        else:
+            coords_zoom = None
+
+        if coords_zoom is not None:
+            width = zoompxl if not wcs_coords else zoompxl*self.pixel_size_deg
+            ax.set_xlim(coords_zoom[0]-width,coords_zoom[0]+width)
+            ax.set_ylim(coords_zoom[1]-width,coords_zoom[1]+width)
+            
         # ----------- #
         # - Recordit
         # -- Save the data -- #
@@ -757,8 +778,13 @@ class Image( BaseObject ):
     
     @property
     def exposuretime(self):
-        return float(self._side_properties['exptime']) \
-          if self._side_properties['exptime'] is not None else None
+        if self._side_properties['exptime'] is None:
+            # -- It has not be set manually, maybe check the header
+            if self._build_properties["header_exptime"] in self.header:
+                self._side_properties['exptime'] = \
+                  np.float(self.header[self._build_properties["header_exptime"]])
+        # -- You have it ? This will stay None if not
+        return self._side_properties['exptime']
     
     # -- derived values
     @property # based on rawdata for pratical reason (like background check)
@@ -985,10 +1011,10 @@ class PhotoPoint( BaseObject ):
     # - Derived 
     @property
     def mag(self):
-        return flux_2_mag(self.flux,self.dflux,self.lbda)[0]
+        return flux_2_mag(self.flux,np.sqrt(self.var),self.lbda)[0]
     @property
     def magvar(self):
-        return flux_2_mag(self.flux,self.dflux,self.lbda)[1] ** 2
+        return flux_2_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2
 
 
 
@@ -997,7 +1023,7 @@ class PhotoPoint( BaseObject ):
 # Base Object Classes: LightCurve     #
 #                                     #
 #######################################
-def LightCurve( BaseObject ):
+class LightCurve( BaseObject ):
     """This object gather several PhotoPoint and there corresponding time
     to forme a lightcurve"""
     
@@ -1010,10 +1036,8 @@ def LightCurve( BaseObject ):
     # =========================== #
     # = Constructor             = #
     # =========================== #
-    def __init__(self,
-                 photopoints=None,
-                 times=None,
-                 empty=False):
+    def __init__(self,photopoints=None,
+                 times=None,empty=False):
         """
         """
         self.__build__()
@@ -1056,7 +1080,7 @@ def LightCurve( BaseObject ):
         # ----------------------- #
         # - Test the bands      - #
         # ----------------------- #
-        if "__nature__" not in photopoint or \
+        if "__nature__" not in dir(photopoint) or \
           photopoint.__nature__ != "PhotoPoint":
             raise TypeError("'photopoint' must be a list of astrobject PhotoPoint")
         

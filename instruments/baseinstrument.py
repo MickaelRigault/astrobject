@@ -64,6 +64,10 @@ class Instrument( Image ):
     @property
     def lbda(self):
         return self.band_info["lbda"]
+
+    @property
+    def mjd_obstime(self):
+        raise NotImplementedError("'obstime' must be implemented")
     
     @property
     def mab0(self):
