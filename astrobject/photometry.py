@@ -88,9 +88,11 @@ def lightcurve(datapoints,times,**kwargs):
     Parameters
     ----------
     datapoints: [list/dict]        Two formes fo data can be given to this function.
+
                                    1) datapoints = list-of-PhotoPoint
                                    This is a simple list (or array) of astrobject
                                    PhotoPoint. Its size must corresponds to 'times' one
+                                   
                                    2) a dictionnary having 3 parameters: lbda, fluxes,
                                    and variances. Each have to have the size of 'times'
                                    except lbda that could be simple float since all

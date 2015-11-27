@@ -7,6 +7,9 @@ __all__ = ["hst"]
 
 HST_INFO = {
     "f225w":{"lbda":2365.80,"ABmag0":None,"instrument":"UVIS"}
+    "telescope":{
+                 "lon":np.NaN,
+                 "lat":np.NaN}
     }
 
 def hst(*args,**kwargs):

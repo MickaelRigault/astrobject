@@ -11,6 +11,9 @@ STELLA_INFO = {"up":{"lbda":3580,"ABmag0":None},
                "rp":{"lbda":6204,"ABmag0":None},
                "ip":{"lbda":7698,"ABmag0":None},
                "zp":{"lbda":9665,"ABmag0":None},
+                "telescope":{
+                    "lon":28.3022822,
+                    "lat":-16.5122172}
               }
 
 def stella(*args,**kwargs):

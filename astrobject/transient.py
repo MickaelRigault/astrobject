@@ -5,6 +5,8 @@ from .baseobject import AstroTarget
 
 __all__     = ["snIa"]
 
+def snIa(args,**kwargs):
+    return Supernova(*args,**kwargs)
 #######################################
 #                                     #
 # Base Object Classes: Transient      #

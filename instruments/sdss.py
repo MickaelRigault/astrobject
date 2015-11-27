@@ -11,6 +11,9 @@ SDSS_INFO = {"u":{"lbda":3551,"ABmag0":22.46},
              "r":{"lbda":6166,"ABmag0":22.50},
              "i":{"lbda":7480,"ABmag0":22.50},
              "z":{"lbda":8932,"ABmag0":22.52},
+             "telescope":{
+                 "lon": 32.780,
+                 "lat":-105.82}
             }
 # -------------------- #
 # - Instrument Info  - #
