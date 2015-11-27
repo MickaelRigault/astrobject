@@ -4,4 +4,5 @@
 import tools
 import mpladdon
 import decorators
-__all__ = ['tools','mpladdon','decorators']
+import random
+__all__ = ['tools','mpladdon','decorators','random']
