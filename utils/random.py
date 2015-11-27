@@ -12,7 +12,17 @@ __all__ = ["simulate_lb","simulate_z"]
 def simulate_lb(Npoints,MW_exclusion=10,ra_range=(-180,180),dec_range=(-90,90),
                 output_frame='galactic',radius=None):
     """
-    radius -- (radius, l, b) force coordinates to be within radius of (l, b)
+    Draw a set of coordinates for particular RA and Dec range with MW exclusion 
+
+    Arguments:
+    Npoints -- number of coordinates to draw
+    
+    Keyword arguments:
+    MW_exclusion -- redraw coordinates with b < this valu in degrees (default: 10)
+    ra_range     -- range of RA distribution
+    dec_range    -- range of DEC distribution
+    output_frame -- output coordinate system ('galactic' or 'j2000')
+    radius -- (r, l, b) force coordinates to be within r degrees of (l, b)
               Only works in galactic coordinates so far
     """
     # ----------------------- #
@@ -77,7 +87,16 @@ def simulate_lb(Npoints,MW_exclusion=10,ra_range=(-180,180),dec_range=(-90,90),
 
 def simulate_z(NPoints,z_range,z_pdf=None,z_pdf_bins=None):
     """
+    Draw redshifts from distribution based on histogram
 
+    Arguments:
+    NPoints -- number of redshifts to draw
+    z_range -- redshift range (tuple of length 2)
+
+    Keyword arguments:
+    z_pdf      -- redshift histogramm values (need not be normalized)
+    z_pdf_bins -- redshift bins for z_pdf (must contain one more element 
+                  than z_pdf)
     """
     if (len(z_range) != 2 or z_range[0] > z_range[1]):
         raise ValueError('Invalid z_range')
