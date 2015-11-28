@@ -9,6 +9,48 @@ _d2r = np.pi / 180
 __all__ = ["simulate_lb","simulate_z"]
 
 
+
+# ============================== #
+# = High Level Function        = #
+# ============================== #
+def radec(npoints=1,
+          ra_range=(-180,180),dec_range=(-90,90),
+          mw_exclusion=10,**kwargs):
+    """
+    """
+    return np.asarray(simulate_lb(npoints,MW_exclusion=mw_exclusion,
+                       ra_range=ra_range,dec_range=dec_range,
+                       output_frame="j2000",**kwargs))
+
+def redshift(npoints, zrange,
+             pdfkind="flat",
+             **kwargs):
+    """
+    """
+    # Not For Uly: This redshift function could do much more
+    # to parse easily the z_pdf and z_pdf_bins.
+    # This through "pdfkind"
+    # We can imagine having a string parser that is None
+    
+    if pdfkind.lower() in ["flat","None"]:
+        pdfkind = None
+        
+    if pdfkind is None:
+        # - The default Stuff
+        z_pdf = kwargs.pop("z_pdf",None)
+        z_pdf_bins = kwargs.pop("z_pdf_bins",None)
+    elif type(pdfkind) is str:
+        raise NotImplementedError("the 'pdfkind' could only be 'flat' or None")
+    else:
+        raise NotImplementedError("the 'pdfkind' could only be 'flat' or None")
+
+    
+    return np.asarray(simulate_z(npoints,zrange,z_pdf=z_pdf,z_pdf_bins=z_pdf_bins))
+
+
+# ============================== #
+# = Low level Functions        = #
+# ============================== #
 def simulate_lb(Npoints,MW_exclusion=10,ra_range=(-180,180),dec_range=(-90,90),
                 output_frame='galactic',radius=None):
     """
