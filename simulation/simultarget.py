@@ -7,8 +7,39 @@ from ..astrobject.baseobject import BaseObject,astrotarget
 from ..astrobject.transient import transient
 from ..utils import random
 
-__all__ = ["TransientGenerator"]
+__all__ = ["transient_generator","generate_transients"]
 
+def transient_generator(npoints, zrange,
+                        zpdf="flat",
+                        ra_range=[-180,180], dec_range=[-90,90],
+                        **kwargs):
+    """
+    This model return the object that enable to create and change
+    the kind of transient you which to set in the sky.
+
+    # - HERE COPY PASTE THE TransientGenerator INIT - #
+    # - TO BE DONE
+    
+    """
+    return TransientGenerator(ntransients=npoints, zrange=zrange,
+                              zpdf=zpdf,ra_range=ra_range,dec_range=dec_range,
+                              **kwargs)
+    
+def generate_transients(npoints, zrange,**kwargs):
+    """This module call transient_generator to create the
+    TransientGenerator object and then returns the associated
+    TransientGenerator.transients
+
+    # - HERE COPY PASTE the transient_generator docstring
+    """
+    return transient_generator(npoints, zrange,**kwargs).transients
+
+
+#######################################
+#                                     #
+# Generator: Any Transient            #
+#                                     #
+#######################################
 class TransientGenerator( BaseObject ):
     """
     """
@@ -52,7 +83,20 @@ class TransientGenerator( BaseObject ):
                                            }
         
         self._update_()
+
+    # --------------------------- #
+    # - Plots Methods           - #
+    # --------------------------- #
+    def show_skycoverage(self):
+        """This function enable to draw on the sky the position of the
+        transients"""
         
+        
+    def display_target_onsky(self,ax):
+        """This function enable to draw on the given ax the sky coverage of
+        the given transients"""
+
+    
     # =========================== #
     # = Internal Methods        = #
     # =========================== #

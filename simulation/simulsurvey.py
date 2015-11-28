@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 from ..astrobject.baseobject import BaseObject
+from .simultarget import transient_generator
+
 
 class SimulSurvey( BaseObject ):
     """
