@@ -6,7 +6,8 @@ import numpy as np
 
 _d2r = np.pi / 180 
 
-__all__ = ["simulate_lb","simulate_z"]
+__all__ = ["radec","redshift",
+           "simulate_lb","simulate_z"]
 
 
 
@@ -27,7 +28,7 @@ def redshift(npoints, zrange,
              **kwargs):
     """
     """
-    # Not For Uly: This redshift function could do much more
+    # Note for Uly: This redshift function could do much more
     # to parse easily the z_pdf and z_pdf_bins.
     # This through "pdfkind"
     # We can imagine having a string parser that is None
