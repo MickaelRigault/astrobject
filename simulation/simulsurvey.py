@@ -10,14 +10,11 @@ class SimulSurvey( BaseObject ):
     Basic survey object
     (far from finished)
     """
-    _properties_keys         = ["",""]
+    _properties_keys         = ["targetlist","instprop"]
     _side_properties_keys    = []
-    _derived_properties_keys = ["maglimit"]
+    _derived_properties_keys = []
     
-    def __init__(self,
-                 instrument_info,
-                 candence=None,
-                 ):
+    def __init__(self):
         """
         """
         self.__build__()

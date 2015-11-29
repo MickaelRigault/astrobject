@@ -4,6 +4,5 @@
 
 import astrobject
 import utils
-import instruments
 import simulation
-__all__ = ["utils","astrobject","instruments","simulation"]
+__all__ = ["utils","astrobject","simulation"]
