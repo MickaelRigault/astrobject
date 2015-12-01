@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # -- here load all the object that could be parsed
-from ..utils.decorators import _autogen_docstring_inheritance
-from ..astrobject.photometry import photopoint,Image
+from ...utils.decorators import _autogen_docstring_inheritance
 
 from .sdss   import sdss,SDSS_INFO,is_sdss_file
 from .hst    import hst,HST_INFO,is_hst_file

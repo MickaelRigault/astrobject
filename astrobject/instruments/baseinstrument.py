@@ -1,8 +1,9 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from ..utils.decorators import _autogen_docstring_inheritance
-from ..astrobject.photometry import photopoint,Image
+from sncosmo import get_bandpass
+from ...utils.decorators import _autogen_docstring_inheritance
+from ...astrobject.photometry import photopoint,Image
 
 __all__ = ["Instrument"]
 
@@ -54,32 +55,32 @@ class Instrument( Image ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
+    # ------------------
+    # - Band Information
     @property
-    def band(self):
+    def bandname(self):
         raise NotImplementedError("'band' must be implemented")
-
+    
     @property
-    def band_info(self):
-        raise NotImplementedError("'band_info' must be implemented")
+    def bandpass(self):
+        return get_bandpass(self.bandname)
+    
+    @property
+    def lbda(self):
+        return self.bandpass.wave_eff
 
     # -- Derived values
     @property
-    def lbda(self):
-        return self.band_info["lbda"]
-
-    @property
-    def mjd_obstime(self):
-        raise NotImplementedError("'obstime' must be implemented")
-    
-    @property
     def mab0(self):
-        return self.band_info["ABmag0"]
+        raise NotImplementedError("'mab0' must be implemented")
 
     @property
     def _gain(self):
         raise NotImplementedError("'_gain' must be implemented (even for None)")
         
-    
+    @property
+    def mjd_obstime(self):
+        raise NotImplementedError("'obstime' must be implemented")
     
     
 

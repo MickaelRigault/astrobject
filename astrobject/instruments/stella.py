@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from ..astrobject.photometry import pf
+import pyfits as pf
 from .baseinstrument import Instrument
 
 __all__ = ["sdss","SDSS_INFO"]

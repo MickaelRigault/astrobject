@@ -4,7 +4,7 @@
 import numpy as np
 
 from .baseobject  import BaseObject
-from ..instruments import instrument
+from .instruments import instrument
 from ..utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["multibands","multimages"]

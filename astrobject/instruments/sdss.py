@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-from ..astrobject.photometry import pf
+import pyfits as pf
 from .baseinstrument import Instrument
 
 __all__ = ["sdss","SDSS_INFO"]
@@ -11,6 +11,7 @@ SDSS_INFO = {"u":{"lbda":3551,"ABmag0":22.46},
              "r":{"lbda":6166,"ABmag0":22.50},
              "i":{"lbda":7480,"ABmag0":22.50},
              "z":{"lbda":8932,"ABmag0":22.52},
+             "bands":["u","g","r","i","z"],
              "telescope":{
                  "lon": 32.780,
                  "lat":-105.82}
@@ -140,21 +141,15 @@ class SDSS( Instrument ):
             self._derived_properties["skyparam"] = self.fits[2].data[0]
         # -- return it
         return self._derived_properties["skyparam"]
-    # --------------
-    # - Image Data    
+
+    
+    # --------------------
+    # - Band Information
     @property
-    def band(self):
+    def bandname(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
-        return self.header["FILTER"]
-
-    @property
-    def band_info(self):
-        return SDSS_INFO[self.band]
-
-    @property
-    def lbda(self):
-        return self.band_info["lbda"]
+        return "sdss"+self.header["FILTER"]
 
     @property
     def mjd_obstime(self):
@@ -162,6 +157,16 @@ class SDSS( Instrument ):
             raise AttributeError("no header loaded ")
         from astropy import time
         return time.Time("%sT%s"%(self.header["DATE-OBS"],self.header["TAIHMS"])).mjd
+
+    # -- Derived values
+    @property
+    def mab0(self):
+        """The ABmag zero point of SDSS data"""
+        if self.bandname  == "sdssu":
+            return 22.46
+        if self.bandname  == "sdssz":
+            return 22.52
+        return 22.5
     
     # ------------
     # - Internal
@@ -176,14 +181,14 @@ class SDSS( Instrument ):
     def _gain(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
-        return get_gain(self.header["CAMCOL"],self.band,
+        return get_gain(self.header["CAMCOL"],self.bandname[-1],
                         self.header["RUN"])
 
     @property
     def _darkvariance(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
-        return get_darkvariance(self.header["CAMCOL"],self.band,
+        return get_darkvariance(self.header["CAMCOL"],self.bandname[-1],
                                 self.header["RUN"])
     # =========================== #
     # = Internal Tools          = #

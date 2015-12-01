@@ -1,12 +1,12 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
+import pyfits as pf
 from .baseinstrument import Instrument
 
 __all__ = ["hst"]
 
 HST_INFO = {
-    "f225w":{"lbda":2365.80,"ABmag0":None,"instrument":"UVIS"},
     "telescope":{
                  "lon":np.NaN,
                  "lat":np.NaN}
@@ -17,7 +17,8 @@ def hst(*args,**kwargs):
 
 def is_hst_file(filename):
     """This test if the given file is an HST one"""
-    raise NotImplementedError("To Be Done")
+    return True if pf.getheader(filename).get("TELESCOP") == "HST" \
+      else False
 
 class HST( Instrument ):
     """This is the umage object custom for HST data"""
@@ -51,19 +52,13 @@ class HST( Instrument ):
         return self._side_properties['exptime']
     
     @property
-    def band(self):
+    def bandname(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
-        return self.header["FILTER"]
+        return self.fits[0].header["FILTER"]
 
-    @property
-    def band_info(self):
-        return HST_INFO[self.band]
-
-    @property
-    def lbda(self):
-        return self.band_info["lbda"]
-
+    # --------------------
+    # - Band Information
     @property
     def mjd_obstime(self):
         """This is the Modify Julien Date at the start of the Exposure"""

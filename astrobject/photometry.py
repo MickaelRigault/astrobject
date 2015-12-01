@@ -196,7 +196,8 @@ class Image( BaseObject ):
                                 "var","background"]
     _side_properties_keys    = ["wcs","target",
                                 "exptime"]
-    _derived_properties_keys = ["fits","data"]
+        
+    _derived_properties_keys = ["fits","data","sepobjects"]
     
     # Where in the fitsfile the data are
     # =========================== #
@@ -601,12 +602,48 @@ class Image( BaseObject ):
 
         return self._sepbackground.back()
         
-    def sep_extract(self):
+    def sep_extract(self,thresh=None,returnobjects=True,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor SEP.
-        """
-        print "to be done"
+
+        Parameters
+        ----------
+
+        - options -
+
+        thresh: [float]            Threshold pixel value for detection.
+                                   If None is set, the globalrms background from sep
+                                   will be used.
+                                   Additional information from sep.extract:
+                                   "If an err array is not given, this is interpreted
+                                    as an absolute threshold. If err is given,
+                                    this is interpreted as a relative threshold:
+                                    the absolute threshold at pixel (j, i) will be
+                                    thresh * err[j, i]."
+
+        returnobjects              Change the output of this function. if True the
+                                   extracted objects are recorded and returned (self.sepobjects)
+                                   if not they are just recorded.
+
+        - others options -
+
+        kwargs                     goes to set.extract
+                                   (sep.readthedocs.org/en/v0.5.x/api/sep.extract.html)
         
+        Return
+        -------
+        Void [or ndarray(sep.extract output) is returnobjects set to True]
+        """
+        from sep import extract
+        if thresh is None:
+            if "_sepbackground" not in dir(self):
+                _ = self.get_sep_background()
+            thresh = self._sepbackground.globalrms*1.5
+            
+        self._derived_properties["sepobjects"] = extract(self.data,thresh,**kwargs)
+        if returnobjects:
+            self.sepobjects
+            
     # ------------------- #
     # - I/O Methods     - #
     # ------------------- #
@@ -615,6 +652,10 @@ class Image( BaseObject ):
         """
         print "to be done"
 
+
+    # ------------------- #
+    # - Plot Methods    - #
+    # ------------------- #        
     def show(self,toshow="data",savefile=None,logscale=True,
              ax=None,show=True,wcs_coords=False,
              zoomon=None,zoompxl=200,
@@ -731,6 +772,12 @@ class Image( BaseObject ):
                 
         return pl
 
+    def display_sepobjects(self,ax,wcs_coords=True,**kwargs):
+        """If sep_extract has been ran, you have an sepobjects entry.
+        This entry will be red and parsed here.
+        """
+        
+        
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -787,7 +834,7 @@ class Image( BaseObject ):
                   np.float(self.header[self._build_properties["header_exptime"]])
         # -- You have it ? This will stay None if not
         return self._side_properties['exptime']
-    
+    # ----------------------
     # -- derived values
     @property # based on rawdata for pratical reason (like background check)
     def shape(self):
@@ -811,6 +858,7 @@ class Image( BaseObject ):
         return False if self.var is None \
           else True
 
+          
     # ------------      
     # -- wcs tools
     @property
@@ -846,7 +894,15 @@ class Image( BaseObject ):
     def has_target(self):
         return False if self.target is None \
           else True
+
+
+    @property
+    def sepobjects(self):
+        if self._derived_properties["sepobjects"] is None:
+            raise AttributeError("no 'sepobjects' recorded. most likely sep_extract has not been ran")
+        return self._derived_properties["sepobjects"]
     
+        
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
@@ -1188,4 +1244,112 @@ class LightCurve( BaseObject ):
     @property
     def lbda(self):
         return self._derived_properties['lbda']
+    
+
+
+#######################################
+#                                     #
+# Base Object Classes: SEPObjects     #
+#                                     #
+#######################################
+
+class SexObjects( BaseObject ):
+    """This instance parse the ourput from Sextractor/SEP and have
+    convinient associated functions"""
+
+    _properties_keys = ["sexoutput"]
+
+    def __init__(self,sexoutput=None,empty=False):
+        """
+        = Load the SexObject =
+
+        Parameters
+        ----------
+
+        sexoutput: [ndarray/file]  The ndarray as output by sextractor/sep or the
+                                   associated file
+
+        - options -
+
+        empty: [bool]              return an empy object
+        """
+        self.__build__()
+        if empty:
+            return
+
+        self.create(sexoutput)
+
+    # ====================== #
+    # Main Methods           #
+    # ====================== #
+    def create(self,sexoutput,force_it=False):
+        """
+        """
+        if self.has_data() and force_it is False:
+            raise AttributeError("'sexout' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+                    
+        sexdata = self._read_sexoutput_input_(sexoutput)
+        if sexdata is None:
+            print "WARNING empty imput data. Empty object loaded"
+            return
+        
+        # ****************** #
+        # * Creation       * #
+        # ****************** #
+        self._properties["sexoutput"] = sexdata
+
+
+    # ------------------- #
+    # - PLOT Methods    - #
+    # ------------------- #
+    def display(self,ax,world_coords=True,
+                **kwargs):
+        """
+        """
+        
+    # =========================== #
+    # Internal Methods            #
+    # =========================== #
+    def _read_sexoutput_input_(self,sexoutput):
+        """This method enable to parse the input and therefore
+        allow flexible inputs"""
+
+        # ---------------
+        # -- no input
+        if sexoutput is None:
+            return
+        
+        # ---------------
+        # -- data input
+        if type(sexoutput) == np.ndarray:
+            # let's check
+            try:
+                _ = sexoutput["cxx"]
+            except :
+                raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+"\n"+\
+                                " It most likely is not a sextrator/sep output ")
+            return sexoutput
+        
+        # ---------------
+        # -- file input
+        if type(sexoutput) == str:
+            if sexoutput.endswith(".pkl"):
+                from ..utils.tools import load_pkl
+                self._read_sexoutput_input_(load_pkl(sexoutput))
+                
+            # -- So this is a sextrator output ?
+            return
+                
+    # =========================== #
+    # Properties and Settings     #
+    # =========================== #
+    @property
+    def sexoutput(self):
+        return self._properties["sexoutput"]
+    
+    def has_data(self):
+        return False if self.sexoutput is None\
+          else True
+    
     
