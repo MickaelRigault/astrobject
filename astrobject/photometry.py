@@ -14,7 +14,7 @@ from .baseobject   import BaseObject
 from ..utils.tools import kwargs_update,flux_2_mag
 
 
-__all__ = ["image","photopoint","lightcurve"]
+__all__ = ["image","photopoint","lightcurve","sexobjects"]
 
 
 def image(filename=None,astrotarget=None,**kwargs):
@@ -122,6 +122,14 @@ def lightcurve(datapoints,times,**kwargs):
     raise TypeError("'datapoints' must be a list of photopoints or a dictsource")
         
 
+def sexobjects(sexoutput):
+    """
+    """
+    return SexObjects(sexoutput)
+    
+# ========================== #
+#  Internal Tool             #
+# ========================== #
 def dictsource_2_photopoints(dictsource,**kwargs):
     """This fuctions enable to convert a dictionnary
     into a list of photopoints.
@@ -638,9 +646,11 @@ class Image( BaseObject ):
         if thresh is None:
             if "_sepbackground" not in dir(self):
                 _ = self.get_sep_background()
-            thresh = self._sepbackground.globalrms*1.5
+            thresh = self._sepbackground.globalrms*1.5 / self.exposuretime
             
-        self._derived_properties["sepobjects"] = extract(self.data,thresh,**kwargs)
+        o = extract(self.data,thresh,**kwargs)
+        self._derived_properties["sepobjects"] = sexobjects(o)
+        
         if returnobjects:
             self.sepobjects
             
@@ -659,6 +669,7 @@ class Image( BaseObject ):
     def show(self,toshow="data",savefile=None,logscale=True,
              ax=None,show=True,wcs_coords=False,
              zoomon=None,zoompxl=200,
+             show_sepobjects=True,propsep={},
              proptarget={},
              **kwargs):
         """
@@ -713,6 +724,12 @@ class Image( BaseObject ):
         pl_tgt = None if self.has_target() is False \
           else self.display_target(ax,wcs_coords=wcs_coords,
                                    **proptarget)
+
+        if show_sepobjects and self.sepobjects is not None \
+          and self.sepobjects.has_data():
+            self.sepobjects.display(ax,world_coords=wcs_coords,
+                                    **propsep)
+        
         # ----------- #
         # - Zoom      #
         if zoomon is not None:
@@ -776,7 +793,8 @@ class Image( BaseObject ):
         """If sep_extract has been ran, you have an sepobjects entry.
         This entry will be red and parsed here.
         """
-        
+        self.sepobjects.display(ax,world_coords=wcs_coords,
+                                **kwargs)
         
     # =========================== #
     # = Properties and Settings = #
@@ -898,8 +916,6 @@ class Image( BaseObject ):
 
     @property
     def sepobjects(self):
-        if self._derived_properties["sepobjects"] is None:
-            raise AttributeError("no 'sepobjects' recorded. most likely sep_extract has not been ran")
         return self._derived_properties["sepobjects"]
     
         
@@ -1257,7 +1273,7 @@ class SexObjects( BaseObject ):
     """This instance parse the ourput from Sextractor/SEP and have
     convinient associated functions"""
 
-    _properties_keys = ["sexoutput"]
+    _properties_keys = ["data"]
 
     def __init__(self,sexoutput=None,empty=False):
         """
@@ -1297,7 +1313,7 @@ class SexObjects( BaseObject ):
         # ****************** #
         # * Creation       * #
         # ****************** #
-        self._properties["sexoutput"] = sexdata
+        self._properties["data"] = sexdata
 
 
     # ------------------- #
@@ -1307,6 +1323,30 @@ class SexObjects( BaseObject ):
                 **kwargs):
         """
         """
+        if not self.has_data():
+            print "WARNING [Sexobjects] No data to display"
+            return
+        from matplotlib.patches import Ellipse
+        from astropy import units
+        x,y = self.data["x"],self.data["y"]
+        default_prop = dict(ls="None",marker="o",mec="k",mfc="0.7",alpha=0.5,
+                            scalex=False,scaley=False,
+                            label="_no_legend_")
+        prop = kwargs_update(default_prop,**kwargs)
+
+        ells = [Ellipse([x,y],a*5,b*5,t*units.radian.in_units("degree"))
+                for x,y,a,b,t in zip(self.data["x"],self.data["y"],
+                                     self.data["a"],self.data["b"],
+                                     self.data["theta"])]
+        
+        pl = ax.plot(x,y,**prop)
+        for ell in ells:
+            ell.set_clip_box(ax.bbox)
+            ell.set_facecolor("None")
+            ell.set_edgecolor("k")
+            ax.add_patch(ell)
+        
+        return pl
         
     # =========================== #
     # Internal Methods            #
@@ -1345,11 +1385,11 @@ class SexObjects( BaseObject ):
     # Properties and Settings     #
     # =========================== #
     @property
-    def sexoutput(self):
-        return self._properties["sexoutput"]
+    def data(self):
+        return self._properties["data"]
     
     def has_data(self):
-        return False if self.sexoutput is None\
+        return False if self.data is None\
           else True
     
     
