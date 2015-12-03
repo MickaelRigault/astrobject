@@ -1532,7 +1532,7 @@ class SexObjects( BaseObject ):
 
     # ----------------------
     # - Catalogue Matching
-    @propety
+    @property
     def catmatch(self):
         """This is the match dictionnary"""
         if self._derived_properties["catmatch"] is None:
