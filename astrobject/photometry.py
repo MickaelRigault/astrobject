@@ -202,8 +202,9 @@ class Image( BaseObject ):
     # -------------------- #
     _properties_keys         = ["filename","rawdata","header",
                                 "var","background"]
-    _side_properties_keys    = ["wcs","target",
-                                "exptime"]
+    _side_properties_keys    = ["wcs",
+                                "target","catalogue",
+                                "exptime"] # maybe Exptime should just be on flight
         
     _derived_properties_keys = ["fits","data","sepobjects"]
     
@@ -365,7 +366,7 @@ class Image( BaseObject ):
         self._update_()
 
     # ------------------- #
-    # - Target          - #
+    # - Set Methods     - #
     # ------------------- #
     def set_target(self,newtarget,test_inclusion=True):
         """
@@ -440,6 +441,35 @@ class Image( BaseObject ):
         self._properties['background'] = np.asarray(background)
         self._update_data_()
 
+
+    def set_catalogue(self,catalogue,force_it=False):
+        """
+        This Methods enables to load a Catalogue object
+        """
+        if self.has_catalogue() and force_it is False:
+            raise AttributeError("'catalogue' already defined"+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
+            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+        # -------------------------
+        # - Add the world_2_pixel
+        if not self.has_wcs():
+            print "WARNING: no wcs solution. catalogue recorded, but most likely is useless"
+        else:
+            # -- Lets only consider the objects in the FoV
+            catalogue.set_wcs(self.wcs,force_it=True)
+            # -- Lets save the pixel values
+            #catalogue.x,catalogue.y = np.asarray([self.coords_to_pixel(ra_,dec_)
+            #                                      for ra_,dec_ in zip(catalogue.ra,catalogue.dec)]).T
+            if self.has_sepobjects():
+                self.sepobjects.set_catalogue(catalogue,force_it=True)
+                
+        # --------
+        # - set it
+        self._side_properties["catalogue"] = catalogue
+        
+        
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
@@ -610,7 +640,8 @@ class Image( BaseObject ):
 
         return self._sepbackground.back()
         
-    def sep_extract(self,thresh=None,returnobjects=True,**kwargs):
+    def sep_extract(self,thresh=None,returnobjects=True,
+                    set_catalogue=True,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor SEP.
 
@@ -629,10 +660,15 @@ class Image( BaseObject ):
                                     the absolute threshold at pixel (j, i) will be
                                     thresh * err[j, i]."
 
-        returnobjects              Change the output of this function. if True the
+        set_catalogue: [bool]      If the current instance has a catalogue, it will be transfered
+                                   to the SexOutput object created. Set False to avoid that.
+                                   
+                                   
+        returnobjects: [bool]      Change the output of this function. if True the
                                    extracted objects are recorded and returned (self.sepobjects)
                                    if not they are just recorded.
 
+        
         - others options -
 
         kwargs                     goes to set.extract
@@ -650,7 +686,10 @@ class Image( BaseObject ):
             
         o = extract(self.data,thresh,**kwargs)
         self._derived_properties["sepobjects"] = sexobjects(o)
-        
+
+        if set_catalogue and self.has_catalogue():
+            self.sepobjects.set_catalogue(self.catalogue,force_it=True)
+            
         if returnobjects:
             self.sepobjects
             
@@ -725,8 +764,7 @@ class Image( BaseObject ):
           else self.display_target(ax,wcs_coords=wcs_coords,
                                    **proptarget)
 
-        if show_sepobjects and self.sepobjects is not None \
-          and self.sepobjects.has_data():
+        if show_sepobjects and self.has_sepobjects():
             self.sepobjects.display(ax,world_coords=wcs_coords,
                                     **propsep)
         
@@ -764,11 +802,11 @@ class Image( BaseObject ):
         
         return self._plot
 
-    def display_target(self,ax,wcs_coords=True,**kwargs):
+    def display_target(self,ax,wcs_coords=True,draw=True,**kwargs):
         """If a target is loaded, use this to display the target on the
         given ax"""
         if self.has_target() is False:
-            print "No target to display"
+            print "No 'target' to display"
             return
         # --------------------
         # - Fancy
@@ -786,16 +824,38 @@ class Image( BaseObject ):
         else:
             radec_pixel = self.coords_to_pixel(*self.target.radec)
             pl = ax.plot(radec_pixel[0],radec_pixel[1],**prop)
-                
+
+        if draw:
+            ax.figure.canvas.draw()        
         return pl
 
-    def display_sepobjects(self,ax,wcs_coords=True,**kwargs):
+    def display_sepobjects(self,ax,wcs_coords=True,draw=True,**kwargs):
         """If sep_extract has been ran, you have an sepobjects entry.
         This entry will be red and parsed here.
         """
-        self.sepobjects.display(ax,world_coords=wcs_coords,
+        self.sepobjects.display(ax,world_coords=wcs_coords,draw=draw,
                                 **kwargs)
-        
+
+    def display_catalogue(self,ax,wcs_coords=True,draw=True,**kwargs):
+        """This methods enable to show all the known sources in the
+        image's field of view.
+        This will only works if a catalogue has been set"""
+        if not self.has_catalogue():
+            print "No 'catalogue' to display"
+            return
+
+        # --------------------------------
+        # - Remove the non-matched ones
+        if self.has_sepobjects() and "mask_catout" in dir(self.sepobjects):
+            mask_catout = self.sepobjects.mask_catout
+        else:
+            mask_catout = None
+
+        # --------------------------------
+        # - Draw the matched-points
+        return self.catalogue.display(ax,wcs_coords=wcs_coords,draw=draw,
+                                      maskout=mask_catout,**kwargs)
+
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -913,11 +973,26 @@ class Image( BaseObject ):
         return False if self.target is None \
           else True
 
-
+          
+    # ----------------      
+    # -- SEP OUTPUT
     @property
     def sepobjects(self):
         return self._derived_properties["sepobjects"]
+
+    def has_sepobjects(self):
+        return True if self.sepobjects is not None and self.sepobjects.has_data() \
+          else False
     
+    # ----------------      
+    # -- CATALOGUE
+    @property
+    def catalogue(self):
+        return self._side_properties["catalogue"]
+    
+    def has_catalogue(self):
+        return False if self.catalogue is None\
+          else True
         
     # =========================== #
     # = Internal Methods        = #
@@ -1268,13 +1343,15 @@ class LightCurve( BaseObject ):
 # Base Object Classes: SEPObjects     #
 #                                     #
 #######################################
-
 class SexObjects( BaseObject ):
     """This instance parse the ourput from Sextractor/SEP and have
     convinient associated functions"""
 
     _properties_keys = ["data"]
-
+    _side_properties_keys = ["catalogue"]
+    _derived_properties_keys = ["catmask","catmatch"]
+    
+    
     def __init__(self,sexoutput=None,empty=False):
         """
         = Load the SexObject =
@@ -1302,7 +1379,7 @@ class SexObjects( BaseObject ):
         """
         """
         if self.has_data() and force_it is False:
-            raise AttributeError("'sexout' is already defined."+\
+            raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
                     
         sexdata = self._read_sexoutput_input_(sexoutput)
@@ -1315,20 +1392,55 @@ class SexObjects( BaseObject ):
         # ****************** #
         self._properties["data"] = sexdata
 
+    # ------------------ #
+    # - SET Methods    - #
+    # ------------------ #
+    def set_catalogue(self,catalogue,force_it=True):
+        """
+        """
+        if self.has_catalogue() and force_it is False:
+            raise AttributeError("'catalogue' already defined"+\
+                    " Set force_it to True if you really known what you are doing")
 
+        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
+            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+        # -------------------------
+        # - Add the world_2_pixel
+        if not catalogue.has_wcs():
+            print "WARNING the given 'catalogue' has no pixel coordinates. Cannot load it"
+            return
+
+        self._side_properties["catalogue"] = catalogue
+
+    def match_catalogue(self,catalogue=None,force_it=False):
+        """This methods enable to attached a given sexobject entry
+        to a catalog value.
+        You can set a catalogue.
+        """
+        # --------------
+        # - input 
+        if catalogue is not None:
+            self.set_catalogue(catalogue,force_it=force_it)
+
+        
+            
     # ------------------- #
     # - PLOT Methods    - #
     # ------------------- #
-    def display(self,ax,world_coords=True,
+    def display(self,ax,world_coords=True,draw=True,
                 **kwargs):
         """
         """
         if not self.has_data():
             print "WARNING [Sexobjects] No data to display"
             return
+        
         from matplotlib.patches import Ellipse
         from astropy import units
+        
         x,y = self.data["x"],self.data["y"]
+        # -------------
+        # - Properties
         default_prop = dict(ls="None",marker="o",mec="k",mfc="0.7",alpha=0.5,
                             scalex=False,scaley=False,
                             label="_no_legend_")
@@ -1345,7 +1457,8 @@ class SexObjects( BaseObject ):
             ell.set_facecolor("None")
             ell.set_edgecolor("k")
             ax.add_patch(ell)
-        
+        if draw:
+            ax.figure.canvas.draw()
         return pl
         
     # =========================== #
@@ -1384,6 +1497,8 @@ class SexObjects( BaseObject ):
     # =========================== #
     # Properties and Settings     #
     # =========================== #
+    # ----------------      
+    # -- Data
     @property
     def data(self):
         return self._properties["data"]
@@ -1391,5 +1506,41 @@ class SexObjects( BaseObject ):
     def has_data(self):
         return False if self.data is None\
           else True
+          
+    @property
+    def nobjects(self):
+        if not self.has_data():
+            return None
+        return len(self.data)
+        
+    # ----------------      
+    # -- CATALOGUE
+    @property
+    def catalogue(self):
+        return self._side_properties["catalogue"]
     
+    def has_catalogue(self):
+        return False if self.catalogue is None\
+          else True
+    
+    @property
+    def catmask(self):
+        """this array tells you if sextractor objects have a catalogue match"""
+        if self._derived_properties["catmask"] is None and self.has_data():
+            self._derived_properties["catmask"] = np.ones(self.nobjects)
+        return self._derived_properties["catmask"]
+
+    # ----------------------
+    # - Catalogue Matching
+    @propety
+    def catmatch(self):
+        """This is the match dictionnary"""
+        if self._derived_properties["catmatch"] is None:
+            self._derived_properties["catmatch"] = {}
+            
+        return self._derived_properties["catmatch"]
+
+    def has_catmatch(self):
+        return False if self.catmatch is None or len(self.catmatch.keys())==0 \
+          else True
     

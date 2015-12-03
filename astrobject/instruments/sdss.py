@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pyfits as pf
-from .baseinstrument import Instrument
+from .baseinstrument import Instrument,Catalogue
 
 __all__ = ["sdss","SDSS_INFO"]
 
@@ -209,3 +209,36 @@ class SDSS( Instrument ):
         t = interpolate.bisplrep(XI,YI,rawsky.T)
         self._derived_properties["sky"] = interpolate.bisplev(xinterpol,yinterpol,t)
         return t
+
+#################################
+#                               #
+# BASIC SDSS: Catalogue         #
+#                               #
+#################################
+class SDSSCatalogue( Catalogue ):
+    """
+    """
+    source_name = "SDSS"
+    
+    def __init__(self, catalogue_file=None,empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        self.load(catalogue_file)
+
+    def __build__(self,data_index=2):
+        """
+        This part is depends on who the catalogue has been built
+        """
+        super(Catalogue,self).__build__()
+        self._build_properties = dict(
+            data_index = data_index,
+            header_ra = "X_WORLD",
+            header_dec = "Y_WORLD",
+            header_mag = "MAG",
+            header_magerr = "MAGERR"
+            )
+        
+    
