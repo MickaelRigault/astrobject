@@ -7,7 +7,7 @@
 import numpy  as np
 import pyfits as pf
 
-from astropy     import units
+from astropy     import units,coordinates
 from astLib      import astWCS
 
 from .baseobject   import BaseObject 
@@ -464,6 +464,7 @@ class Image( BaseObject ):
             #                                      for ra_,dec_ in zip(catalogue.ra,catalogue.dec)]).T
             if self.has_sepobjects():
                 self.sepobjects.set_catalogue(catalogue,force_it=True)
+                self.sepobjects.match_catalogue()
                 
         # --------
         # - set it
@@ -640,8 +641,8 @@ class Image( BaseObject ):
 
         return self._sepbackground.back()
         
-    def sep_extract(self,thresh=None,returnobjects=True,
-                    set_catalogue=True,**kwargs):
+    def sep_extract(self,thresh=None,returnobjects=False,
+                    set_catalogue=True,match_catalogue=True,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor SEP.
 
@@ -687,12 +688,17 @@ class Image( BaseObject ):
         o = extract(self.data,thresh,**kwargs)
         self._derived_properties["sepobjects"] = sexobjects(o)
 
+        if self.has_wcs():
+            self.sepobjects.set_wcs(self.wcs)
+
         if set_catalogue and self.has_catalogue():
             self.sepobjects.set_catalogue(self.catalogue,force_it=True)
-            
+            if match_catalogue:
+                self.sepobjects.match_catalogue()
+                    
         if returnobjects:
-            self.sepobjects
-            
+            return self.sepobjects
+
     # ------------------- #
     # - I/O Methods     - #
     # ------------------- #
@@ -843,18 +849,11 @@ class Image( BaseObject ):
         if not self.has_catalogue():
             print "No 'catalogue' to display"
             return
-
-        # --------------------------------
-        # - Remove the non-matched ones
-        if self.has_sepobjects() and "mask_catout" in dir(self.sepobjects):
-            mask_catout = self.sepobjects.mask_catout
-        else:
-            mask_catout = None
-
+        
         # --------------------------------
         # - Draw the matched-points
         return self.catalogue.display(ax,wcs_coords=wcs_coords,draw=draw,
-                                      maskout=mask_catout,**kwargs)
+                                      **kwargs)
 
     # =========================== #
     # = Properties and Settings = #
@@ -1348,11 +1347,11 @@ class SexObjects( BaseObject ):
     convinient associated functions"""
 
     _properties_keys = ["data"]
-    _side_properties_keys = ["catalogue"]
+    _side_properties_keys = ["catalogue","wcs"]
     _derived_properties_keys = ["catmask","catmatch"]
     
     
-    def __init__(self,sexoutput=None,empty=False):
+    def __init__(self,sexoutput=None,wcs=None,empty=False):
         """
         = Load the SexObject =
 
@@ -1371,7 +1370,8 @@ class SexObjects( BaseObject ):
             return
 
         self.create(sexoutput)
-
+        if wcs is not None:
+            self.set_wcs(wcs)
     # ====================== #
     # Main Methods           #
     # ====================== #
@@ -1395,6 +1395,19 @@ class SexObjects( BaseObject ):
     # ------------------ #
     # - SET Methods    - #
     # ------------------ #
+    def set_wcs(self,wcs,force_it=False):
+        """
+        """
+        if self.has_wcs() and force_it is False:
+            raise AttributeError("'wcs' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if wcs is not None and "coordsAreInImage" not in dir(wcs):
+            raise TypeError("'wcs' solution not recognize, should be an astLib.astWCS")
+
+        self._side_properties["wcs"] = wcs
+        
+
     def set_catalogue(self,catalogue,force_it=True):
         """
         """
@@ -1412,7 +1425,7 @@ class SexObjects( BaseObject ):
 
         self._side_properties["catalogue"] = catalogue
 
-    def match_catalogue(self,catalogue=None,force_it=False):
+    def match_catalogue(self,catalogue=None,force_it=False,arcsec_size=5):
         """This methods enable to attached a given sexobject entry
         to a catalog value.
         You can set a catalogue.
@@ -1422,12 +1435,68 @@ class SexObjects( BaseObject ):
         if catalogue is not None:
             self.set_catalogue(catalogue,force_it=force_it)
 
+        if not self.has_catalogue():
+            raise AttributeError("No 'catalogue' defined or given.")
         
+        if self.has_wcs():
+            # -- matching are made in degree space
+            idxcatalogue, idxsexobjects, d2d, d3d = self.sky_radec.search_around_sky(self.catalogue.sky_radec, arcsec_size*units.arcsec)
+        else:
+            raise NotImplementedError("You currently need a wcs solution in the SexObjects to match a catalogue")
+        # --------------------
+        # - Save the results
+        self._derived_properties["catmatch"] = {
+            "idx_catalogue":idxcatalogue,
+            "idx":idxsexobjects,
+            "angsep":d2d
+            }
+        self.catalogue.set_matchedmask(idxcatalogue)
+
+    # ------------------ #
+    # - get Methods    - #
+    # ------------------ #
+    def get(self,key):
+        """This function enable to get from the data the values of the given keys
+        or derived values, like ellipticity"""
+        if not self.has_data():
+            raise AttributeError("no 'data' defined")
+
+        # -- These are the default key values
+        _data_keys_ = self.data.dtype.fields.keys()
+        _matching_keys_ = ["angsep"]
+        _derived_keys_ = ["elongation","ellipticity"]
+        help_text = " Known keys are: "+" ,".join(_data_keys_+_matching_keys_+_derived_keys_)
+        if key in ["help"]:
+            print help_text
+            return
+        # -- These are from the data
+        if key in _data_keys_:
+            return self.data[key]
+        
+        # -- These are the catalogue values
+        if key in _matching_keys_:
+            if not self.has_catmatch():
+                raise AttributeError("no 'catmatch' defined. The matching has not been ran")
+            return self.catmatch[key]
+
+        # -- These are derived values
+        if key in _derived_keys_:
+            if key == "elongation":
+                return self.get("a") / self.get("b")
+            
+            if key == "ellipticity":
+                return 1. - 1. / self.get("elongation")
+
+        raise ValueError("Cannot parse '%s'."%key +\
+                          help_text)
+            
+
             
     # ------------------- #
     # - PLOT Methods    - #
     # ------------------- #
     def display(self,ax,world_coords=True,draw=True,
+                apply_catmask = True,
                 **kwargs):
         """
         """
@@ -1436,9 +1505,10 @@ class SexObjects( BaseObject ):
             return
         
         from matplotlib.patches import Ellipse
-        from astropy import units
         
-        x,y = self.data["x"],self.data["y"]
+        # -- maskout non matched one if requested
+        mask = self.catmask if apply_catmask else np.ones(self.nobjects,dtype=bool)
+        x,y = self.data["x"][mask],self.data["y"][mask]
         # -------------
         # - Properties
         default_prop = dict(ls="None",marker="o",mec="k",mfc="0.7",alpha=0.5,
@@ -1446,10 +1516,12 @@ class SexObjects( BaseObject ):
                             label="_no_legend_")
         prop = kwargs_update(default_prop,**kwargs)
 
+        
+        
         ells = [Ellipse([x,y],a*5,b*5,t*units.radian.in_units("degree"))
-                for x,y,a,b,t in zip(self.data["x"],self.data["y"],
-                                     self.data["a"],self.data["b"],
-                                     self.data["theta"])]
+                for x,y,a,b,t in zip(self.data["x"][mask],self.data["y"][mask],
+                                     self.data["a"][mask],self.data["b"][mask],
+                                     self.data["theta"][mask])]
         
         pl = ax.plot(x,y,**prop)
         for ell in ells:
@@ -1460,6 +1532,41 @@ class SexObjects( BaseObject ):
         if draw:
             ax.figure.canvas.draw()
         return pl
+
+    def show_hist(self,toshow="a",ax=None,
+                  savefile=None,show=True,
+                  **kwargs):
+        """This methods enable to show the histogram of any given
+        key."""
+        # -- Properties -- #
+        v = self.get(toshow)
+
+        # -- Setting -- #
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if ax is None:
+            fig = mpl.figure(figsize=[8,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        # -- Properties -- #
+        default_prop = dict(histtype="step",fill=True,
+                            fc=mpl.cm.Blues(0.7,0.5),ec="k",lw=2)
+        prop = kwargs_update(default_prop,**kwargs)
+
+        out = ax.hist(v,**prop)
+
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['hist'] = out
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
         
     # =========================== #
     # Internal Methods            #
@@ -1512,7 +1619,32 @@ class SexObjects( BaseObject ):
         if not self.has_data():
             return None
         return len(self.data)
-        
+
+    # ----------------
+    # - WCS
+    @property
+    def wcs(self):
+        return self._side_properties['wcs']
+
+    def has_wcs(self):
+        return False if self.wcs is None else True
+    
+    @property
+    def radec(self):
+        if not self.has_wcs():
+            raise AttributeError("no 'wcs' solution avialable. Cannot have radec")
+        return np.asarray([self.wcs.pix2wcs(x_,y_) for x_,y_ in zip(self.data["x"],self.data["y"])]).T
+
+    @property
+    def xy(self):
+        return self.data["x"],self.data["y"]
+
+    @property
+    def sky_radec(self):
+        """This is an advanced radec methods tight to astropy SkyCoords"""
+        ra,dec = self.radec
+        return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
+    
     # ----------------      
     # -- CATALOGUE
     @property
@@ -1526,9 +1658,9 @@ class SexObjects( BaseObject ):
     @property
     def catmask(self):
         """this array tells you if sextractor objects have a catalogue match"""
-        if self._derived_properties["catmask"] is None and self.has_data():
-            self._derived_properties["catmask"] = np.ones(self.nobjects)
-        return self._derived_properties["catmask"]
+        if not self.has_catmatch() and self.has_data():
+            return np.ones(self.nobjects,dtype=bool)
+        return self._derived_properties["catmatch"]["idx"]
 
     # ----------------------
     # - Catalogue Matching

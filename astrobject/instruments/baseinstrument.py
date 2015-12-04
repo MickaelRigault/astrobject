@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from sncosmo import get_bandpass
+from astropy import coordinates
 import pyfits as pf
 import numpy as np
 from ...utils.decorators import _autogen_docstring_inheritance
@@ -94,7 +95,7 @@ class Catalogue( BaseObject ):
     source_name = "_not_defined_"
     
     _properties_keys = ["filename","data","header"]
-    _side_properties_keys = ["wcs","fovmask"]
+    _side_properties_keys = ["wcs","fovmask","matchedmask"]
     _derived_properties_keys = ["fits","wcsx","wcsy"]
 
     
@@ -170,6 +171,28 @@ class Catalogue( BaseObject ):
             self.fovmask = (self.ra>ra_range[0]) & (self.ra<ra_range[0]) \
               (self.dec>dec_range[0]) & (self.dec<dec_range[0]) \
 
+    def set_matchedmask(self,matchedmask):
+        """This methods enable to set to matchedmask, this mask is an addon
+        mask that indicate which point from the catalogue (after the fov cut)
+        has been matched by for instance a sextractor/sep extraction
+        """
+        if matchedmask is None or len(matchedmask) == 0:
+            return
+
+        if type(matchedmask[0]) is bool:
+            # - it already is a mask, good
+            self._side_properties["matchedmask"] = np.asarray(matchedmask,dtype=bool)
+            return
+
+        if type(matchedmask[0]) in [int,np.int32,np.int64]:
+            # - it must be a list of matched index (from SkyCoord matching fuction e.g.)
+            self._side_properties["matchedmask"] = np.asarray([i in matchedmask for i in range(len(self.ra))],
+                                                              dtype=bool)
+            return
+        raise TypeError("the format of the given 'matchedmask' is not recongnized. "+\
+                        "You could give a booleen mask array or a list of accepted index")
+                        
+        
     # ------------------- #
     # - I/O Methods     - #
     # ------------------- #
@@ -199,7 +222,9 @@ class Catalogue( BaseObject ):
     # PLOT METHODS          #
     # --------------------- #
     def display(self,ax,wcs_coords=True,draw=True,
-                maskout=None,**kwargs):
+                apply_machedmask=True,
+                show_nonmatched=True,propout={},
+                **kwargs):
         """
         This methods enable to show all the known sources in the
         image's field of view.
@@ -211,7 +236,6 @@ class Catalogue( BaseObject ):
         ax: [matplotlib.axes]      the axes where the catalogue should be
                                    displaid
 
-        maskout: [array]
         
         Return
         ------
@@ -220,14 +244,19 @@ class Catalogue( BaseObject ):
         if not self.has_data():
             print "Catalogue has no 'data' to display"
             return
-        
+                  
         if wcs_coords:
             x,y = self.ra,self.dec
         else:
             x,y = self.wcs_xy
-
-        if maskout is not None:
-            x,y = x[~maskout],y[~maskout]
+        # -------------- #
+        # - mask
+        mask = self.matchedmask if self.has_matchedmask() \
+          else np.ones(len(self.ra),dtype=bool)
+          
+        # -- in
+        xin,yin = x[mask],y[mask]
+        xout,yout = x[~mask],y[~mask]
             
         default_prop = dict(
             ls="None",marker="o",mfc="b",mec="k",alpha=0.5,
@@ -235,11 +264,21 @@ class Catalogue( BaseObject ):
             scalex=False,scaley=False
             )
         prop = kwargs_update(default_prop,**kwargs)
-        pl = ax.plot(x,y,**prop)
+
+        axout = []
+        # - the ins
+        axout.append(ax.plot(xin,yin,**prop))
+        # - the outs
+        if show_nonmatched and len(xout)>0:
+            print "here"
+            default_out = kwargs_update(prop,**dict(mfc="r"))
+            prop_out = kwargs_update(default_out,**propout)
+            axout.append(ax.plot(xout,yout,**prop_out))
         
         if draw:
             ax.figure.canvas.draw()
-        return pl
+            
+        return axout
     
         
     # =========================== #
@@ -281,7 +320,16 @@ class Catalogue( BaseObject ):
         if len(newmask) != self.header["NAXIS2"]:
             raise ValueError("the given 'mask' must have the size of 'ra'")
         self._side_properties["fovmask"] = newmask
-        
+
+
+    @property
+    def matchedmask(self):
+        return self._side_properties["matchedmask"]
+
+    def has_matchedmask(self):
+        return False if self.matchedmask is None\
+          else True
+          
     # ------------
     # - on flight
     # - coords
@@ -298,6 +346,11 @@ class Catalogue( BaseObject ):
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
         return self.data[self._build_properties["header_dec"]][self.fovmask]
+
+    @property
+    def sky_radec(self):
+        """This is an advanced radec methods tight to astropy SkyCoords"""
+        return coordinates.SkyCoord(ra=self.ra,dec=self.dec, unit="deg")
     
     # - mag
     @property
