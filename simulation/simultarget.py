@@ -5,7 +5,7 @@
 
 from ..astrobject.baseobject import BaseObject,astrotarget
 from ..astrobject.transient import transient
-from ..utils import random
+from ..utils import random, skyplot
 
 __all__ = ["transient_generator","generate_transients"]
 

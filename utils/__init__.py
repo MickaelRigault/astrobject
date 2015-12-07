@@ -5,4 +5,5 @@ import tools
 import mpladdon
 import decorators
 import random
-__all__ = ['tools','mpladdon','decorators','random']
+import skyplot
+__all__ = ['tools','mpladdon','decorators','random','skyplot']
