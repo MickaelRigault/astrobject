@@ -35,6 +35,34 @@ def which_band_is_file(filename):
         return None
     return pf.getheader(filename).get("FILTER")
 
+def fetch_sdss_catalog(center,radius,extracolums=[],column_filters={"gmag":"13..22"}):
+    """
+    """
+    try:
+        from astroquery import vizier
+    except:
+        raise ImportError("install astroquery. (pip install astroquery)")
+    
+    # -----------
+    # - DL info
+    columns = ["mode","cl","SDSS9",
+               "RAJ2000","e_RAJ2000","DEJ2000","e_DEJ2000",
+               "ObsDate","Q"
+               ]
+    for band in SDSS_INFO["bands"]:
+        columns.append("%smag"%band)
+        columns.append("e_%smag"%band)
+
+    columns = np.unique(columns+extracolums).tolist()
+    c = vizier.Vizier(catalog="V/139", columns=columns, column_filters=column_filters)
+    c.ROW_LIMIT = 10000
+    t = c.query_region(center,radius=radius).values()[0]
+    cat = SDSSCatalogue(empty=True)
+    cat.create(t.columns,None,
+               key_star="cl",value_star=3,
+               key_ra="RAJ2000",key_dec="DEJ2000")
+    return cat
+    
 # -------------------- #
 # - Inside tools     - #
 # -------------------- #
@@ -220,25 +248,14 @@ class SDSSCatalogue( Catalogue ):
     """
     source_name = "SDSS"
     
-    def __init__(self, catalogue_file=None,empty=False):
+    def __init__(self, catalogue_file=None,empty=False,
+                 key_mag="MAG",key_magerr="MAGERR"):
         """
         """
-        self.__build__()
+        self.__build__(data_index=2,key_mag=key_mag,
+                       key_magerr=key_magerr)
         if empty:
             return
-        self.load(catalogue_file)
-
-    def __build__(self,data_index=2):
-        """
-        This part is depends on who the catalogue has been built
-        """
-        super(Catalogue,self).__build__()
-        self._build_properties = dict(
-            data_index = data_index,
-            header_ra = "X_WORLD",
-            header_dec = "Y_WORLD",
-            header_mag = "MAG",
-            header_magerr = "MAGERR"
-            )
         
+        self.load(catalogue_file)        
     

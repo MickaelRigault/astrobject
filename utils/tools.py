@@ -45,6 +45,12 @@ def dump_pkl(data,filename,**kwargs):
     dump(data, outfile,**kwargs)
     outfile.close()
 
+def fitsrec_to_dict(data):
+    fields = data.dtype.fields.keys()
+    dico = {}
+    for f in fields:
+        dico[f] = data[f]
+    return dico
 # --------------------------- #
 # - Conversion Tools        - #
 # --------------------------- #

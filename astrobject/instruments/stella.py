@@ -65,7 +65,7 @@ class STELLA( Instrument ):
         return self._derived_properties["data"] / self.exposuretime
     
     @property
-    def band(self):
+    def bandname(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
         return self.header["FILTER"]
@@ -85,7 +85,6 @@ class STELLA( Instrument ):
         if value<10:
             raise ValueError("given mab0 lozer then 10 looks unlikely")
         self._properties["mab0"] = value
-        
         
     
     @property

@@ -475,6 +475,16 @@ class Image( BaseObject ):
     # - get Methods     - #
     # ------------------- #
     # ----------- #
+    # - ZeroPoint #
+    # ----------- #
+    def get_stars_magnitude(self):
+        """
+        This methods fetch in the catalogue and sep_extracted objects (sepobjects)
+        the matched points.
+        It then perform a large aperture 
+        """
+        
+    # ----------- #
     #  Aperture   #
     # ----------- #
     def get_target_aperture(self,r_pixels,aptype="circle",subpix=5,**kwargs):
@@ -715,6 +725,7 @@ class Image( BaseObject ):
              ax=None,show=True,wcs_coords=False,
              zoomon=None,zoompxl=200,
              show_sepobjects=True,propsep={},
+             show_catalogue=True,
              proptarget={},
              **kwargs):
         """
@@ -773,7 +784,8 @@ class Image( BaseObject ):
         if show_sepobjects and self.has_sepobjects():
             self.sepobjects.display(ax,world_coords=wcs_coords,
                                     **propsep)
-        
+        if show_catalogue and self.has_catalogue():
+            self.display_catalogue(ax,wcs_coords=wcs_coords)
         # ----------- #
         # - Zoom      #
         if zoomon is not None:
@@ -835,20 +847,32 @@ class Image( BaseObject ):
             ax.figure.canvas.draw()        
         return pl
 
-    def display_sepobjects(self,ax,wcs_coords=True,draw=True,**kwargs):
+    def display_sepobjects(self,ax=None,wcs_coords=True,draw=True,**kwargs):
         """If sep_extract has been ran, you have an sepobjects entry.
         This entry will be red and parsed here.
         """
+        # --------------
+        # - ax parsing
+        if ax is None and ("_plot" not in dir(self) or "ax" not in self._plot.keys()):
+            raise ValueError('no ax defined')
+        ax = self._plot['ax'] if ax is None else ax
+        
         self.sepobjects.display(ax,world_coords=wcs_coords,draw=draw,
                                 **kwargs)
 
-    def display_catalogue(self,ax,wcs_coords=True,draw=True,**kwargs):
+    def display_catalogue(self,ax=None,wcs_coords=True,draw=True,**kwargs):
         """This methods enable to show all the known sources in the
         image's field of view.
         This will only works if a catalogue has been set"""
         if not self.has_catalogue():
             print "No 'catalogue' to display"
             return
+
+        # --------------
+        # - ax parsing
+        if ax is None and ("_plot" not in dir(self) or "ax" not in self._plot.keys()):
+            raise ValueError('no ax defined')
+        ax = self._plot['ax'] if ax is None else ax
         
         # --------------------------------
         # - Draw the matched-points
@@ -1425,7 +1449,7 @@ class SexObjects( BaseObject ):
 
         self._side_properties["catalogue"] = catalogue
 
-    def match_catalogue(self,catalogue=None,force_it=False,arcsec_size=5):
+    def match_catalogue(self,catalogue=None,force_it=False,arcsec_size=2):
         """This methods enable to attached a given sexobject entry
         to a catalog value.
         You can set a catalogue.
@@ -1457,7 +1481,7 @@ class SexObjects( BaseObject ):
     # ------------------ #
     def get(self,key):
         """This function enable to get from the data the values of the given keys
-        or derived values, like ellipticity"""
+        or derived values, like ellipticity. Set 'help' for help."""
         if not self.has_data():
             raise AttributeError("no 'data' defined")
 
@@ -1466,7 +1490,7 @@ class SexObjects( BaseObject ):
         _matching_keys_ = ["angsep"]
         _derived_keys_ = ["elongation","ellipticity"]
         help_text = " Known keys are: "+" ,".join(_data_keys_+_matching_keys_+_derived_keys_)
-        if key in ["help"]:
+        if key in ["help","keys","keylist"]:
             print help_text
             return
         # -- These are from the data
@@ -1661,7 +1685,7 @@ class SexObjects( BaseObject ):
         if not self.has_catmatch() and self.has_data():
             return np.ones(self.nobjects,dtype=bool)
         return self._derived_properties["catmatch"]["idx"]
-
+    
     # ----------------------
     # - Catalogue Matching
     @property
