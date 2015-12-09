@@ -66,7 +66,7 @@ def skyplot(ax, ra, dec, var=None,
     """
     # -----------------------
     # - Properties of plot
-    default_kwargs = dict(marker='o', markersize=2)
+    default_kwargs = dict(marker='o', markersize=5, linestyle='none')
     if color is not None:
         default_kwargs["color"] = color
     propplot = kwargs_update(default_kwargs,**kwargs)

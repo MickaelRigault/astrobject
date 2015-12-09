@@ -3,9 +3,13 @@
 
 """This pupose of this method is the have a generator of fake astrotarget, like SN"""
 
+import numpy as np
+
 from ..astrobject.baseobject import BaseObject,astrotarget
 from ..astrobject.transient import transient
-from ..utils import random, skyplot
+from ..utils.skyplot import ax_skyplot
+from ..utils.tools import kwargs_extract
+from ..utils import random
 
 __all__ = ["transient_generator","generate_transients"]
 
@@ -87,10 +91,41 @@ class TransientGenerator( BaseObject ):
     # --------------------------- #
     # - Plots Methods           - #
     # --------------------------- #
-    def show_skycoverage(self):
+    def show_skycoverage(self, ax=None, savefile=None, show=True, **kwargs):
         """This function enable to draw on the sky the position of the
         transients"""
+        from ..utils.mpladdon import figout, skyplot
+        self._plot = {}
+
+        if ax is None:
+            ax_default = dict(fig=None, figsize=(12, 6), 
+                                   rect=[0.1, 0.1, 0.8, 0.8], 
+                                   projection='mollweide')
+            ax_kw, kwargs = kwargs_extract(ax_default, **kwargs)
+            fig, ax = ax_skyplot(**ax_kw)
+        elif ("MollweideTransform" not in dir(ax) and
+              "HammerTransform" not in dir(ax)):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axis "+\
+                            "with Mollweide or Hammer projection. Transform "+\
+                            "function not found.")
+        else:
+            fig = ax.fig
         
+        # maybe these arrays can be integrate into the generator
+        ra = np.asarray([t['ra'] for t in self.transientsources])
+        dec = np.asarray([t['dec'] for t in self.transientsources])
+        
+        pl = ax.skyplot(ra, dec, **kwargs)
+
+        # ------------------- #
+        # -- Save the data -- #
+        self._plot["figure"] = fig
+        self._plot["ax"]     = ax
+        self._plot["plot"] = pl
+        
+        fig.figout(savefile=savefile,show=show)
+        
+        return self._plot        
         
     def display_target_onsky(self,ax):
         """This function enable to draw on the given ax the sky coverage of
