@@ -99,26 +99,28 @@ class Catalogue( BaseObject ):
     _derived_properties_keys = ["fits","wcsx","wcsy"]
 
     
-    def __init__(self, catalogue_file=None,empty=False,data_index=0):
+    def __init__(self, catalogue_file=None,empty=False,
+                 data_index=0,key_mag="MAG",key_magerr="MAGERR"):
         """
         """
-        self.__build__(data_index=data_index)
+        self.__build__(data_index=data_index,
+                       key_mag=key_mag,key_magerr=key_magerr)
         if empty:
             return
-        self.load(catalogue_file)
+        if catalogue_file is not None:
+            self.load(catalogue_file)
 
-    def __build__(self,data_index=0):
+    def __build__(self,data_index=0,
+                  key_mag="MAG",key_magerr="MAGERR"):
         """
         """
         super(Catalogue,self).__build__()
         self._build_properties = dict(
             data_index = data_index,
-            header_ra = "X_WORLD",
-            header_dec = "Y_WORLD",
-            header_mag = "MAG",
-            header_magerr = "MAGERR"
+            key_ra = "X_WORLD",
+            key_dec = "Y_WORLD"
             )
-        
+        self.set_mag_keys(key_mag,key_magerr)
     # =========================== #
     # = Main Methods            = #
     # =========================== #
@@ -163,8 +165,8 @@ class Catalogue( BaseObject ):
                 raise TypeError("'wcs' solution not recognize, should be an astLib.astWCS")
             
             self.fovmask = np.asarray([wcs.coordsAreInImage(ra,dec)
-                                       for ra,dec in zip(self.data[self._build_properties["header_ra"]],
-                                                         self.data[self._build_properties["header_dec"]])])
+                                       for ra,dec in zip(self.data[self._build_properties["key_ra"]],
+                                                         self.data[self._build_properties["key_dec"]])])
         elif ra_range is None or dec_range is None:
             raise AttributeError("please provide either 'wcs' and ra_range *and* dec_range")
         else:
@@ -202,12 +204,17 @@ class Catalogue( BaseObject ):
         fits   = pf.open(catalogue_file)
         header = fits[self._build_properties["data_index"]].header
         data   = fits[self._build_properties["data_index"]].data
-
+        if type(data) == pf.fitsrec.FITS_rec:
+            from astrobject.utils.tools import fitsrec_to_dict
+            from astropy.table import TableColumns
+            data = TableColumns(fitsrec_to_dict(data))
+            
         self.create(data,header,**kwargs)
         self._properties["filename"] = catalogue_file
         self._derived_properties["fits"] = fits
+
         
-    def create(self,data,header,force_it=True):
+    def create(self,data,header,force_it=True,**build):
         """
         """
         if self.has_data() and force_it is False:
@@ -217,7 +224,21 @@ class Catalogue( BaseObject ):
         self._properties["data"] = data
         self._properties["header"] = header if header is not None \
           else pf.Header()
-
+        self._build_properties = kwargs_update(self._build_properties,**build)
+      
+    def writeto(self,savefile,force_it=True):
+        """
+        """
+        raise NotImplementedError("to be done")
+    # --------------------- #
+    # Set Methods           #
+    # --------------------- #
+    def set_mag_keys(self,key_mag,key_magerr):
+        """
+        """
+        self._build_properties["key_mag"] = key_mag
+        self._build_properties["key_magerr"] = key_magerr
+        
     # --------------------- #
     # PLOT METHODS          #
     # --------------------- #
@@ -283,7 +304,9 @@ class Catalogue( BaseObject ):
         
     # =========================== #
     # Properties and Settings     #
-    # =========================== #    
+    # =========================== #
+    # -------
+    # - data
     @property
     def data(self):
         return self._properties["data"]
@@ -291,7 +314,20 @@ class Catalogue( BaseObject ):
     def has_data(self):
         return False if self.data is None\
           else True
+          
+    @property
+    def ndata(self):
+        if self.data is None:
+            return 0
+        
+        if self.header is not None and "NAXIS2" in self.header:
+            return self.header["NAXIS2"]
+        
+        return len(self.data.values()[0])
+    
 
+    # ---------------
+    # - header / wcs 
     @property
     def header(self):
         return self._properties["header"]
@@ -304,7 +340,6 @@ class Catalogue( BaseObject ):
         return False if self.wcs is None\
           else True
         
-    
     @property
     def fovmask(self):
         if self._side_properties["fovmask"] is None:
@@ -313,11 +348,11 @@ class Catalogue( BaseObject ):
         return self._side_properties["fovmask"]
     
     def _load_default_fovmask_(self):
-        self._side_properties["fovmask"] = np.ones(self.header["NAXIS2"],dtype=bool)
+        self._side_properties["fovmask"] = np.ones(self.ndata,dtype=bool)
         
     @fovmask.setter
     def fovmask(self,newmask):
-        if len(newmask) != self.header["NAXIS2"]:
+        if len(newmask) != self.ndata:
             raise ValueError("the given 'mask' must have the size of 'ra'")
         self._side_properties["fovmask"] = newmask
 
@@ -338,14 +373,14 @@ class Catalogue( BaseObject ):
         """Barycenter position along world x axis"""
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["header_ra"]][self.fovmask]
+        return self.data[self._build_properties["key_ra"]][self.fovmask]
 
     @property
     def dec(self):
         """arycenter position along world y axis"""
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["header_dec"]][self.fovmask]
+        return self.data[self._build_properties["key_dec"]][self.fovmask]
 
     @property
     def sky_radec(self):
@@ -358,16 +393,28 @@ class Catalogue( BaseObject ):
         """Generic magnitude"""
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["header_mag"]][self.fovmask]
+        return self.data[self._build_properties["key_mag"]][self.fovmask]
 
     @property
     def mag_err(self):
         """Generic magnitude RMS error"""
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["header_magerr"]][self.fovmask]
+        return self.data[self._build_properties["key_magerr"]][self.fovmask]
 
-    
+    @property
+    def starmask(self):
+        """ This will tell which of the datapoints is a star
+        Remark, you need to have defined key_star and value_star
+        in the __build_properties to be able to have access to this mask
+        """
+        if "key_star" in self._build_properties.keys() and \
+          "value_star" in self._build_properties.keys():
+          flag = self.data[self._build_properties["key_star"]] == \
+            self._build_properties["value_star"]
+          return flag.data[self.fovmask]
+      
+                           
     # ------------
     # - Derived
     @property
