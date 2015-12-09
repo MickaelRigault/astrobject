@@ -37,6 +37,9 @@ def ax_skyplot(fig=None, figsize=(12, 6), rect=[0.1, 0.1, 0.8, 0.8],
     xlabels = [u'%i\xb0'%ra for ra in range(150,-1,-30) + range(330,209,-30)]
     ax.set_xticklabels(xlabels)
 
+    ax.set_xlabel(r"$\mathrm{Ra\ [deg]}$",fontsize = "x-large")
+    ax.set_ylabel(r"$\mathrm{Dec\ [deg]}$",fontsize = "x-large")
+
     return fig, ax
 
 # ============================== #
@@ -49,7 +52,7 @@ def convert_radec_azel(ra, dec):
     [This could be extended to also convert between cooridinate systems.]
     """
     #Make sure RA is between -180 and 180, then invert axis
-    ra = ((ra + 180) % 180) - 180
+    ra = ((ra + 180) % 360) - 180
     ra *= -1
 
     az = _d2r * ra
