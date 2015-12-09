@@ -7,9 +7,10 @@ import matplotlib.pyplot as mpl
 
 from .tools import kwargs_update
 from .decorators import make_method
+from .skyplot import convert_radec_azel
 
 
-__all__ = ["specplot","figout"]
+__all__ = ["specplot","skyplot","figout"]
 
 # ========================== #
 # =  Axes Add-on           = #
@@ -53,6 +54,28 @@ def specplot(ax,x,y,var=None,
         
     return pl,fill
 
+# --------------------- #
+# - Skyplot           - #
+# --------------------- #
+
+@make_method(mpl.Axes)
+def skyplot(ax, ra, dec, var=None,
+            color=None, bandprop={}, **kwargs):
+    """This function in a build-in axes method that enable to quickly and
+    easily plot a spectrum.
+    """
+    # -----------------------
+    # - Properties of plot
+    default_kwargs = dict(marker='o', markersize=2)
+    if color is not None:
+        default_kwargs["color"] = color
+    propplot = kwargs_update(default_kwargs,**kwargs)
+
+    az, el = convert_radec_azel(ra, dec)
+    # -- Plot 
+    pl = ax.plot(az, el, **propplot)
+    
+    return pl
 
 # ========================== #
 # =  Figure Add-on         = #
