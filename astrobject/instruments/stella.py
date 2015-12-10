@@ -3,8 +3,9 @@
 import numpy as np
 import pyfits as pf
 from .baseinstrument import Instrument
+from ...utils.decorators import _autogen_docstring_inheritance
 
-__all__ = ["sdss","SDSS_INFO"]
+__all__ = ["stella","STELLA_INFO"]
 
 STELLA_INFO = {"up":{"lbda":3580,"ABmag0":None},
                "gp":{"lbda":4754,"ABmag0":None},
@@ -54,6 +55,25 @@ class STELLA( Instrument ):
                 header_exptime = "EXPT"
                 )
 
+    @_autogen_docstring_inheritance(Instrument.set_catalogue,"Instrument.set_catalogue")
+    def set_catalogue(self,catalogue,force_it=True,**kwargs):
+        #
+        # - Add the bandname key_mag setting
+        #
+        if catalogue.source_name =="SDSS":
+            key_mag = "%smag"%self.bandname[0]
+            key_magerr = "e_%smag"%self.bandname[0]
+            if key_mag not in catalogue.data.keys():
+                print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
+            catalogue.set_mag_keys(key_mag,key_magerr)
+                
+            
+        super(STELLA,self).set_catalogue(catalogue,force_it=force_it,**kwargs)
+
+    @_autogen_docstring_inheritance(Instrument._get_sep_extract_threshold_,"Instrument._get_sep_extract_threshold_")
+    def _get_sep_extract_threshold_(self,**kwargs):
+        # Because Stella image are no per second
+        return super(STELLA,self)._get_sep_extract_threshold_(**kwargs) / self.exposuretime
     # =========================== #
     # = Properties and Settings = #
     # =========================== #

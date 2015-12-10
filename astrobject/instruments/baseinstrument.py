@@ -100,7 +100,7 @@ class Catalogue( BaseObject ):
 
     
     def __init__(self, catalogue_file=None,empty=False,
-                 data_index=0,key_mag="MAG",key_magerr="MAGERR"):
+                 data_index=0,key_mag=None,key_magerr=None):
         """
         """
         self.__build__(data_index=data_index,
@@ -111,7 +111,7 @@ class Catalogue( BaseObject ):
             self.load(catalogue_file)
 
     def __build__(self,data_index=0,
-                  key_mag="MAG",key_magerr="MAGERR"):
+                  key_mag=None,key_magerr=None):
         """
         """
         super(Catalogue,self).__build__()
@@ -121,6 +121,7 @@ class Catalogue( BaseObject ):
             key_dec = "Y_WORLD"
             )
         self.set_mag_keys(key_mag,key_magerr)
+        
     # =========================== #
     # = Main Methods            = #
     # =========================== #
@@ -274,27 +275,39 @@ class Catalogue( BaseObject ):
         # - mask
         mask = self.matchedmask if self.has_matchedmask() \
           else np.ones(len(self.ra),dtype=bool)
+
+        starmask = self.starmask if self.has_starmask() \
+          else np.ones(len(self.ra),dtype=bool)
           
-        # -- in
-        xin,yin = x[mask],y[mask]
-        xout,yout = x[~mask],y[~mask]
-            
+        # -- in / out star / notstar
+        x_starin,y_starin = x[mask & starmask], y[mask & starmask]
+        x_nostarin,y_nostarin = x[mask & ~starmask], y[mask & ~starmask]
+        
+        x_starout,y_starout = x[~mask & starmask],y[~mask & starmask]
+        x_nostarout,y_nostarout = x[~mask & ~starmask], y[~mask & ~starmask]
+        # -- Properties
+        colorin = "b"
+        colorout = "r"
         default_prop = dict(
-            ls="None",marker="o",mfc="b",mec="k",alpha=0.5,
+            ls="None",marker="o",mfc="b",alpha=0.7,ms=6,mew=0,
             label="%s-catalgue"%self.source_name,
-            scalex=False,scaley=False
             )
         prop = kwargs_update(default_prop,**kwargs)
 
+        # -- plot loop
         axout = []
-        # - the ins
-        axout.append(ax.plot(xin,yin,**prop))
-        # - the outs
-        if show_nonmatched and len(xout)>0:
-            print "here"
-            default_out = kwargs_update(prop,**dict(mfc="r"))
-            prop_out = kwargs_update(default_out,**propout)
-            axout.append(ax.plot(xout,yout,**prop_out))
+        for x_,y_,show_,propextra in [[x_starin,  y_starin,True,
+                                       {}],
+                                      [x_nostarin,y_nostarin,True,
+                                        dict(mfc="None",mec=colorin,mew=2,alpha=0.6)],
+                                      [x_starout, y_starout, show_nonmatched,
+                                        dict(mfc=colorout,ms=4,alpha=0.5)],
+                                      [x_nostarout,y_nostarout,show_nonmatched,
+                                        dict(mfc="None",mec=colorout,mew=1,ms=4,alpha=0.5)],
+                                ]:
+            prop_ = kwargs_update(prop,**propextra)
+            if len(x_)>0 and show_:
+                axout.append(ax.plot(x_,y_,**prop_))
         
         if draw:
             ax.figure.canvas.draw()
@@ -325,7 +338,6 @@ class Catalogue( BaseObject ):
         
         return len(self.data.values()[0])
     
-
     # ---------------
     # - header / wcs 
     @property
@@ -393,6 +405,9 @@ class Catalogue( BaseObject ):
         """Generic magnitude"""
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
+        if not self._is_keymag_set_():
+            raise AttributeError("no 'key_mag' defined. see self.set_mag_keys ")
+        
         return self.data[self._build_properties["key_mag"]][self.fovmask]
 
     @property
@@ -400,21 +415,44 @@ class Catalogue( BaseObject ):
         """Generic magnitude RMS error"""
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
+        if not self._is_keymag_set_():
+            raise AttributeError("no 'key_magerr' defined. see self.set_mag_keys ")
+        
         return self.data[self._build_properties["key_magerr"]][self.fovmask]
 
+    def _is_keymag_set_(self,verbose=True):
+        """this method test if the keymag has been set"""
+        if self._build_properties["key_mag"] is None or \
+          self._build_properties["key_magerr"] is None:
+            if verbose:
+                print "No 'key_mag'/'key_magerr' set ; call 'set_mag_keys'. List of potential keys: "\
+                  +", ".join([k for k in self.data.keys() if "mag" in k or "MAG" in k])
+            return False
+        return True
+    
+    @property
+    def objectclass(self):
+        if "key_class" not in self._build_properties.keys():
+            raise AttributeError("no 'key_class' provided in the _build_properties.")
+        
+        return self.data[self._build_properties["key_class"]][self.fovmask]
+        
     @property
     def starmask(self):
         """ This will tell which of the datapoints is a star
-        Remark, you need to have defined key_star and value_star
+        Remark, you need to have defined key_class and value_star
         in the __build_properties to be able to have access to this mask
         """
-        if "key_star" in self._build_properties.keys() and \
-          "value_star" in self._build_properties.keys():
-          flag = self.data[self._build_properties["key_star"]] == \
-            self._build_properties["value_star"]
-          return flag.data[self.fovmask]
-      
-                           
+        if "value_star" not in self._build_properties.keys():
+            return None
+
+        flag = self.objectclass == self._build_properties["value_star"]
+        return flag.data  #not self.fovmask already in objectclass
+
+    def has_starmask(self):
+        return False if self.starmask is None \
+          else True
+          
     # ------------
     # - Derived
     @property

@@ -3,6 +3,7 @@
 import numpy as np
 import pyfits as pf
 from .baseinstrument import Instrument,Catalogue
+from ...utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["sdss","SDSS_INFO"]
 
@@ -35,7 +36,7 @@ def which_band_is_file(filename):
         return None
     return pf.getheader(filename).get("FILTER")
 
-def fetch_sdss_catalog(center,radius,extracolums=[],column_filters={"gmag":"13..22"}):
+def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"13..22"}):
     """
     """
     try:
@@ -45,21 +46,26 @@ def fetch_sdss_catalog(center,radius,extracolums=[],column_filters={"gmag":"13..
     
     # -----------
     # - DL info
-    columns = ["mode","cl","SDSS9",
+    columns = ["cl",
                "RAJ2000","e_RAJ2000","DEJ2000","e_DEJ2000",
-               "ObsDate","Q"
+               #"ObsDate","Q"#"mode","SDSS9",
                ]
     for band in SDSS_INFO["bands"]:
         columns.append("%smag"%band)
         columns.append("e_%smag"%band)
-
-    columns = np.unique(columns+extracolums).tolist()
+    
+    columns = columns+extracolums
+    # - WARNING if discovered that some of the bandmag were missing if too many colums requested
     c = vizier.Vizier(catalog="V/139", columns=columns, column_filters=column_filters)
     c.ROW_LIMIT = 10000
-    t = c.query_region(center,radius=radius).values()[0]
+    try:
+        t = c.query_region(center,radius=radius).values()[0]
+    except:
+        raise IOError("Error while query the given coords. You might not have an internet connection")
+    
     cat = SDSSCatalogue(empty=True)
     cat.create(t.columns,None,
-               key_star="cl",value_star=3,
+               key_class="cl",value_star=6,
                key_ra="RAJ2000",key_dec="DEJ2000")
     return cat
     
@@ -148,7 +154,21 @@ class SDSS( Instrument ):
         self._derived_properties_keys.append("skyparam")
         super(SDSS,self).__build__(data_index=data_index)
 
-
+    @_autogen_docstring_inheritance(Instrument.set_catalogue,"Instrument.set_catalogue")
+    def set_catalogue(self,catalogue,force_it=True,**kwargs):
+        #
+        # - Add the bandname key_mag setting
+        #
+        if catalogue.source_name =="SDSS":
+            key_mag = "%smag"%self.bandname[-1]
+            key_magerr = "e_%smag"%self.bandname[-1]
+            if key_mag not in catalogue.data.keys():
+                print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
+            catalogue.set_mag_keys(key_mag,key_magerr)
+                
+            
+        super(SDSS,self).set_catalogue(catalogue,force_it=force_it,**kwargs)
+        
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -249,7 +269,7 @@ class SDSSCatalogue( Catalogue ):
     source_name = "SDSS"
     
     def __init__(self, catalogue_file=None,empty=False,
-                 key_mag="MAG",key_magerr="MAGERR"):
+                 key_mag=None,key_magerr=None):
         """
         """
         self.__build__(data_index=2,key_mag=key_mag,

@@ -4,7 +4,7 @@
 # -- here load all the object that could be parsed
 from ...utils.decorators import _autogen_docstring_inheritance
 
-from .sdss   import sdss,SDSS_INFO,is_sdss_file
+from .sdss   import sdss,SDSS_INFO,is_sdss_file, fetch_sdss_catalogue
 from .hst    import hst,HST_INFO,is_hst_file
 from .stella import stella,STELLA_INFO,is_stella_file
 
@@ -12,6 +12,16 @@ __all__ = ["instrument","KNOWN_INSTRUMENTS"]
 
 KNOWN_INSTRUMENTS = ["sdss","hst","stella"]
 
+def catalogue(source,radec,radius,extracolums=[],column_filters={"gmag":"13..22"},**kwargs):
+    """
+    """
+    if source == "sdss":
+        return fetch_sdss_catalogue(radec,radius,
+                                    extracolums=extracolums,
+                                    column_filters=column_filters,**kwargs)
+    
+    
+    raise NotImplementedError("Only the SDSS source catalogue is ready")
 
 def instrument(filename,astrotarget=None,**kwargs):
     """This method parse the input file to know to which

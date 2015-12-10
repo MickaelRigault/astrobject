@@ -470,19 +470,54 @@ class Image( BaseObject ):
         # - set it
         self._side_properties["catalogue"] = catalogue
         
+
+    # ------------------- #
+    # - download Methods- #
+    # ------------------- #
+    def download_catalogue(self,source="sdss",
+                           set_it=True,force_it=False,**kwargs):
+        """
+        """
+        from .instruments import instrument
+        radec = "%s %s"%(self.wcs.getCentreWCSCoords()[0],self.wcs.getCentreWCSCoords()[1])
+        radius = np.max(self.wcs.getHalfSizeDeg())*np.sqrt(2)
+        cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
+                                    **kwargs)
+        if not set_it:
+            return cat
         
+        self.set_catalogue(cat,force_it=force_it)
+                    
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
     # ----------- #
     # - ZeroPoint #
     # ----------- #
-    def get_stars_magnitude(self):
+    def get_stars_magnitude(self, detected=True, aperture_prop={}):
         """
         This methods fetch in the catalogue and sep_extracted objects (sepobjects)
         the matched points.
         It then perform a large aperture 
         """
+        # -------------- #
+        # - Input Test - #
+        # -------------- #
+        if not self.has_catalogue():
+            raise AttributeError("no 'catalogue' set. This is required")
+        
+        if detected and not self.has_sepobjects():
+            raise AttributeError("no 'sepobjects'. Run sep_extract() or set detected to False")
+
+        # -------------------- #
+        # - Detected         - #
+        # -------------------- #
+        if detected:
+            sep_idx, cat_idx =  self.sepobjects.get_pairing(stars_only=True)
+            radec = self.sepobjects.radec.T
+            
+            
+        
         
     # ----------- #
     #  Aperture   #
@@ -691,9 +726,7 @@ class Image( BaseObject ):
         """
         from sep import extract
         if thresh is None:
-            if "_sepbackground" not in dir(self):
-                _ = self.get_sep_background()
-            thresh = self._sepbackground.globalrms*1.5 / self.exposuretime
+            thresh = self._get_sep_extract_threshold_()
             
         o = extract(self.data,thresh,**kwargs)
         self._derived_properties["sepobjects"] = sexobjects(o)
@@ -708,6 +741,12 @@ class Image( BaseObject ):
                     
         if returnobjects:
             return self.sepobjects
+
+    def _get_sep_extract_threshold_(self):
+        """this will be used as a default threshold for sep_extract"""
+        if "_sepbackground" not in dir(self):
+                _ = self.get_sep_background()
+        return self._sepbackground.globalrms*1.5 
 
     # ------------------- #
     # - I/O Methods     - #
@@ -877,6 +916,7 @@ class Image( BaseObject ):
         # --------------------------------
         # - Draw the matched-points
         return self.catalogue.display(ax,wcs_coords=wcs_coords,draw=draw,
+                                      scalex=False,scaley=False,
                                       **kwargs)
 
     # =========================== #
@@ -1372,7 +1412,7 @@ class SexObjects( BaseObject ):
 
     _properties_keys = ["data"]
     _side_properties_keys = ["catalogue","wcs"]
-    _derived_properties_keys = ["catmask","catmatch"]
+    _derived_properties_keys = ["catmatch","starmask"]
     
     
     def __init__(self,sexoutput=None,wcs=None,empty=False):
@@ -1474,8 +1514,12 @@ class SexObjects( BaseObject ):
             "idx":idxsexobjects,
             "angsep":d2d
             }
+        
         self.catalogue.set_matchedmask(idxcatalogue)
-
+        self._derived_properties["starmask"] = np.asarray([i in self.catmask[self.catstarmask]
+                                                for i in range(len(self.data["x"]))],dtype=bool)
+        
+        
     # ------------------ #
     # - get Methods    - #
     # ------------------ #
@@ -1514,13 +1558,38 @@ class SexObjects( BaseObject ):
         raise ValueError("Cannot parse '%s'."%key +\
                           help_text)
             
+    def get_pairing(self, stars_only=False):
+        """
+        """
+        if not self.has_catmatch():
+            raise AttributeError("no matching performed")
+        
+        if stars_only and not self.catalogue.has_starmask():
+            raise AttributeError("no 'starmask' in the catalogue. Define it or set 'stars_only' to False")
 
-            
+        mask = self.catstarmask if stars_only else np.ones(len(self.catmatch["idx"]),dtype=bool)
+        return self.catmatch["idx"][mask],self.catmatch["idx_catalogue"][mask]
+
+    def get_psf_ellipse(self):
+        """This methods look for the stars and return the mean ellipse parameters"""
+
+        # -- add input test
+        angles = self.data["theta"][self.starmask]
+        a = self.data["a"][self.starmask]
+        b = self.data["b"][self.starmask]
+        m = np.sqrt(len(angles)-1)
+        theta,e_theta = np.median(angles),np.std(angles)/m
+        
+        return [np.median(a),np.std(a)/m],[np.median(b),np.std(b)/m],[theta,e_theta]
+        
+        
+        
     # ------------------- #
     # - PLOT Methods    - #
     # ------------------- #
+    # - Display
     def display(self,ax,world_coords=True,draw=True,
-                apply_catmask = True,
+                apply_catmask=True, stars_only=False,
                 **kwargs):
         """
         """
@@ -1532,6 +1601,8 @@ class SexObjects( BaseObject ):
         
         # -- maskout non matched one if requested
         mask = self.catmask if apply_catmask else np.ones(self.nobjects,dtype=bool)
+        mask = self.starmask if stars_only else mask
+        
         x,y = self.data["x"][mask],self.data["y"][mask]
         # -------------
         # - Properties
@@ -1547,7 +1618,7 @@ class SexObjects( BaseObject ):
                                      self.data["a"][mask],self.data["b"][mask],
                                      self.data["theta"][mask])]
         
-        pl = ax.plot(x,y,**prop)
+        #pl = ax.plot(x,y,**prop)
         for ell in ells:
             ell.set_clip_box(ax.bbox)
             ell.set_facecolor("None")
@@ -1555,15 +1626,18 @@ class SexObjects( BaseObject ):
             ax.add_patch(ell)
         if draw:
             ax.figure.canvas.draw()
-        return pl
+        #return pl
 
+    # - Histograms
     def show_hist(self,toshow="a",ax=None,
                   savefile=None,show=True,
+                  stars_only=False,
                   **kwargs):
         """This methods enable to show the histogram of any given
         key."""
         # -- Properties -- #
-        v = self.get(toshow)
+        mask = self.starmask if stars_only else self.catmask
+        v = self.get(toshow)[mask]
 
         # -- Setting -- #
         from ..utils.mpladdon import figout
@@ -1591,7 +1665,82 @@ class SexObjects( BaseObject ):
         self._plot['hist'] = out
         self._plot['prop'] = kwargs
         fig.figout(savefile=savefile,show=show)
+
+    # - Ellipse
+    def show_ellipses(self,stars_only=False,
+                      ax=None,
+                      savefile=None,show=True,
+                      **kwargs):
+        """
+        """
+        if not self.has_data():
+            print "WARNING [Sexobjects] No data to display"
+            return
         
+        from matplotlib.patches import Ellipse,Polygon
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        # ------------------- #
+        # - axes            - #
+        # ------------------- #
+        if ax is None:
+            fig = mpl.figure(figsize=[6,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        # ------------------- #
+        # - axes            - #
+        # ------------------- #
+        mask = self.starmask if stars_only else self.catmask
+        # -------------
+        # - Properties
+        
+        
+        ells = [Ellipse([0,0],2.,2*b/a,t*units.radian.in_units("degree"))
+                for a,b,t in zip(self.data["a"][mask],self.data["b"][mask],
+                                 self.data["theta"][mask])]
+        # -- Show the typical angle
+        psf_a,psf_b,psf_theta = self.get_psf_ellipse()
+        ellipticity = 1- psf_b[0]/psf_a[0]
+        # - cos/ sin what angle in radian
+        
+        ax.plot([0,np.cos(psf_theta[0])*ellipticity],[0,np.sin(psf_theta[0])*ellipticity],ls="-",lw=2,
+                 color=mpl.cm.Blues(0.8),zorder=8)
+
+        Cone_error = Polygon( [ [0,0],[np.cos(psf_theta[0]-psf_theta[1])*ellipticity,
+                                       np.sin(psf_theta[0]-psf_theta[1])*ellipticity],
+                                [np.cos(psf_theta[0]+psf_theta[1])*ellipticity,
+                                 np.sin(psf_theta[0]+psf_theta[1])*ellipticity],
+                                 [0,0]]
+                                )
+        Cone_error.set_facecolor(mpl.cm.Blues(0.8))
+        Cone_error.set_edgecolor(mpl.cm.Blues(0.8))
+        Cone_error.set_alpha(0.3)
+        ax.add_patch(Cone_error)
+
+        # -- Show the Ellipses
+        for ell in ells:
+            ell.set_clip_box(ax.bbox)
+            ell.set_facecolor("None")
+            ell.set_edgecolor("k")
+            ell.set_alpha(0.1)
+            ax.add_patch(ell)
+
+        ax.set_ylim(-1.1,1.1)
+        ax.set_xlim(-1.1,1.1)
+        # -- show the center
+        ax.axvline(0,ls="--",color="k",alpha=0.2)
+        ax.axhline(0,ls="--",color="k",alpha=0.2)
+        
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
     # =========================== #
     # Internal Methods            #
     # =========================== #
@@ -1644,6 +1793,7 @@ class SexObjects( BaseObject ):
             return None
         return len(self.data)
 
+    
     # ----------------
     # - WCS
     @property
@@ -1661,7 +1811,7 @@ class SexObjects( BaseObject ):
 
     @property
     def xy(self):
-        return self.data["x"],self.data["y"]
+        return np.asarray([self.data["x"],self.data["y"]])
 
     @property
     def sky_radec(self):
@@ -1678,14 +1828,28 @@ class SexObjects( BaseObject ):
     def has_catalogue(self):
         return False if self.catalogue is None\
           else True
-    
+          
     @property
     def catmask(self):
         """this array tells you if sextractor objects have a catalogue match"""
         if not self.has_catmatch() and self.has_data():
             return np.ones(self.nobjects,dtype=bool)
         return self._derived_properties["catmatch"]["idx"]
+
+    @property
+    def starmask(self):
+        return self._derived_properties["starmask"]
     
+    @property
+    def catstarmask(self):
+        """return a bool mask of the stars. If it can not do it, not data are masked (full True)"""
+        if not self.has_catmatch() and self.has_data():
+            return np.ones(self.nobjects,dtype=bool)
+        
+        if not self.catalogue.has_starmask():
+            return np.ones(self.nobjects,dtype=bool)
+        
+        return self.catalogue.starmask[ self.catmatch["idx_catalogue"]]
     # ----------------------
     # - Catalogue Matching
     @property
