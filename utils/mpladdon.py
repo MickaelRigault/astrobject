@@ -60,20 +60,20 @@ def specplot(ax,x,y,var=None,
 
 @make_method(mpl.Axes)
 def skyplot(ax, ra, dec, var=None,
-            color=None, bandprop={}, **kwargs):
+            bandprop={}, **kwargs):
     """This function in a build-in axes method that enable to quickly and
     easily plot a spectrum.
     """
     # -----------------------
     # - Properties of plot
-    default_kwargs = dict(marker='o', markersize=5, linestyle='none')
-    if color is not None:
-        default_kwargs["color"] = color
+    default_kwargs = dict(marker='o', s=20, #edgecolor='none',
+                          cmap=mpl.cm.RdYlBu_r)
+
     propplot = kwargs_update(default_kwargs,**kwargs)
 
     az, el = convert_radec_azel(ra, dec)
     # -- Plot 
-    pl = ax.plot(az, el, **propplot)
+    pl = ax.scatter(az, el, **propplot)
     
     return pl
 
