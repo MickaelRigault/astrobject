@@ -91,17 +91,30 @@ class TransientGenerator( BaseObject ):
     # --------------------------- #
     # - Plots Methods           - #
     # --------------------------- #
-    def show_skycoverage(self, ax=None, savefile=None, show=True, **kwargs):
+    def show_skycoverage(self, ax=None, savefile=None, show=True, cscale=None, 
+                         cblabel=None, **kwargs):
         """This function enable to draw on the sky the position of the
         transients"""
         import matplotlib.pyplot as mpl
         from ..utils.mpladdon import figout, skyplot
         self._plot = {}
 
+        if cscale == 'redshift':
+            c = np.asarray([t['zcmb'] for t in self.transientsources])
+            if cblabel is None:
+                cblabel = r"$\mathrm{Redshift}$"
+        elif type(cscale) != str and hasattr(cscale, '__iter__'):
+            c = cscale
+        elif cscale is not None:
+            raise ValueError('cscale must be array or predefined string, e.g. "redshift"') 
+
         if ax is None:
             ax_default = dict(fig=None, figsize=(12, 6), 
                                    rect=[0.1, 0.1, 0.8, 0.8], 
                                    projection='mollweide')
+            if cscale is not None:
+                ax_default['figsize'] = (12,8)
+                
             ax_kw, kwargs = kwargs_extract(ax_default, **kwargs)
             fig, ax = ax_skyplot(**ax_kw)
         elif ("MollweideTransform" not in dir(ax) and
@@ -111,22 +124,27 @@ class TransientGenerator( BaseObject ):
                             "function not found.")
         else:
             fig = ax.fig
-        
+
         # maybe these arrays can be integrate into the generator
         ra = np.asarray([t['ra'] for t in self.transientsources])
         dec = np.asarray([t['dec'] for t in self.transientsources])
-        zcmb = np.asarray([t['zcmb'] for t in self.transientsources])
 
-        pl = ax.skyplot(ra, dec, c=zcmb, **kwargs)
-        cb = fig.colorbar(pl, orientation='horizontal')
-        cb.set_label('Redshift') 
+        if cscale is None:
+            pl = ax.skyplot(ra, dec, **kwargs)
+            cb = None
+        else:
+            pl = ax.skyscatter(ra, dec, c=c, **kwargs)
+            cb = fig.colorbar(pl, orientation='horizontal', shrink=0.85, pad=0.08)
+            if cblabel is not None:
+                cb.set_label(cblabel, fontsize="x-large") 
 
         # ------------------- #
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
         self._plot["plot"] = pl
-        self._plot["cbar"] = cb
+        if cb is not None:
+            self._plot["cbar"] = cb
 
         fig.figout(savefile=savefile,show=show)
         

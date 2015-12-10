@@ -37,8 +37,8 @@ def ax_skyplot(fig=None, figsize=(12, 6), rect=[0.1, 0.1, 0.8, 0.8],
     xlabels = [u'%i\xb0'%ra for ra in range(150,-1,-30) + range(330,209,-30)]
     ax.set_xticklabels(xlabels)
 
-    ax.set_xlabel(r"$\mathrm{Ra\ [deg]}$",fontsize = "x-large")
-    ax.set_ylabel(r"$\mathrm{Dec\ [deg]}$",fontsize = "x-large")
+    ax.set_xlabel(r"$\mathrm{RA\ [deg]}$", fontsize="x-large")
+    ax.set_ylabel(r"$\mathrm{Dec\ [deg]}$", fontsize="x-large")
 
     return fig, ax
 
