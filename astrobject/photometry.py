@@ -1659,13 +1659,28 @@ class PhotoMap( BaseObject ):
 
         self._side_properties["refmap"] = photomap
 
-    # ========================== #
-    # = Get Methods            = #
-    # ========================== #
-    def display_voronoi(self,ax,wcs_coords=True):
+    def get(self,key):
         """
         """
-        from scipy.spatial import Voronoi,voronoi_plot_2d
+        if key is None:
+            return None
+        _sep_keys_ = self.sep_params.keys()
+        _derived_keys_ = ["flux_ratio","scaled_flux_ratio"]
+        if key in _derived_keys_:
+            if key == "flux_ratio":
+                return self.fluxes / self.refmap.fluxes
+            if key == "scaled_flux_ratio":
+                ratio = self.get("flux_ratio")
+                return ratio - np.median(ratio)
+        raise NotImplementedError("'%s' access is not implemented")
+    
+    # ========================== #
+    # = Plot Methods           = #
+    # ========================== #
+    def display_voronoi(self,ax,toshow="scaled_flux_ratio",wcs_coords=False,**kwargs):
+        """
+        """
+        from ..utils.mpladdon import voronoi_patchs
         if not self.has_refmap():
             raise AttributeError("No reference map ('refmap') defined ")
         # -----------------
@@ -1673,11 +1688,12 @@ class PhotoMap( BaseObject ):
         if wcs_coords:
             x,y = self.ra,self.dec
         else:
-            x,y = np.asarray(self.wcs_xy).T
+            xy = np.asarray(self.wcs_xy)
+            
         # -----------------
         # -
-        vor = Voronoi(self.fluxes / self.refmap.fluxes)
-        return vor
+        ax.voronoi_patchs(xy,self.get(toshow),**kwargs)
+        
     
     # =========================== #
     # Properties and Settings     #
