@@ -28,6 +28,7 @@ def make_method(obj):
           ...
     makes *toto* a method of `Axes`, so that one can directly use::
       ax.toto()
+    COPYRIGHT: from Yannick Copin
     """
 
     def decorate(f):
