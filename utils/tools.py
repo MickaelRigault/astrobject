@@ -54,7 +54,7 @@ def fitsrec_to_dict(data):
 # --------------------------- #
 # - Conversion Tools        - #
 # --------------------------- #
-def flux_2_mag(flux,dflux,wavelength):
+def flux_to_mag(flux,dflux,wavelength):
     """
     """
     F_Lxlambda2  = flux * wavelength**2
@@ -63,6 +63,19 @@ def flux_2_mag(flux,dflux,wavelength):
     err = -2.5*np.log(10) * dflux / flux
     return -2.5*np.log10(F_Lxlambda2) - 2.406, err
 
+def mag_to_flux(mag,magerr,wavelength):
+    """
+    mag must be ABmag
+    wavelength in Angstrom
+    return Flux in erg/s/cm2/A
+    """
+    F_Lxlambda2 = 10**(-(mag+2.406)/2.5)
+    flux = F_Lxlambda2/wavelength**2
+    if magerr is None:
+        return flux
+    
+    dflux = np.abs(flux*(-magerr/2.5*np.log(10))) # df/f = dcount/count
+    return flux,dflux
 
 def hourangle_2_degree(ra_hours,dec_hours,obstime="J2000"):
     """given the coordinate of the target in hours units

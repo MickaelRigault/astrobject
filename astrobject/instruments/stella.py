@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pyfits as pf
-from .baseinstrument import Instrument
+from .baseinstrument import Instrument,get_bandpass
 from ...utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["stella","STELLA_INFO"]
@@ -66,10 +66,9 @@ class STELLA( Instrument ):
             if key_mag not in catalogue.data.keys():
                 print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
             catalogue.set_mag_keys(key_mag,key_magerr)
-                
             
         super(STELLA,self).set_catalogue(catalogue,force_it=force_it,**kwargs)
-
+    
     @_autogen_docstring_inheritance(Instrument._get_sep_extract_threshold_,"Instrument._get_sep_extract_threshold_")
     def _get_sep_extract_threshold_(self,**kwargs):
         # Because Stella image are no per second
@@ -77,6 +76,10 @@ class STELLA( Instrument ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
+    @property
+    def bandpass(self):
+        # -- TO BE CHANGED
+        return get_bandpass("sdss%s"%self.bandname[0])
     # --------------
     # - Image Data
     @property
@@ -89,10 +92,6 @@ class STELLA( Instrument ):
         if self.header is None:
             raise AttributeError("no header loaded ")
         return self.header["FILTER"]
-
-    @property
-    def band_info(self):
-        return STELLA_INFO[self.band]
     
     @property
     def mab0(self):
@@ -121,3 +120,9 @@ class STELLA( Instrument ):
     # =========================== #
     # = Internal Tools          = #
     # =========================== #
+    def _get_default_variance_(self):
+        """
+        """
+        if "_sepbackground" in dir(self):
+            return (self._sepbackground.rms() / self.exposuretime) ** 2
+        return None

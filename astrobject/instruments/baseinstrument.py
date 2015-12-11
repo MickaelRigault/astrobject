@@ -6,10 +6,10 @@ from astropy import coordinates
 import pyfits as pf
 import numpy as np
 from ...utils.decorators import _autogen_docstring_inheritance
-from ...utils.tools import kwargs_update
+from ...utils.tools import kwargs_update,mag_to_flux
 
-from ...astrobject.photometry import photopoint,Image
-from ..baseobject import BaseObject
+from ...astrobject.photometry import Image,photopoint,photomap
+from ..baseobject import BaseObject,astrotarget
 __all__ = ["Instrument"]
 
 
@@ -24,6 +24,30 @@ class Instrument( Image ):
     # ----------- #
     #  PhotoPoint #
     # ----------- #
+    @_autogen_docstring_inheritance(Image.get_stars_aperture,"Image.get_stars_aperture")
+    def get_stars_photomap(self, r_pixels,aptype="circle",
+                            isolated_only=True,
+                            **kwargs):
+        #
+        # Get the photopoints instead of aperture
+        #
+        idx, cat_idx, [counts,errs,flags] = self.get_stars_aperture(r_pixels=r_pixels,aptype=aptype,
+                                                            isolated_only=isolated_only,**kwargs)
+        # -- Data Map
+        fluxes = self.count_to_flux(counts)
+        vares  = self.count_to_flux(errs)**2
+        ra_all,dec_all = self.sepobjects.radec
+        ra     = [ra_all[i] for i in idx]
+        dec     = [dec_all[i] for i in idx]
+        pmap = photomap(fluxes,vares,ra,dec,lbda=self.lbda)
+        pmap.set_wcs(self.wcs)
+        # -- Catalogue Map
+        catmap = self.catalogue.get_photomap(idx_only=cat_idx)
+        pmap.set_refmap(catmap)
+        return pmap
+        
+        
+        
     @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
     def get_photopoint(self,x,y,r_pixels=None,
                        aptype="circle",
@@ -95,8 +119,9 @@ class Catalogue( BaseObject ):
     source_name = "_not_defined_"
     
     _properties_keys = ["filename","data","header"]
-    _side_properties_keys = ["wcs","fovmask","matchedmask"]
-    _derived_properties_keys = ["fits","wcsx","wcsy"]
+    _side_properties_keys = ["wcs","fovmask","matchedmask","lbda"]
+    _derived_properties_keys = ["fits","wcsx","wcsy",
+                                "naround"]
 
     
     def __init__(self, catalogue_file=None,empty=False,
@@ -125,6 +150,53 @@ class Catalogue( BaseObject ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
+    
+    # ------------------- #
+    # - I/O Methods     - #
+    # ------------------- #
+    def load(self,catalogue_file,**kwargs):
+        """
+        """
+        fits   = pf.open(catalogue_file)
+        header = fits[self._build_properties["data_index"]].header
+        data   = fits[self._build_properties["data_index"]].data
+        if type(data) == pf.fitsrec.FITS_rec:
+            from astrobject.utils.tools import fitsrec_to_dict
+            from astropy.table import TableColumns
+            data = TableColumns(fitsrec_to_dict(data))
+            
+        self.create(data,header,**kwargs)
+        self._properties["filename"] = catalogue_file
+        self._derived_properties["fits"] = fits
+
+        
+    def create(self,data,header,force_it=True,**build):
+        """
+        """
+        if self.has_data() and force_it is False:
+            raise AttributeError("'data' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        self._properties["data"] = data
+        self._properties["header"] = header if header is not None \
+          else pf.Header()
+        self._build_properties = kwargs_update(self._build_properties,**build)
+      
+    def writeto(self,savefile,force_it=True):
+        """
+        """
+        raise NotImplementedError("to be done")
+    
+    # --------------------- #
+    # Set Methods           #
+    # --------------------- #
+    def set_mag_keys(self,key_mag,key_magerr):
+        """
+        """
+        self._build_properties["key_mag"] = key_mag
+        self._build_properties["key_magerr"] = key_magerr
+
+        
     def set_wcs(self,wcs,force_it=False,update_fovmask=True):
         """
         """
@@ -195,51 +267,36 @@ class Catalogue( BaseObject ):
         raise TypeError("the format of the given 'matchedmask' is not recongnized. "+\
                         "You could give a booleen mask array or a list of accepted index")
                         
-        
-    # ------------------- #
-    # - I/O Methods     - #
-    # ------------------- #
-    def load(self,catalogue_file,**kwargs):
-        """
-        """
-        fits   = pf.open(catalogue_file)
-        header = fits[self._build_properties["data_index"]].header
-        data   = fits[self._build_properties["data_index"]].data
-        if type(data) == pf.fitsrec.FITS_rec:
-            from astrobject.utils.tools import fitsrec_to_dict
-            from astropy.table import TableColumns
-            data = TableColumns(fitsrec_to_dict(data))
-            
-        self.create(data,header,**kwargs)
-        self._properties["filename"] = catalogue_file
-        self._derived_properties["fits"] = fits
-
-        
-    def create(self,data,header,force_it=True,**build):
-        """
-        """
-        if self.has_data() and force_it is False:
-            raise AttributeError("'data' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        self._properties["data"] = data
-        self._properties["header"] = header if header is not None \
-          else pf.Header()
-        self._build_properties = kwargs_update(self._build_properties,**build)
-      
-    def writeto(self,savefile,force_it=True):
-        """
-        """
-        raise NotImplementedError("to be done")
     # --------------------- #
-    # Set Methods           #
+    # Get Methods           #
     # --------------------- #
-    def set_mag_keys(self,key_mag,key_magerr):
+    def get_photomap(self,idx_only=None,lbda=None):
         """
         """
-        self._build_properties["key_mag"] = key_mag
-        self._build_properties["key_magerr"] = key_magerr
+        mask = self.idx_to_mask(idx_only) if idx_only is not None \
+          else np.ones(self.ndata,dtype=bool)
+        if lbda is not None:
+            self.lbda = lbda
+        elif self.lbda is None:
+            raise ValueError("No known 'lbda' and no 'lbda' given")
+
+        flux_fluxerr = self._flux_fluxerr
+        fluxes = [flux_fluxerr[0][i] for i in idx_only]
+        variances = [flux_fluxerr[1][i]**2 for i in idx_only]
+        ra = [self.ra[i] for i in idx_only]
+        dec = [self.dec[i] for i in idx_only]
         
+        pmap = photomap(fluxes=fluxes,variances=variances,
+                        ra=ra,dec=dec,lbda=self.lbda)
+        pmap.set_wcs(self.wcs)
+        return pmap
+    
+    def idx_to_mask(self,idx):
+        mask = np.zeros(self.ndata,dtype=bool)
+        for i in idx:
+            mask[i] = True
+        return mask
+
     # --------------------- #
     # PLOT METHODS          #
     # --------------------- #
@@ -337,6 +394,10 @@ class Catalogue( BaseObject ):
             return self.header["NAXIS2"]
         
         return len(self.data.values()[0])
+
+    @property
+    def ndata_in_fov(self):
+        return len(self.ra)
     
     # ---------------
     # - header / wcs 
@@ -420,6 +481,31 @@ class Catalogue( BaseObject ):
         
         return self.data[self._build_properties["key_magerr"]][self.fovmask]
 
+    # ----------------
+    # - Fluxes
+    @property
+    def lbda(self):
+        return self._side_properties["lbda"]
+
+    @lbda.setter
+    def lbda(self,value):
+        self._side_properties["lbda"] = value
+        
+    @property
+    def _flux_fluxerr(self):
+        if self.lbda is None:
+            raise AttributeError("set 'lbda' first (self.lbda = ...)")
+        
+        return mag_to_flux(self.mag,self.mag_err,self.lbda)
+    
+    @property
+    def flux(self):
+        return self._flux_fluxerr[0]
+    
+    @property
+    def flux_err(self):
+        return self._flux_fluxerr[1]
+    
     def _is_keymag_set_(self,verbose=True):
         """this method test if the keymag has been set"""
         if self._build_properties["key_mag"] is None or \
@@ -464,4 +550,32 @@ class Catalogue( BaseObject ):
         if self.has_wcs():
             return np.asarray([self.wcs.wcs2pix(ra_,dec_) for ra_,dec_ in zip(self.ra,self.dec)]).T
         raise AttributeError("no 'wcs' solution loaded")
+
+    # ----------------------
+    # - Alone Object
+    def define_around(self,ang_distance):
+        """
+        """
+        idxcatalogue = self.sky_radec.search_around_sky(self.sky_radec, ang_distance)[0]
+        self._derived_properties["naround"] = np.bincount(idxcatalogue)
+
+    def around_defined(self):
+        return False if self._derived_properties["naround"] is None\
+          else True
+        
+    @property
+    def nobjects_around(self):
+        """ """
+        if not self.around_defined():
+            print "INFORMATION: run 'define_around' to set nobject_around"
+        return self._derived_properties["naround"]
     
+    @property
+    def isolatedmask(self):
+        """
+        """
+        if not self.around_defined():
+            raise AttributeError("no 'nobjects_around' parameter derived. Run 'define_around'")
+        
+        return (self.nobjects_around == 1)
+        

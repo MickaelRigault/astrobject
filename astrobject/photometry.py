@@ -11,10 +11,11 @@ from astropy     import units,coordinates
 from astLib      import astWCS
 
 from .baseobject   import BaseObject 
-from ..utils.tools import kwargs_update,flux_2_mag
+from ..utils.tools import kwargs_update,flux_to_mag
 
 
-__all__ = ["image","photopoint","lightcurve","sexobjects"]
+__all__ = ["image","sexobjects",
+           "photopoint","lightcurve","photomap"]
 
 
 def image(filename=None,astrotarget=None,**kwargs):
@@ -77,6 +78,42 @@ def photopoint(lbda,flux,var,source=None,
                       instrument_name=instrument_name,
                       **kwargs)
 
+def photomap(fluxes=None,variances=None,ra=None,dec=None,lbda=None,
+             photopoints=None,**kwargs):
+    """
+    Get the object gathering photometric and coordinate informations
+    
+    Parameters
+    ----------
+
+    flux: [array]              The fluxes (*not magnitude*) of the photometric points.
+
+    variances: [array]         The variance associated to the point's fluxes.
+
+    ra,dec: [array,array]      Coordinates *in degree* of the given points
+
+    
+    - option -
+
+    lbda: [float]              The central wavelength associated to the photometric
+                               points.
+
+    photopoints: [array]       list of photopoints. Set that instead of fluxes / variances
+                               and lbda. (ra and dec style requiered)
+    
+    empty: [bool]              Set True to return an empty object.
+
+    
+    - other options ; not exhautive ; goes to 'create' -
+
+
+    Return
+    ------
+    PhotoMap
+    """
+    return PhotoMap(fluxes=fluxes,variances=variances,
+                    ra=ra,dec=dec,lbda=lbda,
+                    photopoints=photopoints,**kwargs)
 
 def lightcurve(datapoints,times,**kwargs):
     """
@@ -365,6 +402,7 @@ class Image( BaseObject ):
 
         self._update_()
 
+
     # ------------------- #
     # - Set Methods     - #
     # ------------------- #
@@ -465,6 +503,7 @@ class Image( BaseObject ):
             if self.has_sepobjects():
                 self.sepobjects.set_catalogue(catalogue,force_it=True)
                 self.sepobjects.match_catalogue()
+            
                 
         # --------
         # - set it
@@ -492,13 +531,19 @@ class Image( BaseObject ):
     # - get Methods     - #
     # ------------------- #
     # ----------- #
-    # - ZeroPoint #
+    #  Aperture   #
     # ----------- #
-    def get_stars_magnitude(self, detected=True, aperture_prop={}):
+    def get_stars_aperture(self, r_pixels,aptype="circle",
+                           isolated_only=True, 
+                           **kwargs):
         """
         This methods fetch in the catalogue and sep_extracted objects (sepobjects)
         the matched points.
-        It then perform a large aperture 
+        It then perform a large aperture
+
+        Return
+        ------
+        sep_idx, catalogue_idx, get_aperture's output (sum,sumerr,flag)
         """
         # -------------- #
         # - Input Test - #
@@ -506,22 +551,26 @@ class Image( BaseObject ):
         if not self.has_catalogue():
             raise AttributeError("no 'catalogue' set. This is required")
         
-        if detected and not self.has_sepobjects():
-            raise AttributeError("no 'sepobjects'. Run sep_extract() or set detected to False")
+        if not self.has_sepobjects():
+            raise AttributeError("no 'sepobjects'.  This is required")
 
-        # -------------------- #
-        # - Detected         - #
-        # -------------------- #
-        if detected:
-            sep_idx, cat_idx =  self.sepobjects.get_pairing(stars_only=True)
-            radec = self.sepobjects.radec.T
+        if isolated_only and not self.catalogue.around_defined():
+            raise AttributeError("no 'around' not defined in the catalogue."+ \
+                                 " Run catalogue.defined_around or set isolated_only to False")
             
-            
+        # -------------------- #
+        # - Pairing          - #
+        # -------------------- #
+        # note that might be a bit slow if called for the first time
+        pair = self.sepobjects.get_pairing(stars_only=True,isolated_only=isolated_only)
         
-        
-    # ----------- #
-    #  Aperture   #
-    # ----------- #
+        idx,cat_idx, x, y = np.asarray([[i,d['cat_idx'],d["sep_x"],d["sep_y"]] for i,d in pair.items()]).T
+        # -------------------- #
+        # - Get it           - #
+        # -------------------- #
+        return idx, cat_idx, self.get_aperture(x,y,r_pixels=r_pixels,aptype=aptype,**kwargs)
+    
+    
     def get_target_aperture(self,r_pixels,aptype="circle",subpix=5,**kwargs):
         """If a target is loaded, this will get the target coords and run
         'get_aperture'.
@@ -532,6 +581,7 @@ class Image( BaseObject ):
         return self.get_aperture(xpix,ypix,
                                  r_pixels=r_pixels,aptype=aptype,
                                  subpix=subpix,**kwargs)
+
     
     def get_aperture(self,x,y,r_pixels=None,aptype="circle",subpix=5,
                      ellipse_args={"a":None,"b":None,"theta":None},
@@ -610,9 +660,7 @@ class Image( BaseObject ):
         gain = kwargs.pop("gain",gain)
         # -----------------
         # - Variance Trick
-        var = self._sepbackground.rms()**2 if self.var is None \
-          and "_sepbackground" in dir(self) else None
-        var = kwargs.pop("var",var)
+        var = kwargs.pop("var",self.var)
 
         # ------------------------
         # - Do the Aperture Photo
@@ -993,6 +1041,8 @@ class Image( BaseObject ):
     
     @property
     def var(self):
+        if self._properties["var"] is None:
+           self._properties["var"] = self._get_default_variance_()
         return self._properties["var"]
     
     def has_var(self):
@@ -1060,6 +1110,13 @@ class Image( BaseObject ):
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
+    def _get_default_variance_(self):
+        """
+        """
+        if "_sepbackground" in dir(self):
+            return self._sepbackground.rms()**2
+        return None
+        
     def _get_default_background_(self,*args,**kwargs):
         return self.get_sep_background(*args,**kwargs)
         
@@ -1089,7 +1146,7 @@ class PhotoPoint( BaseObject ):
     __nature__ = "PhotoPoint"
 
     _properties_keys = ["lbda","flux","var"]
-    _side_properties_keys = ["source","intrument_name"]
+    _side_properties_keys = ["source","intrument_name","target"]
     _derived_properties_keys = []
     
     # =========================== #
@@ -1181,7 +1238,26 @@ class PhotoPoint( BaseObject ):
         self._plot["marker"] = pl
         self._plot["prop"] = prop
         return self._plot
-    
+
+    def set_target(self,newtarget):
+        """
+        Change (or create) an object associated to the given image.
+        This function will test if the object is withing the image
+        boundaries (expect if *test_inclusion* is set to False).
+        Set newtarget to None to remove the association between this
+        object and a target
+        """
+        if newtarget is None:
+            self._side_properties['target'] = None
+            return
+        
+        # -- Input Test -- #
+        if newtarget.__nature__ != "AstroTarget":
+            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
+        
+        # -- Seems Ok -- #
+        self._side_properties["target"] = newtarget.copy()
+        
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
@@ -1205,6 +1281,8 @@ class PhotoPoint( BaseObject ):
         return not self.flux is None
     # ------------
     # - Side
+    
+    # -- source
     @property
     def source(self):
         return self._side_properties["source"]
@@ -1212,21 +1290,32 @@ class PhotoPoint( BaseObject ):
     def source(self,value):
         self._side_properties["source"] = value
 
+    # -- instrument
     @property
     def instrument_name(self):
         return self._side_properties["instrument_name"]
+    
     @instrument_name.setter
     def instrument_name(self,value):
         self._side_properties["instrument_name"] = value
         
+    # -- Target
+    @property
+    def target(self):
+        return self._side_properties['target']
+
+    def has_target(self):
+        return False if self.target is None \
+          else True
+          
     # ------------
     # - Derived 
     @property
     def mag(self):
-        return flux_2_mag(self.flux,np.sqrt(self.var),self.lbda)[0]
+        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[0]
     @property
     def magvar(self):
-        return flux_2_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2
+        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2
 
 
 
@@ -1398,7 +1487,278 @@ class LightCurve( BaseObject ):
     @property
     def lbda(self):
         return self._derived_properties['lbda']
+
+
+
+#######################################
+#                                     #
+# Base Object Classes: PhotoMap       #
+#                                     #
+#######################################
+
+class PhotoMap( BaseObject ):
+    """
+    """
+    __nature__ = "PhotoMap"
     
+    _properties_keys = ["fluxes","variances","ra","dec","lbda"]
+    _side_properties_keys = ["refmap", "wcs", "sep_params"]
+    _derived_properties_keys = [""]
+    
+    def __init__(self,fluxes=None,variances=None,
+                 ra=None,dec=None,lbda=None,
+                 photopoints=None,
+                 empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+
+        if photopoints is not None:
+            self.create_from_photopoints(photopoints,ra,dec)
+            return
+        
+        if fluxes is not None and variances is not None:
+            self.create(fluxes,variances,ra,dec,lbda)
+            
+            
+        
+    # ========================== #
+    # = Init Methods           = #
+    # ========================== #
+    def create(self, fluxes, variances, ra, dec,lbda):
+        """
+        This method is the core function that create the object.
+        All the other initializing method rely on this one.
+        
+        
+        Parameters
+        ----------
+
+        fluxes: [array]            The fluxes of each points
+
+        variances: [array]         Associated variances
+
+        ra,dec: [array,array]      Poisiton in the sky *in degree*
+
+        lbda: [None, float]        wavelength associated to the points
+        """
+        
+        if len(fluxes) != len(variances):
+            raise ValueError("fluxes and variances must have the same size")
+
+        if len(fluxes) != len(ra):
+            raise ValueError("fluxes and ra must have the same size")
+
+        if len(fluxes) != len(dec):
+            raise ValueError("ra and dec must have the same size")
+
+        if "__iter__" in dir(lbda):
+            raise TypeError("lbda must be a float or an int. not an array")
+
+        # ********************* #
+        # * Creation          * #
+        # ********************* #
+        self._properties["lbda"] = np.float(lbda) if lbda is not None else None
+        self._properties["fluxes"] = np.asarray(fluxes,dtype= float)
+        self._properties["variances"] = np.asarray(variances,dtype= float)
+        self._properties["ra"] = np.asarray(ra,dtype= float)
+        self._properties["dec"] = np.asarray(dec,dtype= float)
+        
+        
+    def create_from_photopoints(self,photopoints,
+                                ra,dec):
+        """
+        This methods enable to extract, from a list of photpoints
+        the requiered input for this instance. Remark that if
+        the photpoints have a target set and if this target has
+        ra and dec defined, no need to inpout radec. Otherwisem you do.
+
+        Parameters
+        ----------
+
+        photopoints: [array of PhotoPoints]
+                                   a list of photopoints that contains
+                                   the flux/error/lbda [target] parameters
+        """
+        fluxes, variances, lbda = np.asarray([ [p.flux, p.var, p.lbda]
+                                                for p in photopoints ]).T
+        # -- ra,dec
+        ra,dec = radec if radec is not None else None,None
+        if ra is not None and len(ra) != len(flux):
+            raise ValueError("radec size must be equal to flux's one")
+        if ra is None:
+            try:
+                ra,dec = np.asarray([ [p.target.ra,p.target.dec] 
+                                 for p in photopoints]).T
+            except:
+                raise AttributeError("no radec provided and no photopoint.target to find it.")
+        
+        # ------------ #
+        # call create
+        # ------------ #
+        self.create(fluxes, variances, ra, dec, lbda)
+
+        
+    def writeto(self,savefile):
+        """
+        """
+        
+    def load(self,filename):
+        """
+        """
+        
+    # ========================== #
+    # = Get Methods            = #
+    # ========================== #
+    def get_photopoint(self,index):
+        """
+        """
+        
+        
+    def get_index_around(self,ra, dec, radius):
+        """
+        Parameters:
+        ----------
+        ra, dec : [float]          Position in the sky *in degree*
+
+        radius: [float with unit]  distance of search, using astropy.units
+
+        Return
+        ------
+        (SkyCoords.search_around_sky output)
+        """
+        sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
+        return self.sky_radec.search_around_sky(sky, radius)
+    
+    # ========================== #
+    # = Set Methods            = #
+    # ========================== #
+    def set_wcs(self,wcs,force_it=False):
+        """
+        """
+        if self.has_wcs() and force_it is False:
+            raise AttributeError("'wcs' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if wcs is not None and "coordsAreInImage" not in dir(wcs):
+            raise TypeError("'wcs' solution not recognize, should be an astLib.astWCS")
+
+        self._side_properties["wcs"] = wcs
+
+    def set_refmap(self, photomap,force_it=False):
+        """
+        """
+        if self.has_refmap() and force_it is False:
+            raise AttributeError("'refmap' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if "__nature__" not in dir(photomap) or photomap.__nature__ != "PhotoMap":
+            raise TypeError("The given reference map must be a astrobject PhotoMap")
+
+        self._side_properties["refmap"] = photomap
+
+    # ========================== #
+    # = Get Methods            = #
+    # ========================== #
+    def display_voronoi(self,ax,wcs_coords=True):
+        """
+        """
+        from scipy.spatial import Voronoi,voronoi_plot_2d
+        if not self.has_refmap():
+            raise AttributeError("No reference map ('refmap') defined ")
+        # -----------------
+        # - What to show
+        if wcs_coords:
+            x,y = self.ra,self.dec
+        else:
+            x,y = np.asarray(self.wcs_xy).T
+        # -----------------
+        # -
+        vor = Voronoi(self.fluxes / self.refmap.fluxes)
+        return vor
+    
+    # =========================== #
+    # Properties and Settings     #
+    # =========================== #
+    @property
+    def npoints(self):
+        if self.ra is None:
+            return 0
+        return len(self.ra)
+    
+    # ----------------
+    # - PhotoPoints
+    @property
+    def fluxes(self):
+        return self._properties["fluxes"]
+
+    @property
+    def variances(self):
+        return self._properties["variances"]
+
+    # --------------
+    # - radec
+    @property
+    def ra(self):
+        return self._properties["ra"]
+    
+    @property
+    def dec(self):
+        return self._properties["dec"]
+
+    @property
+    def sky_radec(self):
+        """This is an advanced radec methods tight to astropy SkyCoords"""
+        ra,dec = self.ra,self.dec
+        return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
+    
+    # --------------- #
+    # - Side Prop   - #
+    # --------------- #
+    
+    # ----------------      
+    # -- WCS
+    @property
+    def wcs(self):
+        return self._side_properties['wcs']
+
+    def has_wcs(self):
+        return False if self.wcs is None \
+          else True
+          
+    @property
+    def wcs_xy(self):
+        if not self.has_wcs():
+            raise AttributeError("no 'wcs' solution defined")
+        
+        return self.wcs.wcs2pix(self.ra,self.dec)
+        
+    # ----------------      
+    # -- References
+    @property
+    def refmap(self):
+        return self._side_properties["refmap"]
+    
+    
+    def has_refmap(self):
+        return False if self.refmap is None\
+          else True
+
+    # ----------------      
+    # -- sep Parameters
+    @property
+    def sep_params(self):
+        if self._side_properties["sep_params"] is None:
+            self._side_properties["sep_params"] = {}
+        return self._side_properties["sep_params"]
+    
+    def has_sep_params(self):
+        return False if len(self.sep_params.keys())==0 \
+          else True
+
+
 
 
 #######################################
@@ -1412,7 +1772,7 @@ class SexObjects( BaseObject ):
 
     _properties_keys = ["data"]
     _side_properties_keys = ["catalogue","wcs"]
-    _derived_properties_keys = ["catmatch","starmask"]
+    _derived_properties_keys = ["catmatch","starmask","pairdict"]
     
     
     def __init__(self,sexoutput=None,wcs=None,empty=False):
@@ -1472,8 +1832,20 @@ class SexObjects( BaseObject ):
         self._side_properties["wcs"] = wcs
         
 
-    def set_catalogue(self,catalogue,force_it=True):
+    def set_catalogue(self,catalogue,force_it=True, default_isolation_def = 5*units.arcsec):
         """
+        Parameters
+        ---------
+
+        default_isolation_def: [ang dist]
+                                   If 'define_around' has not be ran yet, this scale will
+                                   be used. This is important to know which object is
+                                   isolated.
+                                   
+                                   
+        Return
+        ------
+        
         """
         if self.has_catalogue() and force_it is False:
             raise AttributeError("'catalogue' already defined"+\
@@ -1486,7 +1858,10 @@ class SexObjects( BaseObject ):
         if not catalogue.has_wcs():
             print "WARNING the given 'catalogue' has no pixel coordinates. Cannot load it"
             return
-
+        
+        if not catalogue.around_defined():
+            catalogue.define_around(default_isolation_def)
+            
         self._side_properties["catalogue"] = catalogue
 
     def match_catalogue(self,catalogue=None,force_it=False,arcsec_size=2):
@@ -1557,18 +1932,6 @@ class SexObjects( BaseObject ):
 
         raise ValueError("Cannot parse '%s'."%key +\
                           help_text)
-            
-    def get_pairing(self, stars_only=False):
-        """
-        """
-        if not self.has_catmatch():
-            raise AttributeError("no matching performed")
-        
-        if stars_only and not self.catalogue.has_starmask():
-            raise AttributeError("no 'starmask' in the catalogue. Define it or set 'stars_only' to False")
-
-        mask = self.catstarmask if stars_only else np.ones(len(self.catmatch["idx"]),dtype=bool)
-        return self.catmatch["idx"][mask],self.catmatch["idx_catalogue"][mask]
 
     def get_psf_ellipse(self):
         """This methods look for the stars and return the mean ellipse parameters"""
@@ -1583,7 +1946,26 @@ class SexObjects( BaseObject ):
         return [np.median(a),np.std(a)/m],[np.median(b),np.std(b)/m],[theta,e_theta]
         
         
-        
+    def get_pairing(self, stars_only=True, isolated_only=False):
+        """
+        """
+        pair = {}
+        for i,d in self.pairdict.items():
+            if stars_only and not d['is_star']:
+                continue
+            if isolated_only and not d['is_isolated']:
+                continue
+            
+            pair[i] = d
+            
+        return pair
+
+    def idx_to_mask(self,idx):
+        mask = np.zeros(self.nobjects,dtype=bool)
+        for i in idx:
+            mask[i] = True
+        return mask
+    
     # ------------------- #
     # - PLOT Methods    - #
     # ------------------- #
@@ -1741,6 +2123,7 @@ class SexObjects( BaseObject ):
         self._plot['fig'] = fig
         self._plot['prop'] = kwargs
         fig.figout(savefile=savefile,show=show)
+        
     # =========================== #
     # Internal Methods            #
     # =========================== #
@@ -1773,7 +2156,38 @@ class SexObjects( BaseObject ):
                 
             # -- So this is a sextrator output ?
             return
-                
+
+    def _get_pairing_(self):
+        """
+        This is slow, should be optimized
+        """
+        if not self.has_catmatch():
+            raise AttributeError("no matching performed")
+        
+        idxself,idxcat = self.catmatch["idx"],self.catmatch["idx_catalogue"]
+        pair = {}
+        for i,icat in zip(idxself,idxcat):
+            if i in pair.keys():
+                pair[i]["other_cat_match"].append(icat)
+                continue
+            
+            pair[i] = {"cat_idx":icat,
+                       #"cat_mag":self.catalogue.mag[icat],
+                       #"cat_magerr":self.catalogue.mag_err[icat],
+                       #"cat_ra":self.catalogue.ra[icat],
+                       #"cat_dec":self.catalogue.dec[icat],
+                       "is_isolated":self.catalogue.isolatedmask[icat] if self.catalogue.around_defined() else None,
+                       "is_star":self.catalogue.starmask[icat],
+                       #"sep_a":self.get("a")[i],
+                       #"sep_b":self.get("b")[i],
+                       "sep_x":self.get("x")[i],
+                       "sep_y":self.get("y")[i],
+                       #"sep_theta":self.get("theta")[i],
+                       #"sep_flux":self.get("flux")[i],
+                       "other_cat_match":[]
+                       }
+            
+        return pair
     # =========================== #
     # Properties and Settings     #
     # =========================== #
@@ -1828,6 +2242,15 @@ class SexObjects( BaseObject ):
     def has_catalogue(self):
         return False if self.catalogue is None\
           else True
+
+    @property
+    def pairdict(self):
+        if self._derived_properties["pairdict"] is None:
+            print "Pairing loading..."
+            self._derived_properties["pairdict"] = self._get_pairing_()
+            
+        return self._derived_properties["pairdict"]
+        
           
     @property
     def catmask(self):

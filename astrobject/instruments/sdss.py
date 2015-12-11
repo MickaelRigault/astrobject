@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pyfits as pf
-from .baseinstrument import Instrument,Catalogue
+from .baseinstrument import Instrument,Catalogue,get_bandpass
 from ...utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["sdss","SDSS_INFO"]
@@ -165,7 +165,6 @@ class SDSS( Instrument ):
             if key_mag not in catalogue.data.keys():
                 print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
             catalogue.set_mag_keys(key_mag,key_magerr)
-                
             
         super(SDSS,self).set_catalogue(catalogue,force_it=force_it,**kwargs)
         
@@ -278,4 +277,14 @@ class SDSSCatalogue( Catalogue ):
             return
         
         self.load(catalogue_file)        
+    
+    @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
+    def set_mag_keys(self,key_mag,key_magerr):
+        #
+        # add lbda def
+        #
+        super(SDSSCatalogue,self).set_mag_keys(key_mag,key_magerr)
+        if key_mag is not None:
+            bandpass = get_bandpass("sdss%s"%key_mag[0])
+            self.lbda = bandpass.wave_eff
     
