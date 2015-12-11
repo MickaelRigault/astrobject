@@ -4,7 +4,7 @@
 
 import numpy as np
 
-__all__ = ["kwargs_update",
+__all__ = ["kwargs_update","kwargs_extract",
            "load_pkl","dump_pkl"]
 
 
@@ -17,6 +17,23 @@ def kwargs_update(default,**kwargs):
         
     return k
 
+def kwargs_extract(default,**kwargs):
+    """
+    like kwargs_update but extracts keys of default from kwargs
+
+    Returns:
+    k -- dictionary based on default update for kwargs
+    l -- kwargs without keys defined in default
+    """
+    k = default.copy()
+    l = {}
+    for key,val in kwargs.iteritems():
+        if key in k.keys():
+            k[key] = val
+        else:
+            l[key] = val
+
+    return k, l
 
 # --------------------------- #
 # - I/O Tools               - #
