@@ -40,10 +40,18 @@ class Instrument( Image ):
         ra     = [ra_all[i] for i in idx]
         dec     = [dec_all[i] for i in idx]
         pmap = photomap(fluxes,vares,ra,dec,lbda=self.lbda)
-        pmap.set_wcs(self.wcs)
+        
         # -- Catalogue Map
         catmap = self.catalogue.get_photomap(idx_only=cat_idx)
+        # -- Setting
+        sepinfo = {
+            "a": [self.sepobjects.data['a'][i] for i in idx],
+            "b": [self.sepobjects.data['b'][i] for i in idx],
+            "theta": [self.sepobjects.data['theta'][i] for i in idx]
+            }
         pmap.set_refmap(catmap)
+        pmap.set_wcs(self.wcs)
+        pmap.set_sep_params(sepinfo)
         return pmap
         
         

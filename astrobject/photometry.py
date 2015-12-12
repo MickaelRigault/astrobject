@@ -1659,6 +1659,17 @@ class PhotoMap( BaseObject ):
 
         self._side_properties["refmap"] = photomap
 
+
+    def set_sep_params(self, sep_params,force_it=True):
+        """
+        sepparam is a dictionnary containing some SEP info
+        """
+        if self.has_sep_params() and force_it is False:
+            raise AttributeError("'sep_params' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        self._side_properties["sep_params"] = sep_params
+        
     def get(self,key):
         """
         """
@@ -1666,6 +1677,12 @@ class PhotoMap( BaseObject ):
             return None
         _sep_keys_ = self.sep_params.keys()
         _derived_keys_ = ["flux_ratio","scaled_flux_ratio"]
+        # ---------------
+        # - key parsing
+        
+        if key in _sep_keys_:
+            return self.sep_params[key]
+        
         if key in _derived_keys_:
             if key == "flux_ratio":
                 return self.fluxes / self.refmap.fluxes
@@ -1692,7 +1709,9 @@ class PhotoMap( BaseObject ):
             
         # -----------------
         # -
-        ax.voronoi_patchs(xy,self.get(toshow),**kwargs)
+        out = ax.voronoi_patchs(xy,self.get(toshow),**kwargs)
+        ax.figure.canvas.draw()
+        return out
         
     
     # =========================== #
@@ -1848,14 +1867,16 @@ class SexObjects( BaseObject ):
         self._side_properties["wcs"] = wcs
         
 
-    def set_catalogue(self,catalogue,force_it=True, default_isolation_def = 5*units.arcsec):
+    def set_catalogue(self,catalogue,force_it=True,
+                      default_isolation_def = 5*units.arcsec):
         """
         Parameters
         ---------
 
         default_isolation_def: [ang dist]
-                                   If 'define_around' has not be ran yet, this scale will
-                                   be used. This is important to know which object is
+                                   If 'define_around' has not be ran yet,
+                                   this scale will be used.
+                                   This is important to know which object is
                                    isolated.
                                    
                                    
@@ -1981,7 +2002,13 @@ class SexObjects( BaseObject ):
         for i in idx:
             mask[i] = True
         return mask
-    
+
+
+    def get_photomap(self, matched_only=True,
+                     stars_only=False, isolated_only=False):
+        """
+        """
+        print "to be done"
     # ------------------- #
     # - PLOT Methods    - #
     # ------------------- #
