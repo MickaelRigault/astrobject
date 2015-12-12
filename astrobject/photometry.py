@@ -1455,8 +1455,6 @@ class LightCurve( BaseObject ):
         if self.lbda != photopoint.lbda:
             raise ValueError("the given 'photopoint' does not share the other's lbda")
         
-        
-        
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -1495,7 +1493,6 @@ class LightCurve( BaseObject ):
 # Base Object Classes: PhotoMap       #
 #                                     #
 #######################################
-
 class PhotoMap( BaseObject ):
     """
     """
@@ -1543,6 +1540,10 @@ class PhotoMap( BaseObject ):
         ra,dec: [array,array]      Poisiton in the sky *in degree*
 
         lbda: [None, float]        wavelength associated to the points
+
+        Return
+        ------
+        void
         """
         
         if len(fluxes) != len(variances):
@@ -1581,6 +1582,10 @@ class PhotoMap( BaseObject ):
         photopoints: [array of PhotoPoints]
                                    a list of photopoints that contains
                                    the flux/error/lbda [target] parameters
+
+        Return
+        ------
+        Void
         """
         fluxes, variances, lbda = np.asarray([ [p.flux, p.var, p.lbda]
                                                 for p in photopoints ]).T
@@ -1604,18 +1609,19 @@ class PhotoMap( BaseObject ):
     def writeto(self,savefile):
         """
         """
-        
+        print "to be done"
+                
     def load(self,filename):
         """
         """
-        
+        print "to be done"
     # ========================== #
     # = Get Methods            = #
     # ========================== #
     def get_photopoint(self,index):
         """
         """
-        
+        print "to be done"
         
     def get_index_around(self,ra, dec, radius):
         """
@@ -1649,6 +1655,9 @@ class PhotoMap( BaseObject ):
 
     def set_refmap(self, photomap,force_it=False):
         """
+        Set here the reference map associated to the current one.
+        The ordering of the point must be consistant with that of the current
+        photomap. 
         """
         if self.has_refmap() and force_it is False:
             raise AttributeError("'refmap' is already defined."+\
@@ -1662,7 +1671,8 @@ class PhotoMap( BaseObject ):
 
     def set_sep_params(self, sep_params,force_it=True):
         """
-        sepparam is a dictionnary containing some SEP info
+        sep_param is a dictionnary containing some SEP info. Setting it here
+        will enable to use the associated function (e.g. some 'get' keyword)
         """
         if self.has_sep_params() and force_it is False:
             raise AttributeError("'sep_params' is already defined."+\
@@ -1677,8 +1687,13 @@ class PhotoMap( BaseObject ):
             return None
         _sep_keys_ = self.sep_params.keys()
         _derived_keys_ = ["flux_ratio","scaled_flux_ratio"]
+        help_text = " Known keys are: "+", ".join(_sep_keys_+_derived_keys_)
         # ---------------
         # - key parsing
+        
+        if key in ["help","keys","keylist"]:
+            print help_text
+            return
         
         if key in _sep_keys_:
             return self.sep_params[key]
@@ -1689,17 +1704,41 @@ class PhotoMap( BaseObject ):
             if key == "scaled_flux_ratio":
                 ratio = self.get("flux_ratio")
                 return ratio - np.median(ratio)
-        raise NotImplementedError("'%s' access is not implemented")
+            
+        raise NotImplementedError("'%s' access is not implemented"+help_text)
     
     # ========================== #
     # = Plot Methods           = #
     # ========================== #
     def display_voronoi(self,ax,toshow="scaled_flux_ratio",wcs_coords=False,**kwargs):
         """
+        This methods enables to display in the given axes patchs following the voronoi
+        tesselation based on the photomap radec/xy (see wcs_coords) parameters.
+        This methods won't scale the ax according to the voronoi tesselation.
+
+        Parameters
+        ----------
+
+        ax: [matplotlib.Axes]      where the voronoi patch collection should be drawn
+        
+        - options -
+
+        toshow: [string]           keyword set to self.get that parses it. Use 'help'
+                                   for additional information.
+                                   The value of this key will define the color of the
+                                   patchs.
+        
+        - kwargs goes to mpladdon.voronoi_patchs -
+
+        non-exhaustive list of key arguments: *vmin, vmax, cmap,
+        cbar [bool or ax], cblabel, any matplotlib.PolyCollection keys*
+        
+        Return
+        ------
+        PatchCollection (see mpladdon.voronoi_patchs)
         """
         from ..utils.mpladdon import voronoi_patchs
-        if not self.has_refmap():
-            raise AttributeError("No reference map ('refmap') defined ")
+        
         # -----------------
         # - What to show
         if wcs_coords:
@@ -1708,7 +1747,7 @@ class PhotoMap( BaseObject ):
             xy = np.asarray(self.wcs_xy)
             
         # -----------------
-        # -
+        # - The plot itself
         out = ax.voronoi_patchs(xy,self.get(toshow),**kwargs)
         ax.figure.canvas.draw()
         return out
@@ -1945,7 +1984,7 @@ class SexObjects( BaseObject ):
         _data_keys_ = self.data.dtype.fields.keys()
         _matching_keys_ = ["angsep"]
         _derived_keys_ = ["elongation","ellipticity"]
-        help_text = " Known keys are: "+" ,".join(_data_keys_+_matching_keys_+_derived_keys_)
+        help_text = " Known keys are: "+", ".join(_data_keys_+_matching_keys_+_derived_keys_)
         if key in ["help","keys","keylist"]:
             print help_text
             return
