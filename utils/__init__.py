@@ -6,4 +6,5 @@ import mpladdon
 import decorators
 import random
 import skyplot
-__all__ = ['tools','mpladdon','decorators','random','skyplot']
+import skybins
+__all__ = ['tools','mpladdon','decorators','random','skyplot','skybins']
