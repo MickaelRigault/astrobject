@@ -115,21 +115,22 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
     hist = bins.hist(ra, dec)
 
     patches = []
-    for k in xranger(len(hist)):
+    for k in xrange(len(hist)):
         ra_bd, dec_bd = bins.boundary(k, steps=steps,
                                       max_stepsize=max_stepsize)
 
-        az_bd, el_bd = convert_radec_azel(ra_bd, dec_bd)
-        patches.append(Polygon(az_bd, el_bd), True)
+        coord_bd = np.asarray(convert_radec_azel(ra_bd, dec_bd, edge=0.0001)).T
 
-    p = PatchCollection(patches, **propplot) 
+        patches.append(Polygon(coord_bd, True))
+
+    p = PatchCollection(patches, **propplot)
+    p.set_edgecolor('face')
+    p.set_array(hist)
         
     # -- Plot 
     ax.add_collection(p)
     
     return p
-
-
 
 # --------------------- #
 # - Patchs Plots      - #

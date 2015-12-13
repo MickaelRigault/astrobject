@@ -151,7 +151,7 @@ class TransientGenerator( BaseObject ):
         return self._plot        
 
     def hist_skycoverage(self, ax=None, savefile=None, show=True, 
-                         cblabel=r"$N_{\textrm{SNe}}$", **kwargs):
+                         cblabel=r"$N_{SNe}$", **kwargs):
         """This function draws a sky histogram of the transient coverage"""
         import matplotlib.pyplot as mpl
         from ..utils.mpladdon import figout, skyhist
@@ -190,6 +190,7 @@ class TransientGenerator( BaseObject ):
             self._plot["cbar"] = cb
 
         fig.figout(savefile=savefile,show=show)
+        # mpl.show()
         
         return self._plot 
         

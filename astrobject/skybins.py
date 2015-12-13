@@ -27,7 +27,7 @@ class SkyBins( BaseObject ):
     _derived_keys = ["nbins"]
 
     def __init__(self, ra_range=(-180, 180), dec_range=(-90, 90), 
-                 ra_nbins=18, dec_nbins=10, dec_sin=True, empty=False,
+                 ra_nbins=12, dec_nbins=6, dec_sin=True, empty=False,
                  max_stepsize=5):
         """
         """
@@ -55,7 +55,7 @@ class SkyBins( BaseObject ):
         ra_max, dec_max = np.meshgrid(ra_base[1:], dec_base[1:])
 
         self._properties["ra_min"] = ra_min.flatten() 
-        self._properties["ra_max"] = ra_min.flatten() 
+        self._properties["ra_max"] = ra_max.flatten() 
         self._properties["dec_min"] = dec_min.flatten() 
         self._properties["dec_max"] = dec_max.flatten() 
                          
@@ -88,10 +88,10 @@ class SkyBins( BaseObject ):
         binned = np.zeros(self.nbins)
         
         for r, d in zip(ra, dec):
-            k = self.coord2bin(ra, dec)
-            if k[0] == np.NaN:
+            k = self.coord2bin(r, d)
+            if np.isnan(k[0]):
                 outside += 1
-                break 
+                continue
             elif len(k) > 1 and verbose:
                 warnings.warn("Some bins appear to be overlapping.")
             binned[k] += 1
@@ -115,14 +115,14 @@ class SkyBins( BaseObject ):
         lkwargs = dict(steps=steps, max_stepsize=max_stepsize)
         
         # Start in top left and work clockwise 
-        ra1, dec1 = self._draw_line(self.ramin[k], self.decmax[k], 
-                                    self.ramax[k], self.decmax[k], **lkwargs)
-        ra2, dec2 = self._draw_line(self.ramax[k], self.decmax[k], 
-                                    self.ramax[k], self.decmin[k], **lkwargs)
-        ra3, dec3 = self._draw_line(self.ramax[k], self.decmin[k], 
-                                    self.ramin[k], self.decmin[k], **lkwargs)
-        ra4, dec4 = self._draw_line(self.ramin[k], self.decmin[k], 
-                                    self.ramin[k], self.decmax[k], **lkwargs)
+        ra1, dec1 = self._draw_line(self.ra_min[k], self.dec_max[k], 
+                                    self.ra_max[k], self.dec_max[k], **lkwargs)
+        ra2, dec2 = self._draw_line(self.ra_max[k], self.dec_max[k], 
+                                    self.ra_max[k], self.dec_min[k], **lkwargs)
+        ra3, dec3 = self._draw_line(self.ra_max[k], self.dec_min[k], 
+                                    self.ra_min[k], self.dec_min[k], **lkwargs)
+        ra4, dec4 = self._draw_line(self.ra_min[k], self.dec_min[k], 
+                                    self.ra_min[k], self.dec_max[k], **lkwargs)
         
         ra = np.concatenate([ra1, ra2[1:], ra3[1:], ra4[1:-1]])
         dec = np.concatenate([dec1, dec2[1:], dec3[1:], dec4[1:-1]])
@@ -145,23 +145,26 @@ class SkyBins( BaseObject ):
             if steps is None:
                 steps = self._determine_steps(dec1, dec2, 
                                               max_stepsize=max_stepsize)
-            ra = np.ones(steps)
+            ra = ra1 * np.ones(steps)
             dec = np.linspace(dec1, dec2, steps)
         elif dec1 == dec2:
             if steps is None:
                 steps = self._determine_steps(ra1, ra2, 
                                               max_stepsize=max_stepsize)
             ra = np.linspace(ra1, ra2, steps)
-            dec = np.ones(steps)
+            dec = dec1 * np.ones(steps)
         else:
             raise ValueError("Either ra1 and ra2 or dec1 and dec2 must be the same.")
         
         return ra, dec
 
-        def _determine_steps(self, x1, x2, max_stepsize=self.max_stepsize):
-            """
-            """
-            return np.ceil(np.abs(float(x2 - x1)) / max_stepsize) + 1
+    def _determine_steps(self, x1, x2, max_stepsize=None):
+        """
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        return np.ceil(np.abs(float(x2 - x1)) / max_stepsize) + 1
 
     # =========================== #
     # = Properties and Settings = #
