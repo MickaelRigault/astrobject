@@ -8,7 +8,7 @@ Classes for binning sky coordinates
 import warnings
 import numpy as np
 
-from ..astrobject.baseobject import BaseObject
+from .baseobject import BaseObject
 
 _d2r = np.pi / 180 
 
@@ -40,7 +40,7 @@ class SkyBins( BaseObject ):
         
 
     def create(self, ra_range=(-180, 180), dec_range=(-90, 90), 
-               ra_nbins=18, dec_nbins=10, dec_sin=True):
+               ra_nbins=18, dec_nbins=10, dec_sin=True, max_stepsize=5):
         """
         """
         ra_base = np.linspace(ra_range[0], ra_range[1], ra_nbins+1)
@@ -100,29 +100,37 @@ class SkyBins( BaseObject ):
             warnings.warn("%i points lay outside the binned area.")
 
         return binned
-
+        
     # ========================== #
     # = Utilities for plotting = #
     # ========================== #
-    def boundary(self, k, step=None, max_stepsize=self.max_stepsize):
+    def boundary(self, k, steps=None, max_stepsize=None):
         """
         Return boundary of a bin; used for drawing polygons.
         If steps is None, max_stepsize is used to automatically determine 
         the appropriate step size.
         """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+        lkwargs = dict(steps=steps, max_stepsize=max_stepsize)
+        
         # Start in top left and work clockwise 
-        ra1, dec1 = self._draw_line(ramin[k], decmax[k], ramax[k], decmax[k])
-        ra2, dec2 = self._draw_line(ramax[k], decmax[k], ramax[k], decmin[k])
-        ra3, dec3 = self._draw_line(ramax[k], decmin[k], ramin[k], decmin[k])
-        ra4, dec4 = self._draw_line(ramin[k], decmin[k], ramin[k], decmax[k])
+        ra1, dec1 = self._draw_line(self.ramin[k], self.decmax[k], 
+                                    self.ramax[k], self.decmax[k], **lkwargs)
+        ra2, dec2 = self._draw_line(self.ramax[k], self.decmax[k], 
+                                    self.ramax[k], self.decmin[k], **lkwargs)
+        ra3, dec3 = self._draw_line(self.ramax[k], self.decmin[k], 
+                                    self.ramin[k], self.decmin[k], **lkwargs)
+        ra4, dec4 = self._draw_line(self.ramin[k], self.decmin[k], 
+                                    self.ramin[k], self.decmax[k], **lkwargs)
         
         ra = np.concatenate([ra1, ra2[1:], ra3[1:], ra4[1:-1]])
         dec = np.concatenate([dec1, dec2[1:], dec3[1:], dec4[1:-1]])
         
         return ra, dec
         
-    def _draw_line(self, ra1, dec1, ra2, dec2, step=None, 
-                  max_stepsize=self.max_stepsize):
+    def _draw_line(self, ra1, dec1, ra2, dec2, steps=None, 
+                   max_stepsize=None):
         """
         Return 'line' between (ra1, dec1) and (ra2, dec2).
         If steps is None, max_stepsize is used to automatically determine 
@@ -130,6 +138,9 @@ class SkyBins( BaseObject ):
         Note: This treats coordinates as Euclidean in (ra, dec) space.
         Therefore it only works for lines of constant ra or dec. 
         """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+        
         if ra1 == ra2:
             if steps is None:
                 steps = self._determine_steps(dec1, dec2, 

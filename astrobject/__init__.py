@@ -6,7 +6,8 @@ from spectroscopy import *
 from transient    import *
 from photometry   import *
 from multiband    import *
+from skybins      import *
 import instruments
 
 __all__ = ['baseobject','spectroscopy','photometry',
-           'multiband',"transient","instruments"]
+           'multiband',"transient","instruments","skybins"]
