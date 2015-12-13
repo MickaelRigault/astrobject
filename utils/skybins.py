@@ -8,7 +8,7 @@ Classes for binning sky coordinates
 import warnings
 import numpy as np
 
-from ..astrobject.baseobject import BaseObject,astrotarget
+from ..astrobject.baseobject import BaseObject
 
 _d2r = np.pi / 180 
 
