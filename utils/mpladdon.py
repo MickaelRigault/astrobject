@@ -8,6 +8,7 @@ import matplotlib.pyplot as mpl
 from .tools import kwargs_update
 from .decorators import make_method
 from .skyplot import convert_radec_azel
+from .skybins import SkyBins
 
 
 __all__ = ["specplot","skyplot","figout"]
@@ -57,8 +58,7 @@ def specplot(ax,x,y,var=None,
 # - Skyplot           - #
 # --------------------- #
 @make_method(mpl.Axes)
-def skyplot(ax, ra, dec, var=None,
-            color=None, bandprop={}, **kwargs):
+def skyplot(ax, ra, dec, color=None, **kwargs):
     """This function in a build-in axes method that allows easily plotting points 
     on the sky.
     """
@@ -77,8 +77,7 @@ def skyplot(ax, ra, dec, var=None,
 
 
 @make_method(mpl.Axes)
-def skyscatter(ax, ra, dec, var=None,
-               bandprop={}, **kwargs):
+def skyscatter(ax, ra, dec, **kwargs):
     """This function in a build-in axes method that allows simple scatter plots
     easily plot a spectrum.
     """
@@ -94,6 +93,43 @@ def skyscatter(ax, ra, dec, var=None,
     sc = ax.scatter(az, el, **propplot)
     
     return sc
+
+@make_method(mpl.Axes)
+def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
+    """This function in a build-in axes method that makes a sky histogram of the 
+    coordinates.
+    
+    """
+    # -----------------------
+    # - Properties of plot
+    from matplotlib.patches import Polygon
+    from matplotlib.collections import PatchCollection
+    
+    if bins is None:
+        bins = SkyBins()
+
+    default_kwargs = dict(cmap=mpl.cm.Blues)
+
+    propplot = kwargs_update(default_kwargs,**kwargs)
+
+    hist = bins.hist(ra, dec)
+
+    patches = []
+    for k in xranger(len(hist)):
+        ra_bd, dec_bd = bins.boundary(k, steps=steps,
+                                      max_stepsize=max_stepsize)
+
+        az_bd, el_bd = convert_radec_azel(ra_bd, dec_bd)
+        patches.append(Polygon(az_bd, el_bd), True)
+
+    p = PatchCollection(patches, **propplot) 
+        
+    # -- Plot 
+    ax.add_collection(p)
+    
+    return p
+
+
 
 # --------------------- #
 # - Patchs Plots      - #

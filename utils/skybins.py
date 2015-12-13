@@ -44,7 +44,7 @@ class SkyBins( BaseObject ):
         """
         """
         ra_base = np.linspace(ra_range[0], ra_range[1], ra_nbins+1)
-v        if dec_sin:
+        if dec_sin:
             dec_base = np.arcsin(np.linspace(np.sin(dec_range[0] * _d2r), 
                                              np.sin(dec_range[1] * _d2r), 
                                              dec_nbins+1)) / _d2r
