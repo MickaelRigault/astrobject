@@ -10,6 +10,13 @@ import numpy as np
 
 from ...astrobject.baseobject import BaseObject
 #import astrobject.astrobject import baseobject as b
+
+try:
+    import healpy as hp
+    HEALPY_IMPORTED = True
+except ImportError:
+    HEALPY_IMPORTED = False
+
 _d2r = np.pi / 180 
 
 __all__ = ["SkyBins","HealpixBins"]
@@ -206,7 +213,97 @@ class SkyBins( BaseObject ):
 
 class HealpixBins( BaseObject ):
     """
+    HEALPix Binner
     """
-    _properties_keys = ["ra_min", "ra_max", "dec_min", "dec_max"]
+    _properties_keys = ["nside", "nest", "max_stepsize"]
 
-    _derived_keys = ["nbins"]
+    _derived_keys = ["nbins"] 
+
+    def __init__(self, nside=8, nest=True, max_stepsize=5, empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        self.create(nside=nside, nest=nest, max_stepsize=max_stepsize)
+
+    def create(self, nside=8, nest=True, max_stepsize=5):
+        """
+        """
+        if not HEALPY_IMPORTED:
+            raise ValueError("HealpixBins requires the healpy package.")
+
+        self._properties["nside"] = nside
+        self._properties["nest"] = nest
+                         
+        self._properties["max_stepsize"] = max_stepsize
+        #self.__update__()
+
+    # =========== #
+    # = Binning = #
+    # =========== #
+    def hist(self, ra, dec):
+        """
+        Return the counts per bin for a list a coordinates.
+        """
+        pixels = hp.ang2pix(self.nside,(90 - dec) * _d2r, ra * _d2r, 
+                            nest=self.nest)
+        binned = np.histogram(pixels, bins=range(hp.nside2npix(self.nside) + 1))
+        
+        return binned[0]
+
+    # ========================== #
+    # = Utilities for plotting = #
+    # ========================== #
+    def boundary(self, k, steps=None, max_stepsize=None):
+        """
+        Return boundary of a bin; used for drawing polygons.
+        If steps is None, max_stepsize is used to automatically determine
+        the appropriate step size.
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        if steps is None:
+            steps = self._determine_steps(max_stepsize=max_stepsize)
+
+        bd = hp.boundaries(self.nside, k, step=steps, nest=self.nest)
+        dec_raw, ra_raw = hp.vec2ang(np.transpose(bd))
+
+        ra = ((ra_raw / _d2r + 180) % 360) - 180
+        dec = 90 - dec_raw / _d2r
+
+        return ra, dec
+
+    def _determine_steps(self, max_stepsize=None):
+        """
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        return np.ceil(hp.nside2resol(self.nside) / _d2r / max_stepsize) + 1
+
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def nside(self):
+        """HEALPix NSIDE parameter"""
+        return self._properties["nside"]
+
+    @property
+    def nest(self):
+        """HEALPix NESTED parameter"""
+        return self._properties["nest"]
+
+    @property
+    def max_stepsize(self):
+        """maximum stepsize for boundary in degrees"""
+        return self._properties["max_stepsize"]
+
+    # --------------------
+    # - Derived Properties
+    @property
+    def nbins(self):
+        """number of bins"""
+        return hp.nside(self._properties["nside"])
