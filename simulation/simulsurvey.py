@@ -5,6 +5,8 @@ from ..astrobject.baseobject import BaseObject
 from .simultarget import transient_generator
 
 
+
+
 #######################################
 #                                     #
 # Survey: Simulation Base             #

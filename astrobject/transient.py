@@ -12,6 +12,7 @@ def snIa(args,**kwargs):
 def transient(lightcurve=None,name=None,
               zcmb=None, ra=None, dec=None,
               type_=None,forced_mwebmv=None,
+              mjd=None,
               datasource={},**kwargs):
     """
     = Initialize the AstroTarget Function =
@@ -36,7 +37,10 @@ def transient(lightcurve=None,name=None,
                                    
     dec: [float]               declination of the object. (degree favored)
                                *ra* and *dec* must have the same unit.
-                               
+
+    mjd: [float/array]         typical time(s) for the transient (could be a list)
+                               If None and a lightcurve is set. The first time of the
+                               LightCurve point will be used.
     - options -
         
     type_:[string]             type of the astro-object (galaxy, sn, Ia, Ibc...)
@@ -104,18 +108,18 @@ class Transient( AstroTarget ):
     def __init__(self,lightcurve=None,
                  name=None,zcmb=None,
                  ra=None,dec=None,type_=None,
-                 empty=False,**kwargs):
+                 mjd=None,empty=False,**kwargs):
         
         super(Transient,self).__init__(name=name,zcmb=zcmb,
                             ra=ra,dec=dec,type_=type_,
                             empty=empty,**kwargs)
         
         self.set_lightcurve(lightcurve)
-
+        self.mjd = mjd
         
     def __build__(self):
         self._properties_keys.append('lightcurve')
-        self._side_properties_keys.append('mjdtime')
+        self._side_properties_keys.append('mjd')
         super(Transient,self).__build__()
 
     # =========================== #
@@ -148,12 +152,15 @@ class Transient( AstroTarget ):
           else True
           
     @property
-    def mjdtime(self):
-        if self.has_lightcurve() and self._side_properties["mjdtime"] is None:
+    def mjd(self):
+        if self.has_lightcurve() and self._side_properties["mjd"] is None:
             return self.lightcurve.times[0]
         
-        return self._side_properties["mjdtime"]
+        return self._side_properties["mjd"]
     
+    @mjd.setter
+    def mjd(self,value):
+        self._side_properties["mjd"] = mjd
 #######################################
 #                                     #
 # Base Object Classes: Supernova      #
