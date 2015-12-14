@@ -95,7 +95,8 @@ def skyscatter(ax, ra, dec, **kwargs):
     return sc
 
 @make_method(mpl.Axes)
-def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
+def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
+            vmin=None, vmax=None, cmap=mpl.cm.Blues, cblabel=None, **kwargs):
     """This function in a build-in axes method that makes a sky histogram of the 
     coordinates.
     
@@ -103,7 +104,7 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
     # -----------------------
     # - Properties of plot
     from matplotlib.patches import Polygon
-    from matplotlib.collections import PatchCollection
+    from matplotlib.collections import PatchCollection, PolyCollection
 
     from .plot.skybins import SkyBins
     from .plot.skyplot import convert_radec_azel
@@ -111,29 +112,65 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
     if bins is None:
         bins = SkyBins()
 
-    default_kwargs = dict(cmap=mpl.cm.Blues)
-
-    propplot = kwargs_update(default_kwargs,**kwargs)
-
     hist = bins.hist(ra, dec)
+    #hist = np.arange(10,58)
 
     patches = []
+    p_idx = []
     for k in xrange(len(hist)):
         ra_bd, dec_bd = bins.boundary(k, steps=steps,
                                       max_stepsize=max_stepsize)
 
-        coord_bd = np.asarray(convert_radec_azel(ra_bd, dec_bd, edge=0.0001)).T
+        # check whether boundary crosses the 180 degree line
+        # If so split patch in two
+        cr = np.where(np.abs(ra_bd[1:] - ra_bd[:-1]) > 4 * max_stepsize)
+        # Need to make sure that difference in RA was not just large because
+        # of dec being 90 or -90 for one of them
+        true_cr = []
+        for cross in cr[0]:
+            if np.abs(dec_bd[cross]) < 90 and np.abs(dec_bd[cross + 1]) < 90:
+                true_cr.append(cross)
 
-        patches.append(Polygon(coord_bd, True))
-
-    p = PatchCollection(patches, **propplot)
-    p.set_edgecolor('face')
-    p.set_array(hist)
+        if len(true_cr) > 0 or np.abs(ra_bd[-1] - ra_bd[0]) > 2 * max_stepsize:
+            ra_bd1 = ra_bd.copy()
+            ra_bd2 = ra_bd.copy()
         
-    # -- Plot 
-    ax.add_collection(p)
+            # This assumes that the bins do not cover more than 180 deg in RA
+            ra_bd1[ra_bd1 > -10] = -180 + edge
+            ra_bd2[ra_bd2 < 10] = 180 - edge
+
+            for r in [ra_bd1, ra_bd2]:
+                # Only draw if really on two sides and not just because of 
+                # non-matching sign of 180
+                if np.any(np.abs(r) < 180 - edge):
+                    coord_bd = np.asarray(convert_radec_azel(r, dec_bd,
+                                                             edge=edge)).T
+                    #patches.append(Polygon(coord_bd, True))
+                    patches.append(coord_bd)
+                    p_idx.append(k)
+        else:
+            coord_bd = np.asarray(convert_radec_azel(ra_bd, dec_bd,
+                                                     edge=edge)).T
+            # patches.append(Polygon(coord_bd, True))
+            patches.append(coord_bd)
+            p_idx.append(k)
+
+    c = np.asarray(hist[np.asarray(p_idx)])
+    vmin = c.min() if vmin is None else vmin
+    vmax = c.max() if vmax is None else vmax
+    color = cmap((c-vmin)/float(vmax-vmin))
+    print np.min((c-vmin)/float(vmax-vmin))
+
+    collec = PolyCollection(patches, cmap=cmap, facecolors=color, **kwargs)
+    collec.set_edgecolor('face')
+    collec.set_array(c)
     
-    return p
+    # -- Plot 
+    ax.add_collection(collec)
+    
+    axcar = ax.insert_ax(fraction=0.9,space=.05,pad=0.03)
+    print vmin,vmax
+    return collec, axcar.colorbar(cmap,vmin=vmin,vmax=vmax,label=cblabel)
 
 # --------------------- #
 # - Patchs Plots      - #

@@ -241,7 +241,7 @@ class TransientGenerator( BaseObject ):
         self._plot = {}
 
         if ax is None:
-            ax_default = dict(fig=None, figsize=(12, 8),
+            ax_default = dict(fig=None, figsize=(12, 6),
                               rect=[0.1, 0.1, 0.8, 0.8],
                               projection='mollweide')
             ax_kw, kwargs = kwargs_extract(ax_default, **kwargs)
@@ -254,22 +254,26 @@ class TransientGenerator( BaseObject ):
         else:
             fig = ax.fig
 
+        #if cmap is None:
+        #    cmap = mpl.cm.Blues
+
         # maybe these arrays can be integrate into the generator
-        p = ax.skyhist(self.ra, self.dec, **kwargs)
-        cb = fig.colorbar(p, orientation='horizontal', shrink=0.85, pad=0.08)
-        if cblabel:
-            cb.set_label(cblabel, fontsize="x-large") 
+        collec, cb = ax.skyhist(self.ra, self.dec, cblabel=cblabel, **kwargs)
+        # cb = fig.colorbar(collec, orientation='horizontal', shrink=0.85, 
+        #                   pad=0.08, cmap=cmap, vmin=vmin, vmax=vmax)
+        # if cblabel:
+        #     cb.set_label(cblabel, fontsize="x-large") 
 
         # ------------------- #
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
-        self._plot["patches"] = p
-        if cb is not None:
-            self._plot["cbar"] = cb
+        self._plot["collection"] = collec
+        self._plot["cbar"] = cb
 
         fig.figout(savefile=savefile,show=show)
         return self._plot 
+
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
