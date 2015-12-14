@@ -9,7 +9,7 @@ import sncosmo
 
 from ..astrobject.baseobject import BaseObject,astrotarget
 from ..astrobject.transient import transient
-from ..utils.skyplot import ax_skyplot
+from ..utils.plot.skyplot import ax_skyplot
 from ..utils.tools import kwargs_extract,kwargs_update
 from ..utils import random
 
@@ -114,6 +114,7 @@ class TransientGenerator( BaseObject ):
         """
         known_event_prop = ["ra_range","dec_range","zcmb_range",
                             "mw_exclusion","mdj_range"]
+            
         for k in kwargs.keys():
             if k not in known_event_prop:
                 raise ValueError("'%s' is not an 'event' parameter."%k +\
@@ -544,6 +545,11 @@ class RateGenerator( _PropertyGenerator_ ):
         (comoving volumetric rate at each redshift in units of yr^-1 Mpc^-3.)
         """
         return self.rate_basic(z)
+    
+    def rate_Ia_ptflike(self,z):
+        """
+        """
+        return self.rate_basic(z)
     # ========================== #
     # = *** Rates              = #
     # ========================== #
@@ -630,11 +636,17 @@ class LightCurveGenerator( _PropertyGenerator_ ):
             mabs = normal(-19.3, 0.3)
             self.model.set_source_peakabsmag(mabs, 'bessellb', 'ab')
             x0.append(self.model.get('x0'))
+            
         ntransient = len(redshifts)
+        
         return {'x0':np.array(x0),
                 'x1':normal(stretch_mean, stretch_sigma, ntransient),
                 'c':normal(color_mean, color_sigma, ntransient)}
+    def lightcurve_Ia_realistic():
+        raise NotImplementedError("To be done")
     
+    def lightcurve_Ia_hostdependent():
+        raise NotImplementedError("To be done")
     # ========================== #
     # = Properties             = #
     # ========================== #

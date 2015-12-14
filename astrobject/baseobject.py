@@ -15,7 +15,7 @@ COSMO_DEFAULT = cosmology.Planck13
 
 
 __version__ = 0.1
-__all__     = ["astrotarget","BaseObject"]
+__all__     = ["astrotarget"]
 
 
 def astrotarget(name=None,zcmb=None, ra=None, dec=None,

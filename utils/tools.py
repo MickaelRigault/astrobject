@@ -68,6 +68,7 @@ def fitsrec_to_dict(data):
     for f in fields:
         dico[f] = data[f]
     return dico
+
 # --------------------------- #
 # - Conversion Tools        - #
 # --------------------------- #
