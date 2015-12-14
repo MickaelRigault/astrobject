@@ -55,13 +55,12 @@ class TransientGenerator( BaseObject ):
     _properties_keys = ["transient_coverage",
                         "event_coverage"]
         
-    _derived_keys    = ["transients","transientsources",
-                        "ratefunc","zcmb"]
+    _derived_properties_keys = ["ratefunc","simul_parameters"]
 
     
 
     def __init__(self,zrange=[0.0,0.2], ratekind="basic", # How deep
-                 mdj_range=[57754.0,58849.0],type_=None,
+                 mdj_range=[57754.0,58849.0],
                  ra_range=(-180,180),dec_range=(-90,90), # Where, see also kwargs
                  ntransients=None, empty=False,**kwargs):
         """
@@ -73,13 +72,13 @@ class TransientGenerator( BaseObject ):
         self.create(zrange,
                     ratekind=ratekind, ntransients=ntransients,
                     ra_range=ra_range, dec_range=dec_range,
-                    mdj_range=mdj_range,type_=type_,
+                    mdj_range=mdj_range,
                     **kwargs)
 
     def create(self,zrange,ratekind="basic",ntransients=None,
-               mdj_range=[57754.0,58849.0],type_=None,
+               mdj_range=[57754.0,58849.0],
                ra_range=(-180,180),dec_range=(-90,90),
-               mw_exclusion=0):
+               mw_exclusion=0,transientpror={}):
         """
         """
         # == Add the Input Test == #
@@ -94,8 +93,8 @@ class TransientGenerator( BaseObject ):
                                    "zcmb_range":zrange,"mdj_range":mdj_range,
                                    "mw_exclusion":mw_exclusion})
         
-        self.set_transient_parameters(type_,ratekind=ratekind,
-                                      update=False)
+        self.set_transient_parameters(ratekind=ratekind,
+                                      update=False,**transientpror)
         
         self._update_()
         
@@ -125,8 +124,8 @@ class TransientGenerator( BaseObject ):
         if update:
             self._update_()
                             
-    def set_transient_parameters(self,type_,ratekind="basic",
-                                 update=True):
+    def set_transient_parameters(self,ratekind="basic",
+                                 update=True,type_=None):
         """
         This method will define the transient properties.
         """
@@ -147,13 +146,22 @@ class TransientGenerator( BaseObject ):
     # --------------------------- #
     # - Get Methods             - #
     # --------------------------- #
-    def get_transients(self):
+    def get_transients(self,index=None):
         """loops over the transientsources to load the transients objects.
         This method could be a bit slow..."""
-        if self.transientsources is None:
-            raise AttributeError("No 'transientsources' defined.")
-        return [transient(**s) for s in self.transientsources]
+        return [transient(**s) for s in self.get_transientsource(index)]
     
+    def get_transientsource(self,index=None):
+        """dictionary containing the fundamental parameters that enable to
+        load the transient objects"""
+        if index is not None and "__iter__" not in dir(index):
+            index = [index]
+        
+        return [dict(name="simul%d"%i,ra=self.ra[i],dec=self.dec[i], zcmb=self.zcmb[i],
+                mjd=self.mjd[i],
+                lightcurve=self.lightcurve[i] if self.has_lightcurves() else None)
+                for i in range(self.ntransient) if i is None or i in index]
+            
     # --------------------------- #
     # - Plots Methods           - #
     # --------------------------- #
@@ -259,27 +267,31 @@ class TransientGenerator( BaseObject ):
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
-    def _update_(self):
-        """This module create the derived values based on the
-        fundamental ones"""
-
+    def _update_simulation_(self):
+        """
+        """
         # -----------------------
         # - Redshift from Rate
-        self._derived_properties["zcmb"] = \
+        self.simul_parameters["zcmb"] = \
           list(sncosmo.zdist(self.zcmb_range[0], self.zcmb_range[1],
                              time=self.timescale, area=self.coveredarea,
                              ratefunc=self.ratefunc))
 
-        simul_mjd = self._simulate_mjd_()
-        simul_ra, simul_dec = random.radec(self.ntransient,
-                                ra_range=self.ra_range,
-                                dec_range=self.dec_range,
-                                mw_exclusion=self._get_event_property_("mw_exclusion"))
+        self.simul_parameters["mjd"] = self._simulate_mjd_()
+        self.simul_parameters["ra"], self.simul_parameters["dec"] = \
+          random.radec(self.ntransient,
+                       ra_range=self.ra_range,
+                       dec_range=self.dec_range,
+                       mw_exclusion=self._get_event_property_("mw_exclusion"))
         
-        self._set_transientsources_(simul_ra, simul_dec, simul_mjd)
-        # The sources are created and not the transient for save space
-        
+    def _update_(self):
+        """This module create the derived values based on the
+        fundamental ones"""
+        # --------------
+        # - update the actual simulation
+        self._update_simulation_()        
 
+        
     def _simulate_mjd_(self):
         """
         Be default, this is a random flat time distribution returning a float
@@ -291,14 +303,6 @@ class TransientGenerator( BaseObject ):
         return np.random.rand(self.ntransient)*self.timescale + self.mjd_range[0]
 
     
-    def _set_transientsources_(self,simul_ra, simul_dec, simul_mjd):
-        """
-        """
-        self._derived_properties["transientsources"] = \
-          [ dict(lightcurve=None,name="simul%d"%i,
-                 zcmb=z_, ra=ra_, dec=dec_, mjd=mjd_)
-            for i,z_,ra_,dec_,mjd_ in zip(range(self.ntransient),
-                                self.zcmb,simul_ra,simul_dec,simul_mjd)]
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -339,12 +343,7 @@ class TransientGenerator( BaseObject ):
     @property
     def timescale(self):
         return self.mjd_range[1] - self.mjd_range[0]
-
-    @property
-    def zcmb(self):
-        """Simulated zcmb based on the given rate function"""
-        return self._derived_properties["zcmb"]
-        
+       
     @property
     def ntransient(self):
         """number of transient requested"""
@@ -375,27 +374,43 @@ class TransientGenerator( BaseObject ):
     # --------------------
     # - Derived Properties
     @property
-    def transientsources(self):
-        """dictionary containing the fundamental parameters that enable to
-        load the transient objects"""
-        return self._derived_properties["transientsources"]
+    def simul_parameters(self):
+        if self._derived_properties["simul_parameters"] is None:
+            self._derived_properties["simul_parameters"] = {}
+        return self._derived_properties["simul_parameters"]
+
     # -----------------
     # - transient info
     @property
+    def zcmb(self):
+        """Simulated zcmb based on the given rate function"""
+        return self.simul_parameters["zcmb"]
+
+    @property
     def mjd(self):
         """Loop over the transient sources to get the mjd"""
-        return np.asarray([s['mjd'] for s in self.transientsources])
+        return np.asarray(self.simul_parameters['mjd'])
     
     @property
     def ra(self):
         """Loop over the transient sources to get the ra"""
-        return np.asarray([s['ra'] for s in self.transientsources])
+        return np.asarray(self.simul_parameters['ra'])
     
     @property
     def dec(self):
         """Loop over the transient sources to get the ra"""        
-        return np.asarray([s['dec'] for s in self.transientsources])
+        return np.asarray(self.simul_parameters['dec'])
     
+    @property
+    def lightcurve(self):
+        """Check if there is a lightcurve simul_parameter defined"""
+        return None if "lightcurve" not in self.simul_parameters.keys()\
+          else np.asarray(self.simul_parameters['lightcurve'])
+          
+    def has_lightcurves(self):
+        return False if self.lightcurve is None \
+          else True
+            
     
 #######################################
 #                                     #
@@ -407,10 +422,7 @@ class SNIaGenerator( TransientGenerator ):
     This child Class enable to add the SN properties to the
     transient generator.
     """
-        
     
-        
-       
     # =========================== #
     # = Main Methods            = #
     # =========================== #
@@ -420,18 +432,25 @@ class SNIaGenerator( TransientGenerator ):
     
     def set_transient_parameters(self,ratekind="basic",
                                  lcsimulation="basic",
-                                 update=True):
+                                 lcmodel="salt2",type_="Ia",
+                                 update=True,lcsimul_prop={}):
         """
         Add to the TransientGenerator the SN Ia properties
         """
         # - If this works, you are good to go
-        f = LightCurveGenerator().get_ratefunc(ratekind=ratekind)
-        
-        super(SNIaGenerator,self).set_transient_parameters("Ia",ratekind)
+        f = LightCurveGenerator().get_lightcurve_func(transient=type_,simulation=lcsimulation)
 
+        super(SNIaGenerator,self).set_transient_parameters(type_=type_,ratekind=ratekind,update=False)
+        print "loading lightcurve parameters..."
         self._properties["transient_coverage"] = {
-            "lcsimulation":"basic",
+            "lcsimulation":lcsimulation,
+            "lcmodel":lcmodel,
+            "lcprop_function":f
             }
+        
+        if update:
+            self._update_()
+
     # ----------------- #
     # - Set Methods   - #
     # ----------------- #
@@ -549,6 +568,39 @@ class LightCurveGenerator( _PropertyGenerator_ ):
     # ========================== #
     # = Method                 = #
     # ========================== #
+    def get_lightcurve_func(self,transient="Ia",simulation="basic"):
+        """
+        Parameters
+        ----------
+
+        Return
+        ------
+        a lightcurve generator function
+        """
+        # ---------------
+        # - Transients
+        if transient is None or transient == "":
+            avialable_lc = self.known_lightcurve_simulation
+            if len(avialable_lc) == 0:
+                raise NotImplementedError("no lightcurve simulation implemented")
+            
+            transient = None
+            
+        elif transient == "Ia":
+            avialable_lc = self.known_Ia_lightcurve_simulation
+        else:
+            raise ValueError("'%s' is not a known transient"%transient)
+    
+        # ---------------
+        # - Rate Kinds
+        if simulation not in avialable_lc:
+            raise ValueError("not '%s' rate kind for '%s'"%(simulation,transient)+\
+                             "These are: "+",".join(avialable_lc))
+        # -- the output
+        if transient is None:
+            return eval("self.lightcurve_%s"%(simulation))
+        return eval("self.lightcurve_%s_%s"%(transient,simulation))
+    
     def set_model(self,model):
         """
         """
@@ -591,11 +643,11 @@ class LightCurveGenerator( _PropertyGenerator_ ):
         return self._side_properties['model']
     
     @property
-    def known_lightcurve_kind(self):
+    def known_lightcurve_simulation(self):
         return self._parse_rate_("lightcurve")
     
     @property
-    def known_Ia_lightcurve_kind(self):
+    def known_Ia_lightcurve_simulation(self):
         return self._parse_rate_("lightcurve_Ia")
     
     

@@ -160,7 +160,7 @@ class Transient( AstroTarget ):
     
     @mjd.setter
     def mjd(self,value):
-        self._side_properties["mjd"] = mjd
+        self._side_properties["mjd"] = value
 #######################################
 #                                     #
 # Base Object Classes: Supernova      #
