@@ -7,8 +7,8 @@ import matplotlib.pyplot as mpl
 
 from .tools import kwargs_update
 from .decorators import make_method
-from .plot.skyplot import convert_radec_azel
-
+# remark: do no import .plot.*** at this level
+#         otherwise import loop with astrobject
 __all__ = ["specplot","skyplot","figout"]
 
 # ========================== #
@@ -60,6 +60,7 @@ def skyplot(ax, ra, dec, color=None, **kwargs):
     """This function in a build-in axes method that allows easily plotting points 
     on the sky.
     """
+    from .plot.skyplot import convert_radec_azel
     # -----------------------
     # - Properties of plot
     default_kwargs = dict(marker='o', markersize=5, linestyle='none')
@@ -79,6 +80,7 @@ def skyscatter(ax, ra, dec, **kwargs):
     """This function in a build-in axes method that allows simple scatter plots
     easily plot a spectrum.
     """
+    from .plot.skyplot import convert_radec_azel
     # -----------------------
     # - Properties of plot
     default_kwargs = dict(marker='o', s=30, #edgecolor='none',
