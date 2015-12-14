@@ -106,6 +106,7 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
     from matplotlib.collections import PatchCollection
 
     from .plot.skybins import SkyBins
+    from .plot.skyplot import convert_radec_azel
     
     if bins is None:
         bins = SkyBins()
