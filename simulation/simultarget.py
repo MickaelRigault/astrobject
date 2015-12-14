@@ -6,12 +6,15 @@
 import numpy as np
 from numpy.random import uniform, normal
 import sncosmo
+import warnings
 
 from ..astrobject.baseobject import BaseObject,astrotarget
 from ..astrobject.transient import transient
 
 from ..utils.tools import kwargs_extract,kwargs_update
 from ..utils import random
+
+_d2r = np.pi / 180
 
 __all__ = ["transient_generator","generate_transients"]
 
@@ -355,8 +358,22 @@ class TransientGenerator( BaseObject ):
     @property
     def coveredarea(self):
         """Covered area in degree squared"""
-        print "COVERED AREA TO BE DEFINED. 4000 by default"
-        return 4000
+        mw_exclusion = self._get_event_property_("mw_exclusion")
+        
+        # Area in steradians without accounting for MW exclusion
+        area_sr = ((np.sin(self.dec_range[1] * _d2r) 
+                    - np.sin(self.dec_range[0] * _d2r)) 
+                   * (self.ra_range[1] - self.ra_range[0]) * _d2r)
+
+        if mw_exclusion > 0:
+            if self.ra_range == [-180, 180] and self.dec_range == [-90, 90]:
+                area_sr -= 4 * np.pi * np.sin(mw_exclusion * _d2r) 
+            else:
+                # Make sure the warning is issued every time
+                warnings.simplefilter('always', UserWarning)
+                warnings.warn("MW exclusion was ignored when calculating covered area.")
+
+        return area_sr / _d2r ** 2
         
     # --------------------
     # - Target Coverage
