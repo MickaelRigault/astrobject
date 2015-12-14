@@ -92,6 +92,7 @@ def transient(lightcurve=None,name=None,
                       dec=datasource.pop("dec",dec),
                       type_=datasource.pop("type",type_),
                       forced_mwebmv=datasource.pop("forced_mwebmv",forced_mwebmv),
+                      mjd=datasource.pop("mjd",mjd),
                       **kwargs).copy() # dont forget the copy
 #######################################
 #                                     #
@@ -153,6 +154,7 @@ class Transient( AstroTarget ):
           
     @property
     def mjd(self):
+        """typical time associated to the transient"""
         if self.has_lightcurve() and self._side_properties["mjd"] is None:
             return self.lightcurve.times[0]
         

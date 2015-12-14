@@ -5,8 +5,6 @@ from ..astrobject.baseobject import BaseObject
 from .simultarget import transient_generator
 
 
-
-
 #######################################
 #                                     #
 # Survey: Simulation Base             #
@@ -17,7 +15,7 @@ class SimulSurvey( BaseObject ):
     Basic survey object
     (far from finished)
     """
-    _properties_keys         = ["targetlist","instprop"]
+    _properties_keys         = ["simultarget","instprop"]
     _side_properties_keys    = []
     _derived_properties_keys = []
     
@@ -27,12 +25,8 @@ class SimulSurvey( BaseObject ):
         """
         """
         self.__build__()
-        self.lon = 30
         if empty:
             return
-        
-        #self.filters = filters
-
     
     # =========================== #
     # = Main Methods            = #

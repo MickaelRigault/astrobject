@@ -157,12 +157,12 @@ class TransientGenerator( BaseObject ):
         load the transient objects"""
         if index is not None and "__iter__" not in dir(index):
             index = [index]
-        
+
         return [dict(name="simul%d"%i,ra=self.ra[i],dec=self.dec[i], zcmb=self.zcmb[i],
-                mjd=self.mjd[i],
-                lightcurve=self.lightcurve[i] if self.has_lightcurves() else None)
-                for i in range(self.ntransient) if i is None or i in index]
-            
+                mjd=self.mjd[i],type_=self.transient_coverage["transienttype"],
+                lightcurve=None)
+                for i in range(self.ntransient) if index is None or i in index]
+
     # --------------------------- #
     # - Plots Methods           - #
     # --------------------------- #
@@ -403,17 +403,36 @@ class TransientGenerator( BaseObject ):
     def dec(self):
         """Loop over the transient sources to get the ra"""        
         return np.asarray(self.simul_parameters['dec'])
-    
+
+    # -----------------------
+    # - LightCuve Properties
     @property
     def lightcurve(self):
         """Check if there is a lightcurve simul_parameter defined"""
         return None if "lightcurve" not in self.simul_parameters.keys()\
-          else np.asarray(self.simul_parameters['lightcurve'])
+          else self.simul_parameters['lightcurve']
           
     def has_lightcurves(self):
         return False if self.lightcurve is None \
           else True
-            
+
+    @property
+    def lightcurve_properties(self):
+        """
+        """
+        return self.transient_coverage["lightcurve_prop"]
+        
+    @property
+    def lightcurve_model(self):
+        if "lightcurve_prop" not in self.transient_coverage:
+            raise AttributeError("no 'lightcurve_prop' defined")
+        return self.lightcurve_properties["model"]
+
+    @property
+    def lightcurve_param(self):
+        """ """
+        return self.lightcurve.keys()
+
     
 #######################################
 #                                     #
@@ -429,12 +448,22 @@ class SNIaGenerator( TransientGenerator ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
+    def _update_simulation_(self):
+        #
+        # Simulation values 
+        #
+        super(SNIaGenerator,self)._update_simulation_()
+        lc = self.transient_coverage["lightcurve_prop"]
+        param = lc["param_func"](self.zcmb,model=lc["model"],
+                                 **lc["param_func_kwargs"])
+        self._derived_properties["simul_parameters"]["lightcurve"] = param
+        
     # -------------------- #
     # - Hacked Methods   - #
     # -------------------- #
     
     def set_transient_parameters(self,ratekind="basic",
-                                 lcsimulation="basic",
+                                 lcsimulation="random",
                                  lcmodel="salt2",type_="Ia",
                                  update=True,lcsimul_prop={}):
         """
@@ -442,14 +471,15 @@ class SNIaGenerator( TransientGenerator ):
         """
         # - If this works, you are good to go
         f = LightCurveGenerator().get_lightcurve_func(transient=type_,simulation=lcsimulation)
-
+        
         super(SNIaGenerator,self).set_transient_parameters(type_=type_,ratekind=ratekind,update=False)
-        print "loading lightcurve parameters..."
-        self._properties["transient_coverage"] = {
-            "lcsimulation":lcsimulation,
-            "lcmodel":lcmodel,
-            "lcprop_function":f
-            }
+        self._properties["transient_coverage"]["lightcurve_prop"] = \
+          {"simulation":lcsimulation,
+              "model":lcmodel,
+              "param_func":f,
+              "param_func_kwargs":lcsimul_prop
+              }
+            
         
         if update:
             self._update_()
@@ -462,7 +492,33 @@ class SNIaGenerator( TransientGenerator ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
-          
+    @property
+    def color(self):
+        if not self.has_lightcurves() or "c" not in self.lightcurve:
+            raise AttributeError("no 'lightcurve' defined or no color ('c') on it")
+        return np.asarray(self.lightcurve["c"])
+
+    @property
+    def x1(self):
+        if not self.has_lightcurves() or "x1" not in self.lightcurve:
+            raise AttributeError("no 'lightcurve' defined or no x1 on it")
+        return np.asarray(self.lightcurve["x1"])
+
+    @property
+    def host(self):
+        if not self.has_host_param():
+            return np.asarray([None]*self.ntransient)
+        return np.asarray(self.lightcurve["host"])
+
+    def has_host_param(self):
+        if not self.has_lightcurves():
+            raise AttributeError("no 'lightcurve' defined")
+        return True if "host" in self.lightcurve_param \
+          else False
+    
+
+    
+    
 #######################################
 #                                     #
 # Generator: SN Rate                  #
@@ -624,7 +680,6 @@ class LightCurveGenerator( _PropertyGenerator_ ):
     def lightcurve_Ia_basic(self,redshifts,
                             color_mean=0,color_sigma=0.1,
                             stretch_mean=0,stretch_sigma=1,
-                            x0_mean=1e-5,x0_sigma=0.1,
                             model="salt2",
                             ):
         """
@@ -644,6 +699,24 @@ class LightCurveGenerator( _PropertyGenerator_ ):
         return {'x0':np.array(x0),
                 'x1':normal(stretch_mean, stretch_sigma, ntransient),
                 'c':normal(color_mean, color_sigma, ntransient)}
+
+    def lightcurve_Ia_random(self,redshifts,
+                            color_mean=0,color_sigma=0.1,
+                            stretch_mean=0,stretch_sigma=1,
+                            x0_mean=1e-5,x0_sigma=1.e-5,
+                            model="salt2",
+                            ):
+        """
+        """
+        # ----------------
+        # - Models        
+        ntransient = len(redshifts)
+        
+        return {'x0':normal(x0_mean, x0_sigma, ntransient),
+                'x1':normal(stretch_mean, stretch_sigma, ntransient),
+                'c':normal(color_mean, color_sigma, ntransient)}
+
+    
     def lightcurve_Ia_realistic():
         raise NotImplementedError("To be done")
     
