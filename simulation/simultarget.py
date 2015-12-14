@@ -9,7 +9,7 @@ import sncosmo
 
 from ..astrobject.baseobject import BaseObject,astrotarget
 from ..astrobject.transient import transient
-from ..utils.plot.skyplot import ax_skyplot
+
 from ..utils.tools import kwargs_extract,kwargs_update
 from ..utils import random
 
@@ -172,6 +172,7 @@ class TransientGenerator( BaseObject ):
         transients"""
         import matplotlib.pyplot as mpl
         from ..utils.mpladdon import figout, skyplot
+        from ..utils.plot.skyplot import ax_skyplot
         self._plot = {}
 
         # ------------------
@@ -233,6 +234,7 @@ class TransientGenerator( BaseObject ):
         """This function draws a sky histogram of the transient coverage"""
         import matplotlib.pyplot as mpl
         from ..utils.mpladdon import figout, skyhist
+        from ..utils.plot.skyplot import ax_skyplot
         self._plot = {}
 
         if ax is None:
