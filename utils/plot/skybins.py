@@ -8,8 +8,8 @@ Classes for binning sky coordinates
 import warnings
 import numpy as np
 
-from .baseobject import BaseObject
-
+from ...astrobject.baseobject import BaseObject
+#import astrobject.astrobject import baseobject as b
 _d2r = np.pi / 180 
 
 __all__ = ["SkyBins","HealpixBins"]

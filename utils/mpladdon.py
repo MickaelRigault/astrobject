@@ -7,7 +7,7 @@ import matplotlib.pyplot as mpl
 
 from .tools import kwargs_update
 from .decorators import make_method
-from .skyplot import convert_radec_azel
+from .plot.skyplot import convert_radec_azel
 
 __all__ = ["specplot","skyplot","figout"]
 
@@ -103,7 +103,7 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
     from matplotlib.patches import Polygon
     from matplotlib.collections import PatchCollection
 
-    from ..astrobject.skybins import SkyBins
+    from .plot.skybins import SkyBins
     
     if bins is None:
         bins = SkyBins()

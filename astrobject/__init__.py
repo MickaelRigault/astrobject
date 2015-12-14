@@ -1,13 +1,14 @@
 #
 # Init the astro objects
 #
-from baseobject   import *
-from spectroscopy import *
-from transient    import *
-from photometry   import *
-from multiband    import *
-from skybins      import *
+#from baseobject   import *
+import baseobject
+import spectroscopy 
+import transient 
+import photometry   
+import multiband    
+#from skybins      import *
 import instruments
 
 __all__ = ['baseobject','spectroscopy','photometry',
-           'multiband',"transient","instruments","skybins"]
+           'multiband',"transient","instruments"]
