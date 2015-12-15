@@ -306,4 +306,4 @@ class HealpixBins( BaseObject ):
     @property
     def nbins(self):
         """number of bins"""
-        return hp.nside(self._properties["nside"])
+        return hp.nside2npix(self._properties["nside"])
