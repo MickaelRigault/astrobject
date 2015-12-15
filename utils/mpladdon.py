@@ -210,7 +210,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
     if _display_colorbar_:
         # - this means it is not an ax
         if "imshow" not in dir(cbar):
-            axcar = ax.insert_ax(fraction=0.85,space=.05,pad=0.03)
+            axcar = ax.insert_ax(space=.05,pad=0.03,location="right")
         else:
             axcar = cbar
         calpha = cbarprop.pop('alpha',kwargs.pop("alpha",None))
@@ -251,7 +251,7 @@ def colorbar(ax,cmap,vmin=0,vmax=1,label="",
 # =  axes manipulation     = #
 # ========================== #
 @make_method(mpl.Axes)
-def insert_ax(ax,fraction,space,pad,
+def insert_ax(ax,space,pad,fraction=None,
               location="right"):
     """
     Split the given axis to insert a new one at this location.
@@ -262,16 +262,17 @@ def insert_ax(ax,fraction,space,pad,
     
     ax: [mpl.axes]                  The axis that will be split.
 
-    fraction: [float]               The location where the axes will be
-                                    split, given in faction of *ax* size.
-                                    e.g., 0.5 means in the middle, while
-                                    0.8 is at the far right / top (see *location*)
-
     space: [float]                  Extra space between the *ax* and the *newax* that
                                     will be created from the freed space.
 
     pad: [float]                    Extra space at the right/top of the *newax*
 
+    fraction: [float /None]         The location where the axes will be
+                                    split, given in faction of *ax* size.
+                                    e.g., 0.5 means in the middle, while
+                                    0.8 is at the far right / top (see *location*)
+                                    If None: the new axis + given axis will fill exactly
+                                    the same space as the given ax.
     - options -
     
     location: [string]              where you whish to add the *newax*. Only
@@ -281,18 +282,28 @@ def insert_ax(ax,fraction,space,pad,
     ------
     axes (the *newax*, the input *ax* is reshape)
     """
-    
-    if location not in ["right","top","left"]:
-        raise NotImplementedError("Only right and top locations are defined (%s given)"%location)
-    
+    known_location = ["right","top","left","bottom"]
+    if location not in known_location:
+        raise ValueError("'%s' is not a correct location"%location," These are: "+", ".join(known_location))
+
+    if fraction is None:
+        fraction = 1- (space + pad)
+        
     if location == "right":
+        print "right"
         bboxax,_,bboxnew,_ = ax.get_position().splitx(fraction,fraction+space,
                                                       fraction+space+pad)
     elif location == "left":
-        bboxnew,_,bboxax,_ = ax.get_position().splitx(fraction,fraction+space,
+        print "left"
+        bboxnew,_,bboxax,_ = ax.get_position().splitx(pad,pad+space,
                                                       fraction+space+pad)
-    else:
+    elif location == "top":
+        print "top"
         bboxax,_,bboxnew,_ = ax.get_position().splity(fraction,fraction+space,
+                                                      fraction+space+pad)
+    else: # bottom
+        print "bottom"
+        bboxnew,_,bboxax,_ = ax.get_position().splity(pad,pad+space,
                                                       fraction+space+pad)
 
     ax.set_position(bboxax)
