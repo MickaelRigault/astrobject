@@ -64,7 +64,7 @@ class TransientGenerator( BaseObject ):
 
     def __init__(self,zrange=[0.0,0.2], ratekind="basic", # How deep
                  mdj_range=[57754.0,58849.0],
-                 ra_range=(-180,180),dec_range=(-90,90), # Where, see also kwargs
+                 ra_range=(-180,180),dec_range=(-20,60), # Where, see also kwargs
                  ntransients=None, empty=False,**kwargs):
         """
         """

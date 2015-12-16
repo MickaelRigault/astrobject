@@ -6,6 +6,7 @@
 
 import numpy  as np
 import pyfits as pf
+from scipy.stats import sigmaclip
 
 from astropy     import units,coordinates
 from astLib      import astWCS
@@ -534,7 +535,7 @@ class Image( BaseObject ):
     #  Aperture   #
     # ----------- #
     def get_stars_aperture(self, r_pixels,aptype="circle",
-                           isolated_only=True, 
+                           isolated_only=True, catmag_range=[None,None],
                            **kwargs):
         """
         This methods fetch in the catalogue and sep_extracted objects (sepobjects)
@@ -562,9 +563,13 @@ class Image( BaseObject ):
         # - Pairing          - #
         # -------------------- #
         # note that might be a bit slow if called for the first time
-        pair = self.sepobjects.get_pairing(stars_only=True,isolated_only=isolated_only)
+        kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
+                          catmag_range=catmag_range)
+        idx = self.sepobjects.get_indexes(**kwardsmask)
+        cat_idx = self.sepobjects.get_indexes(cat_indexes=True,**kwardsmask)
         
-        idx,cat_idx, x, y = np.asarray([[i,d['cat_idx'],d["sep_x"],d["sep_y"]] for i,d in pair.items()]).T
+        x,y = self.catalogue.wcs_xy.T[cat_idx].T
+        
         # -------------------- #
         # - Get it           - #
         # -------------------- #
@@ -1765,6 +1770,10 @@ class PhotoMap( BaseObject ):
     # ----------------
     # - PhotoPoints
     @property
+    def lbda(self):
+        return self._properties["lbda"]
+    
+    @property
     def fluxes(self):
         return self._properties["fluxes"]
 
@@ -1772,6 +1781,16 @@ class PhotoMap( BaseObject ):
     def variances(self):
         return self._properties["variances"]
 
+    @property
+    def _mag_magerr(self):
+        return flux_to_mag(self.fluxes,np.sqrt(self.variances), self.lbda)
+    
+    @property
+    def mag(self):
+        return self._mag_magerr[0]
+    @property
+    def magerr(self):
+        return self._mag_magerr[1]
     # --------------
     # - radec
     @property
@@ -1970,7 +1989,6 @@ class SexObjects( BaseObject ):
         self._derived_properties["starmask"] = np.asarray([i in self.catmask[self.catstarmask]
                                                 for i in range(len(self.data["x"]))],dtype=bool)
         
-        
     # ------------------ #
     # - get Methods    - #
     # ------------------ #
@@ -2009,27 +2027,42 @@ class SexObjects( BaseObject ):
         raise ValueError("Cannot parse '%s'."%key +\
                           help_text)
 
-    def get_psf_ellipse(self):
+    def get_median_ellipse(self,apply_catmask=True,
+                            stars_only=True, isolated_only=True,
+                            catmag_range=[None,None],clipping=[3,3]):
+        
         """This methods look for the stars and return the mean ellipse parameters"""
-
+        if apply_catmask:
+            idx = self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                                    catmag_range=catmag_range)
+            
         # -- add input test
-        angles = self.data["theta"][self.starmask]
-        a = self.data["a"][self.starmask]
-        b = self.data["b"][self.starmask]
-        m = np.sqrt(len(angles)-1)
-        theta,e_theta = np.median(angles),np.std(angles)/m
+         # -- apply the masking
+        a_clipped,_alow,_ahigh = sigmaclip(self.get("a")[idx],*clipping)
+        b_clipped,_blow,_bhigh = sigmaclip(self.get("b")[idx],*clipping)
+        t_clipped,_tlow,_thigh = sigmaclip(self.get("theta")[idx],*clipping)
+        # - so        
+        psf_a,psf_b,psf_t = a_clipped.mean(),b_clipped.mean(),t_clipped.mean()
+        m = np.sqrt(len(a_clipped)-1)
         
-        return [np.median(a),np.std(a)/m],[np.median(b),np.std(b)/m],[theta,e_theta]
+        return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
+        [psf_t,np.std(t_clipped)/m]
         
         
-    def get_pairing(self, stars_only=True, isolated_only=False):
+    def get_pairing(self, stars_only=True, isolated_only=False,
+                    catmag_range=[None,None]):
         """
         """
         pair = {}
+        
         for i,d in self.pairdict.items():
             if stars_only and not d['is_star']:
                 continue
             if isolated_only and not d['is_isolated']:
+                continue
+            if catmag_range[0] is not None and d["cat_mag"]<catmag_range[0]:
+                continue
+            if catmag_range[1] is not None and d["cat_mag"]>catmag_range[1]:
                 continue
             
             pair[i] = d
@@ -2042,6 +2075,51 @@ class SexObjects( BaseObject ):
             mask[i] = True
         return mask
 
+    # ---------------- #
+    # - get Mask     - #
+    # ---------------- #
+    def get_mask(self,isolated_only,stars_only,
+                 catmag_range=[None,None]):
+        """
+        """
+        mask = np.asarray(self.get_catmag_mask(*catmag_range))
+        if isolated_only:
+            mask = mask & self.catisolatedmask
+        if stars_only:
+            mask = mask & self.catstarmask
+        
+        return mask
+
+    def get_indexes(self,isolated_only=False,stars_only=False,
+                    catmag_range=[None,None], cat_indexes=False):
+        """
+        """
+        id = "idx_catalogue" if cat_indexes else "idx"
+        return self.catmatch[id][self.get_mask(isolated_only=isolated_only,
+                                                  stars_only=stars_only,
+                                                  catmag_range=catmag_range
+                                                  )]
+    
+                 
+    def get_catmag_mask(self,magmin,magmax):
+        """
+        return the boolen mask of which matched point
+        belong to the given magnitude range.
+        Set None for no limit
+        Return
+        ------
+        bool mak array
+        """
+        if not self.has_catalogue():
+            raise AttributeError("no 'catalogue' loaded")
+        if not self.has_catmatch():
+            raise AttributeError("catalogue has not been matched to the data")
+    
+        mags = self.catalogue.mag[self.catmatch["idx_catalogue"]]
+        magmin = np.min(mags) if magmin is None else magmin
+        magmax = np.max(mags) if magmax is None else magmax
+        return (mags>=magmin) & (mags<=magmax)
+        
 
     def get_photomap(self, matched_only=True,
                      stars_only=False, isolated_only=False):
@@ -2053,7 +2131,9 @@ class SexObjects( BaseObject ):
     # ------------------- #
     # - Display
     def display(self,ax,world_coords=True,draw=True,
-                apply_catmask=True, stars_only=False,
+                apply_catmask=True,
+                stars_only=False, isolated_only=False,
+                catmag_range=[None,None],
                 **kwargs):
         """
         """
@@ -2064,8 +2144,10 @@ class SexObjects( BaseObject ):
         from matplotlib.patches import Ellipse
         
         # -- maskout non matched one if requested
-        mask = self.catmask if apply_catmask else np.ones(self.nobjects,dtype=bool)
-        mask = self.starmask if stars_only else mask
+        if apply_catmask:
+            kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
+                              catmag_range=catmag_range)
+            mask = self.get_indexes(**kwargsmask)
         
         x,y = self.data["x"][mask],self.data["y"][mask]
         # -------------
@@ -2095,12 +2177,18 @@ class SexObjects( BaseObject ):
     # - Histograms
     def show_hist(self,toshow="a",ax=None,
                   savefile=None,show=True,
-                  stars_only=False,
+                  apply_catmask=True,
+                  stars_only=False, isolated_only=False,
+                  catmag_range=[None,None],
                   **kwargs):
         """This methods enable to show the histogram of any given
         key."""
         # -- Properties -- #
-        mask = self.starmask if stars_only else self.catmask
+        if apply_catmask:
+            kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
+                              catmag_range=catmag_range)
+            mask = self.get_indexes(**kwargsmask)
+        
         v = self.get(toshow)[mask]
 
         # -- Setting -- #
@@ -2131,9 +2219,11 @@ class SexObjects( BaseObject ):
         fig.figout(savefile=savefile,show=show)
 
     # - Ellipse
-    def show_ellipses(self,stars_only=False,
-                      ax=None,
+    def show_ellipses(self,ax=None,
                       savefile=None,show=True,
+                      apply_catmask=True,
+                      stars_only=False, isolated_only=False,
+                      catmag_range=[None,None],
                       **kwargs):
         """
         """
@@ -2160,7 +2250,10 @@ class SexObjects( BaseObject ):
         # ------------------- #
         # - axes            - #
         # ------------------- #
-        mask = self.starmask if stars_only else self.catmask
+        if apply_catmask:
+            kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
+                              catmag_range=catmag_range)
+            mask = self.get_indexes(**kwargsmask)
         # -------------
         # - Properties
         
@@ -2169,7 +2262,8 @@ class SexObjects( BaseObject ):
                 for a,b,t in zip(self.data["a"][mask],self.data["b"][mask],
                                  self.data["theta"][mask])]
         # -- Show the typical angle
-        psf_a,psf_b,psf_theta = self.get_psf_ellipse()
+        psf_a,psf_b,psf_theta = self.get_median_ellipse(apply_catmask=apply_catmask,
+                                                       **kwargsmask)
         ellipticity = 1- psf_b[0]/psf_a[0]
         # - cos/ sin what angle in radian
         
@@ -2254,8 +2348,8 @@ class SexObjects( BaseObject ):
                 continue
             
             pair[i] = {"cat_idx":icat,
-                       #"cat_mag":self.catalogue.mag[icat],
-                       #"cat_magerr":self.catalogue.mag_err[icat],
+                       "cat_mag":self.catalogue.mag[icat],
+                       "cat_magerr":self.catalogue.mag_err[icat],
                        #"cat_ra":self.catalogue.ra[icat],
                        #"cat_dec":self.catalogue.dec[icat],
                        "is_isolated":self.catalogue.isolatedmask[icat] if self.catalogue.around_defined() else None,
@@ -2328,12 +2422,10 @@ class SexObjects( BaseObject ):
     @property
     def pairdict(self):
         if self._derived_properties["pairdict"] is None:
-            print "Pairing loading..."
             self._derived_properties["pairdict"] = self._get_pairing_()
             
         return self._derived_properties["pairdict"]
         
-          
     @property
     def catmask(self):
         """this array tells you if sextractor objects have a catalogue match"""
@@ -2343,7 +2435,13 @@ class SexObjects( BaseObject ):
 
     @property
     def starmask(self):
+        """ This is which are stars amoung *ALL* the detected sources, even those without matcatching"""
         return self._derived_properties["starmask"]
+    
+
+    @property
+    def isolatedmask(self):
+        return self.catalogue.isolatedmask[self.catmcatch["idx_catalogue"]]
     
     @property
     def catstarmask(self):
@@ -2355,6 +2453,19 @@ class SexObjects( BaseObject ):
             return np.ones(self.nobjects,dtype=bool)
         
         return self.catalogue.starmask[ self.catmatch["idx_catalogue"]]
+
+    @property
+    def catisolatedmask(self):
+        """return a bool mask of the stars. If it can not do it, not data are masked (full True)"""
+        if not self.has_catmatch() and self.has_data():
+            return np.ones(self.nobjects,dtype=bool)
+        
+        if not self.catalogue.has_starmask():
+            return np.ones(self.nobjects,dtype=bool)
+        
+        return self.catalogue.isolatedmask[ self.catmatch["idx_catalogue"]]
+    
+    
     # ----------------------
     # - Catalogue Matching
     @property
@@ -2365,6 +2476,7 @@ class SexObjects( BaseObject ):
             
         return self._derived_properties["catmatch"]
 
+    
     def has_catmatch(self):
         return False if self.catmatch is None or len(self.catmatch.keys())==0 \
           else True

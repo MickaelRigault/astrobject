@@ -193,7 +193,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
             vmin = c.min() if vmin is None else vmin
             vmax = c.max() if vmax is None else vmax
             color = cmap((c-vmin)/(vmax-vmin))
-        edgecolors = kwargs.pop("edgecolors","None")
+        edgecolors = kwargs.pop("edgecolors","0.5")
     else:
         color = "None"
         edgecolors = kwargs.pop("edgecolors","k")

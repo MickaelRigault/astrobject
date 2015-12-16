@@ -33,21 +33,23 @@ class Instrument( Image ):
         #
         idx, cat_idx, [counts,errs,flags] = self.get_stars_aperture(r_pixels=r_pixels,aptype=aptype,
                                                             isolated_only=isolated_only,**kwargs)
+        idx,cat_idx = idx.tolist(),cat_idx.tolist()
+        
         # -- Data Map
         fluxes = self.count_to_flux(counts)
         vares  = self.count_to_flux(errs)**2
         ra_all,dec_all = self.sepobjects.radec
-        ra     = [ra_all[i] for i in idx]
-        dec     = [dec_all[i] for i in idx]
+        ra     = ra_all[idx]
+        dec     = dec_all[idx]
         pmap = photomap(fluxes,vares,ra,dec,lbda=self.lbda)
         
         # -- Catalogue Map
         catmap = self.catalogue.get_photomap(idx_only=cat_idx)
         # -- Setting
         sepinfo = {
-            "a": [self.sepobjects.data['a'][i] for i in idx],
-            "b": [self.sepobjects.data['b'][i] for i in idx],
-            "theta": [self.sepobjects.data['theta'][i] for i in idx]
+            "a": self.sepobjects.data['a'][idx],
+            "b": self.sepobjects.data['b'][idx],
+            "theta": self.sepobjects.data['theta'][idx]
             }
         pmap.set_refmap(catmap)
         pmap.set_wcs(self.wcs)
@@ -289,10 +291,17 @@ class Catalogue( BaseObject ):
             raise ValueError("No known 'lbda' and no 'lbda' given")
 
         flux_fluxerr = self._flux_fluxerr
+        """
         fluxes = [flux_fluxerr[0][i] for i in idx_only]
         variances = [flux_fluxerr[1][i]**2 for i in idx_only]
         ra = [self.ra[i] for i in idx_only]
         dec = [self.dec[i] for i in idx_only]
+        """
+        fluxes = flux_fluxerr[0][idx_only]
+        variances = flux_fluxerr[1][idx_only]**2
+        ra = self.ra[idx_only]
+        dec = self.dec[idx_only]
+
         
         pmap = photomap(fluxes=fluxes,variances=variances,
                         ra=ra,dec=dec,lbda=self.lbda)

@@ -3,7 +3,7 @@
 #
 
 import astrobject
-print "astrobject import done"
 import utils
 import simulation
-__all__ = ["astrobject","simulation","utils"]
+import calibration
+__all__ = ["astrobject","simulation","utils","calibration"]
