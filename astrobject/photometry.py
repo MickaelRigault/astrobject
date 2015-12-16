@@ -2027,6 +2027,20 @@ class SexObjects( BaseObject ):
         raise ValueError("Cannot parse '%s'."%key +\
                           help_text)
 
+    def get_stars_xy(self,isolated_only=True,catmag_range=[None,None]):
+        """
+        return the method x and y coordinate of the star following the given
+        conditions.
+        """
+        # -- apply the masking 
+        kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
+                          catmag_range=catmag_range)
+        mask = self.get_indexes(**kwardsmask)
+        # ---------------------
+        # - get the coordinate
+        return self.data["x"][mask],self.data["y"][mask],mask
+    
+        
     def get_median_ellipse(self,apply_catmask=True,
                             stars_only=True, isolated_only=True,
                             catmag_range=[None,None],clipping=[3,3]):

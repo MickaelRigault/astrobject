@@ -61,7 +61,7 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"13
     try:
         t = c.query_region(center,radius=radius).values()[0]
     except:
-        raise IOError("Error while query the given coords. You might not have an internet connection")
+        raise IOError("Error while querying the given coords. You might not have an internet connection")
     
     cat = SDSSCatalogue(empty=True)
     cat.create(t.columns,None,
