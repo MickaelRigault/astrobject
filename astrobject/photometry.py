@@ -664,12 +664,15 @@ class Image( BaseObject ):
         goods = (np.argwhere(delta_counts*100 < percent_gain))
         if len(goods) ==0:
             print "WARNING the maximum radius of the aperture photometries is too small"
+            self._aperture_ok = False
             return len(self.apertures_curve)
         
         idx = np.min(goods)+1
         if idx>= len(self.apertures_curve[0]):
+            self._aperture_ok = False
             print "WARNING maximum aperture index is the highest measured aperture raduis"
-            
+
+        self._aperture_ok = True
         return idx
     
     def get_aperture_photometries(self,rpixel_range=[0.5,20],bins=18,
