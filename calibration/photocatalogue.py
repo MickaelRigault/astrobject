@@ -5,9 +5,9 @@
 import numpy as np
 from scipy.stats import sigmaclip
 from astropy import units
-
 from ..astrobject.baseobject import BaseObject
 from ..utils.tools import kwargs_update
+from ..utils.decorators import _autogen_docstring_inheritance
 from ..astrobject.instruments.instrument import instrument 
 
 class PhotoCatalogue( BaseObject ):
@@ -39,25 +39,25 @@ class PhotoCatalogue( BaseObject ):
                 self.load_instrument(instrument,**kwargs)
             else:
                 self.create(instrument,**kwargs)
-
-        # -----------------
-        # - TO BE REMOVED
-        self.derive_fwhm()
         
     # =========================== #
-    # = Internal Methods        = #
+    # = Main Methods            = #
     # =========================== #
     def calibrate(self, catmag_range=[None,None],
-                  isolated_only=True,clipping=3):
+                  isolated_only=True,clipping=3,
+                  redo_aperture_photos=False):
         """
         """
         maskdict = dict(catmag_range=catmag_range,
                         isolated_only=isolated_only)
-        
-        self.derive_fwhm(set_it=True,force_it=False,**maskdict)
-        delta_zp,delta_zp_std,npoint_used = self.derive_zeropoint(clipping=clipping,**maskdict)
-        
-        self.instrument.mab0 += delta_zp
+        if not self.instrument.has_apertures_photos() or redo_aperture_photos or \
+          (catmat_range is not None and catmag_range != self.aperture_photos["properties"]["catmag_range"]):
+            self.instrument.set_apertures_photos(**maskdict)
+        if not self.instrument.has_fwhm():
+            self.instrument.derive_fwhm(set_it=True,force_it=False)
+            
+        self.derive_zeropoint(clipping=clipping,**maskdict)
+
         
     # --------------- #
     # - ZeroPoints  - #
@@ -84,7 +84,7 @@ class PhotoCatalogue( BaseObject ):
 
         # ------------------
         # - Instrument
-        radius_pixel=self.fwhm/2*fwhm_scale/self.instrument.pixel_size_arcsec
+        radius_pixel=self.fwhm.value /2/self.instrument.pixel_size_arcsec * fwhm_scale
         pmap = self.instrument.get_stars_photomap(radius_pixel,
                                                   catmag_range=catmag_range,
                                                   isolated_only=isolated_only)
@@ -112,33 +112,7 @@ class PhotoCatalogue( BaseObject ):
         else:
             return calibration
         
-    def derive_fwhm(self,catmag_range=None,
-                      isolated_only=True,
-                      set_it=True,force_it=False):
-        """
-        Parameters
-        ----------
-        catmag_range: [2D-array / None]
-                                   The magnitude range (of the catalogue) used to
-                                   derive the zero point.
-                                   If None the current one (self.catmag_range) will
-                                   be used. otherwise this will overwirte it.
 
-        isolated_only: [bool]      Use only the isolated stars (you should)
-
-        Return
-        ------
-        float (if set_it is False)
-        """
-        print "*WARNING* STELLA BASE FOR KNOW"
-        fwhm = self.header["FWHM"]
-        
-        if set_it:
-            self.set_fwhm(fwhm,force_it=force_it)
-        else:
-            return fwhm
-        
-        
     # --------------- #
     # - IO Methods  - #
     # --------------- #
@@ -155,7 +129,7 @@ class PhotoCatalogue( BaseObject ):
         
     def create(self,instrument, force_it=False,
                load_catalogue=True,do_extraction=True,
-               verbose=True):
+               verbose=True,catmag_range=[None,None],**kwargs):
         """
         """
         if self.has_instrument() and not force_it :
@@ -172,115 +146,59 @@ class PhotoCatalogue( BaseObject ):
         if do_extraction and not instrument.has_sepobjects():
             if verbose: print "Extracting the Image's sources (sep.extract)"
             instrument.sep_extract()
-
+            
         self._properties["instrument"] = instrument
             
     
     # --------------- #
     # - Get Methods - #
     # --------------- #
-    def get_aperture_photometries(self,rpixel_range=[0.5,20],bins=18,
-                                  catmag_range=None,isolated_only=True,
-                                  **kwargs
-                                  ):
-        """This method loop over the given range of pixel radius
-        and return the associated counts
 
-        **kwargs goes to instrument.get_aperture ; so K Barbary's sep
-        """
-        # ------------------
-        # - Input
-        self._test_instrument_()
-        if catmag_range is not None:
-            self.catmag_range = catmag_range
-
-        # ----------------
-        # - Aperture Info
-        radius = np.linspace(rpixel_range[0],rpixel_range[1],bins)
-        
-        kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
-                          catmag_range=self.catmag_range)
-        mask = self.sepobjects.get_indexes(**kwardsmask)
-        catidx = self.sepobjects.get_indexes(cat_indexes=True,**kwardsmask)
-        # ---------------------
-        # - get the coordinate
-        x,y = self.sepobjects.data["x"][mask],self.sepobjects.data["y"][mask]
-
-        # ---------------
-        # - SHOUD BE FASTER
-        ap = {}
-        for r_pixels in radius:
-            counts,err,flag = self.instrument.get_aperture(x,y,r_pixels=r_pixels,**kwargs)
-            ap[r_pixels] = {"counts":counts,
-                            "errors":err,
-                            "flag":flag}
-        return {"radius":radius,
-                "counts":np.asarray([ap[d]["counts"] for d in radius]),
-                "errors":np.asarray([ap[d]["errors"] for d in radius]),
-                "idx_catalogue":catidx,
-                "idx":mask,
-                "property":kwargs_update( dict(catmag_range=catmag_range,
-                                        isolated_only=isolated_only),
-                                        **kwargs)
-                }
     
     # --------------- #
     # - Set Methods - #
     # --------------- #
-    def set_fwhm(self,value,force_it=True):
-        """
-        """
-        if self.has_fwhm() and not force_it:
-            raise AttributeError("'fwhm' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if value<0:
-            raise ValueError("the 'fwhm' must be positive")
-        self._derived_properties['fwhm'] = value
-
     def set_zpcalibration(self,zpdict,force_it=False):
         """
         """
         if self.has_zpcalibration() and not force_it:
             raise AttributeError("the 'zeropoint calibration' is already set."+\
                     " Set force_it to True if you really known what you are doing")
+                    
         cal = {"zp":None,"zp_err":None,"derivation_prop":{}}
         self._derived_properties['zp_calibration'] = kwargs_update(cal,**zpdict)
+        
         if self.zpcalibration["zp"] is not None:
             try:
                 self.instrument.mab0 = self.zpcalibration["zp"]
             except:
-                raise AttributeError("Not '@setter.mab0' defined for the given instrument.")
+                print "WARNING no '@setter.mab0' defined for the given instrument. Can't update it."
+                
             
-    def set_photo_apertures(self,rpixel_range=[0.5,20],bins=18,
-                            catmag_range=None,isolated_only=True,
-                            **kwargs):
-        """
-        """
-
-        self._derived_properties["photo_apertures"] = \
-          self.get_aperture_photometries(rpixel_range=rpixel_range,bins=bins,
-                                         catmag_range=catmag_range,
-                                        isolated_only=isolated_only,
-                                         **kwargs)
-        
-         
+    
         
         
                 
     # =========================== #
     # = Plotting Methods        = #
     # =========================== #
-
+    def show_aperture_photos(self,savefile=None,ax=None,show=True,
+                                   cmap=None,cbar=True,set_axes_labels=True,
+                                   show_fwhm=True,
+                                   **kwargs):
+        return self.instrument.show_aperture_photos(savefile=savefile,ax=ax,show=show,
+                                    cmap=cmap,cbar=cbar,set_axes_labels=set_axes_labels,
+                                   show_fwhm=show_fwhm,
+                                   **kwargs)
+    
         
-    def show_aperture_photometries(self,savefile=None,ax=None,show=True,
-                                   cmap=None,cbar=True,**kwargs
-                                   ):
+    def show_zpcalibration(self,savefile=None,ax=None,show=True,
+                           colorin=None,colorout=None,
+                           catmag_range=None,
+                           percentshade=[1,2,5,10],
+                           **kwargs):
         """
         """
-        if not self.has_photo_apertures():
-            raise AttributeError("no 'photo_apertures' defined")
-        
         # ---------------
         # -- Setting 
         from ..utils.mpladdon import figout
@@ -295,58 +213,67 @@ class PhotoCatalogue( BaseObject ):
                              "No imshow available")
         else:
             fig = ax.figure
-        
-        # -- Properties -- #
 
-        # -----------------
-        # - Data To show
-        counts = self.photo_apertures['counts']
-        # ------------------
-        # - Colors  
-        catmag = self.catalogue.mag[self.photo_apertures['idx_catalogue']]
-        catmag_range = self.photo_apertures['property']['catmag_range']
-        if catmag_range is None:
-            catmag_range = [catmag.min(),catmag.max()]
-        elif catmag_range[0] is None:
-            catmag_range[0] = catmag.min()
-        elif catmag_range[1] is None:
-            catmag_range[1] = catmag.max()
-            
-        cmap = mpl.cm.jet if cmap is None else cmap
-        colors = cmap((catmag-catmag_range[0])/(catmag_range[1]-catmag_range[0]))
+        show_catmag_range = self.zpcalibration["properties"]["catmag_range"] \
+          if catmag_range is None else catmag_range
+          
+                                                  
+        pmap = self.instrument.get_stars_photomap(self.zpcalibration["properties"]["radius_pixel"],
+                                                  catmag_range=show_catmag_range,
+                                                  isolated_only=self.zpcalibration["properties"]["isolated_only"],
+                                                  )
+        detlamag =  pmap.refmap.mag - pmap.mag
+        clipping = self.zpcalibration["properties"]["clipping_bounds"] - self.zpcalibration["zp"]
+        maskout = (detlamag<clipping[0]) + (detlamag>clipping[1])
+        maskmagout = (pmap.refmap.mag<self.zpcalibration["properties"]["catmag_range"][0]+0.01) +\
+           (pmap.refmap.mag>self.zpcalibration["properties"]["catmag_range"][1]-0.01)
         
-        pl = [ax.plot(self.photo_apertures['radius'],c_ / np.mean(c_), color=color,**kwargs)
-              for c_,color in zip(counts.T,colors)]
+        # -------------------------
+        # - Properties
+        if colorin is None:
+            colorin = mpl.cm.Blues(0.7)
+        if colorout is None:
+            colorout = mpl.cm.Reds(0.7)
 
-        # ----------------------
-        # - colorbar
-        # - this means it is not an ax
-        if cbar:
-            from ..utils.mpladdon import colorbar,insert_ax
-            if "imshow" not in dir(cbar):
-                axcar = ax.insert_ax(space=.05,pad=0.03,location="right")
-            else:
-                axcar = cbar
-            calpha = kwargs.pop("alpha",None)
-            cbar = axcar.colorbar(cmap,vmin=catmag_range[0],vmax=catmag_range[1],
-                                label="catalogue magnitude",alpha=calpha)
-            
+        default_prop = {"marker":"o", "ms":10,"ls":"None","zorder":5}
+        prop = kwargs_update(default_prop,**kwargs)
+        # -------------------------
+        # - Da plot itself
+        # -- The Good
+        pl = ax.plot(pmap.refmap.mag[~maskout & ~maskmagout],detlamag[~maskout & ~maskmagout],
+                     color=colorin,**prop)
+        # -- The Bad
+        pl.append(ax.plot(pmap.refmap.mag[maskout& ~maskmagout],detlamag[maskout& ~maskmagout],
+                          color=colorout,**prop))
+        # -- And the Ugly
+        if maskmagout.any():
+            propout_mag = kwargs_update(default_prop,**{"mec":colorin,"mfc":"None","mew":2})
+            pl.append(ax.plot(pmap.refmap.mag[maskmagout],detlamag[maskmagout],
+                              **propout_mag))
+        
+        pl.append(ax.errorbar(pmap.refmap.mag,detlamag,
+                              yerr=pmap.magerr,ecolor="0.7",zorder=3,
+                              label="_no_legend_",ms=0,ls="None"))
+        fancy = []
+        fancy.append(ax.axhline(0,ls="-",color="0.7",zorder=2))
+                
+        # -------------------
+        # - Percent Curves
+        
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
         self._plot["pl"]     = pl
-    
+
         fig.figout(savefile=savefile,show=show)
         
-        return self._plot
-    
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
     def _test_instrument_(self):
         if not self.has_instrument():
             raise AttributeError("no 'instrument' loaded")
-
+    
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -377,16 +304,18 @@ class PhotoCatalogue( BaseObject ):
 
     # -------------------
     # - Derived Values
-    # FWHM
+    @property
+    def apertures_curve(self):
+        return self.instrument.apertures_curve[1]
+
+    @property
+    def apertures_radii(self):
+        return self.instrument.apertures_curve[0]
+
     @property
     def fwhm(self):
-        if not self.has_fwhm():
-            raise AttributeError("'fwhm' is not defined")
-        return self._derived_properties["fwhm"]
-
-    def has_fwhm(self):
-        return not self._derived_properties["fwhm"] is None
-
+        return self.instrument.fwhm
+    
     # ZERO POINTS
     @property
     def zpcalibration(self):
@@ -400,32 +329,6 @@ class PhotoCatalogue( BaseObject ):
         return not (self._derived_properties['zp_calibration'] is None \
                     or self.zpcalibration['zp'] is None)
 
-    # APERTURE PHOTOMETRIES
-    @property
-    def photo_apertures(self):
-        """
-        """
-        if self._derived_properties['photo_apertures'] is None:
-            self._derived_properties['photo_apertures'] = {}
-            
-        return self._derived_properties['photo_apertures']
-
-
-    def has_photo_apertures(self):
-        return not len(self.photo_apertures.keys())==0
-
-    
     # -------------------
     # - Mask
-    @property
-    def catmag_range(self):
-        if self._side_properties["catmag_range"] is None:
-            self._side_properties["catmag_range"] = [None,None]
-        return self._side_properties["catmag_range"]
-
-    @catmag_range.setter
-    def catmag_range(self,value):
-        if np.shape(value) !=  (2,):
-            raise TypeError("'catmag_range' must be a 2d-array (minmag,maxmag)")
-        self._side_properties["catmag_range"] = value
         

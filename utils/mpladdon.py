@@ -290,19 +290,15 @@ def insert_ax(ax,space,pad,fraction=None,
         fraction = 1- (space + pad)
         
     if location == "right":
-        print "right"
         bboxax,_,bboxnew,_ = ax.get_position().splitx(fraction,fraction+space,
                                                       fraction+space+pad)
     elif location == "left":
-        print "left"
         bboxnew,_,bboxax,_ = ax.get_position().splitx(pad,pad+space,
                                                       fraction+space+pad)
     elif location == "top":
-        print "top"
         bboxax,_,bboxnew,_ = ax.get_position().splity(fraction,fraction+space,
                                                       fraction+space+pad)
     else: # bottom
-        print "bottom"
         bboxnew,_,bboxax,_ = ax.get_position().splity(pad,pad+space,
                                                       fraction+space+pad)
 

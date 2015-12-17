@@ -244,7 +244,8 @@ class Image( BaseObject ):
                                 "target","catalogue",
                                 "exptime"] # maybe Exptime should just be on flight
         
-    _derived_properties_keys = ["fits","data","sepobjects"]
+    _derived_properties_keys = ["fits","data","sepobjects",
+                                "apertures_photos","fwhm"]
     
     # Where in the fitsfile the data are
     # =========================== #
@@ -510,10 +511,78 @@ class Image( BaseObject ):
         # - set it
         self._side_properties["catalogue"] = catalogue
         
+    def set_apertures_photos(self,rpixel_range=[0.5,25],bins=30,
+                            catmag_range=None,isolated_only=True,
+                            curveclipping=4, 
+                            **kwargs):
+        """
+        """
+        if catmag_range is None:
+            catmag_range = [None,None]
+        # --------------------
+        # - Get the Apertures
+        ap = self.get_aperture_photometries(rpixel_range=rpixel_range,bins=bins,
+                                            catmag_range=catmag_range,
+                                            isolated_only=isolated_only,
+                                            **kwargs)
+        # --------------------
+        # - Derived Values
+        
+        counts = ap["counts"] / np.mean(ap["counts"],axis=0)
+        countT = counts.T
+        # - outlier rejection
+        mask = np.ones(len(countT),dtype=bool)
+        again,iwhile = True,0
+        while again:
+            mean_count = np.median(countT[mask],axis=0)
+            std_count = np.std(countT[mask],axis=0)
+            mewmasked = np.asarray([not (np.abs(c- mean_count) >curveclipping* std_count).any()
+                                    for i,c in enumerate(countT)],dtype=bool)
+            # -- while conditions, again ?
+            if (mewmasked == mask).all() or i==10:
+                again = False
+            mask = mewmasked
+            iwhile+=1
 
+        # --------------
+        # - Set it
+        ap["aperture_curve"]= {"counts":mean_count,
+                               "std":std_count,
+                               "maskused":mask,
+                               "clipping":curveclipping}
+        self._derived_properties["apertures_photos"] = ap
+        if not self.has_fwhm():
+            self.derive_fwhm()
+            
+    def set_fwhm(self,value,force_it=True):
+        """
+        """
+        if self.has_fwhm() and not force_it:
+            raise AttributeError("'fwhm' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if value<0:
+            raise ValueError("the 'fwhm' must be positive")
+        self._derived_properties['fwhm'] = value
+        
     # ------------------- #
     # - download Methods- #
     # ------------------- #
+    def correct_aperture(self,radius_pixel):
+        """
+        
+        """
+        if not self.has_apertures_photos():
+            raise AttributeError("set 'apertures_photos' prior to use this function")
+        
+        maxapidx = self.get_max_aperture_index()
+        if self.apertures_curve[0][maxapidx] <= radius_pixel:
+            return 1
+        count_max = self.apertures_curve[1][maxapidx]
+        count_radius = self._aperture_func(radius_pixel)
+        ratio =count_max/count_radius
+        return ratio if ratio>1 else 1
+    
     def download_catalogue(self,source="sdss",
                            set_it=True,force_it=False,**kwargs):
         """
@@ -527,13 +596,127 @@ class Image( BaseObject ):
             return cat
         
         self.set_catalogue(cat,force_it=force_it)
-                    
+
+    def derive_fwhm(self,percent_gain=0.2,
+                    set_it=True,force_it=False):
+        """
+        This is the size in *units* of the full width half maximum.
+        (Remark that fhwm is a diameter, not a radius)
+        
+        Parameters
+        ----------
+        catmag_range: [2D-array / None]
+                                   The magnitude range (of the catalogue) used to
+                                   derive the zero point.
+                                   If None the current one (self.catmag_range) will
+                                   be used. otherwise this will overwirte it.
+
+        isolated_only: [bool]      Use only the isolated stars (you should)
+
+        Return
+        ------
+        float (if set_it is False)
+        """
+        
+        maxidx = self.get_max_aperture_index(percent_gain=percent_gain)
+        
+        # -- guess area
+        r_refined = np.linspace(1,20,1000)
+        r_fwhm = r_refined[np.argmin(np.abs(self._aperture_func(r_refined)- self.apertures_curve[1][maxidx]/2.))] * 2
+        
+        
+        if set_it:
+            self.set_fwhm(r_fwhm* self.pixel_size_arcsec * units.arcsec,
+                          force_it=force_it)
+
+    def load_calibration(self,catmag_range=None,
+                                calibrate=True,verbose=True):
+        """
+        This module enable to load a unit (self.calibration) that enable to
+        calibrate the current image
+        """
+        from ..calibration.photocatalogue import PhotoCatalogue
+        self.calibration_module = PhotoCatalogue(self,verbose=verbose)
+        if catmag_range is None:
+            if self.has_apertures_photos():
+                catmag_range = self.apertures_photos["property"]["catmag_range"]
+            else:
+                catmag_range = [None,None]
+        if calibrate:
+            if verbose: print "Loading the aperture Photometries"
+            self.calibration_module.calibrate(catmag_range=catmag_range)
+        
+        
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
     # ----------- #
     #  Aperture   #
     # ----------- #
+    def get_max_aperture_index(self,percent_gain=0.5):
+        """This methods enable to fetch the maximum raduis to get the entire
+        star fluxes"""
+        
+        if not self.has_apertures_photos():
+            raise AttributeError("set 'aperture_photos' first")
+        
+        delta_counts = (self.apertures_curve[1][1:] - self.apertures_curve[1][:-1]) / self.apertures_curve[1][:-1]
+        idx = np.min((np.argwhere(delta_counts*100 < percent_gain)))+1
+        if idx>= len(self.apertures_curve[0]):
+            print "WARNING maximum aperture index is the highest measured aperture raduis"
+            
+        return idx
+    
+    def get_aperture_photometries(self,rpixel_range=[0.5,20],bins=18,
+                                  catmag_range=None,isolated_only=True,
+                                  **kwargs
+                                  ):
+        """This method loop over the given range of pixel radius
+        and return the associated counts
+
+        **kwargs goes to instrument.get_aperture ; so K Barbary's sep
+        """
+        # ------------------
+        # - Input
+        if not self.has_catalogue() or not self.has_sepobjects():
+            raise AttributeError("a 'catalogue' and 'sepobjects' are required")
+        
+        # ----------------
+        # - Aperture Info
+        radius = np.linspace(rpixel_range[0],rpixel_range[1],bins)
+        
+        kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
+                          catmag_range=catmag_range)
+        mask = self.sepobjects.get_indexes(**kwardsmask)
+        catidx = self.sepobjects.get_indexes(cat_indexes=True,**kwardsmask)
+        # ---------------------
+        # - get the coordinate
+        x,y = self.sepobjects.data["x"][mask],self.sepobjects.data["y"][mask]
+        # ---------------------
+        # - Edge Issues
+        edge_issue = (x<rpixel_range[-1]) + (y<rpixel_range[-1]) + \
+          (x+rpixel_range[-1]>self.shape[0]) + (y+rpixel_range[-1]>self.shape[1])
+        x,y,mask,catidx = x[~edge_issue], y[~edge_issue], mask[~edge_issue], catidx[~edge_issue]
+          
+            
+        # ---------------
+        # - SHOUD BE FASTER
+        ap = {}
+        for r_pixels in radius:
+            counts,err,flag = self.get_aperture(x,y,r_pixels=r_pixels,**kwargs)
+            ap[r_pixels] = {"counts":counts,
+                            "errors":err,
+                            "flag":flag}
+        return {"radius":radius,
+                "counts":np.asarray([ap[d]["counts"] for d in radius]),
+                "errors":np.asarray([ap[d]["errors"] for d in radius]),
+                "idx_catalogue":catidx,
+                "idx":mask,
+                "property":kwargs_update( dict(catmag_range=catmag_range,
+                                        isolated_only=isolated_only),
+                                        **kwargs)
+                }
+    
     def get_stars_aperture(self, r_pixels,aptype="circle",
                            isolated_only=True, catmag_range=[None,None],
                            **kwargs):
@@ -972,6 +1155,131 @@ class Image( BaseObject ):
                                       scalex=False,scaley=False,
                                       **kwargs)
 
+    
+    def show_aperture_photos(self,savefile=None,ax=None,show=True,
+                                   cmap=None,cbar=True,set_axes_labels=True,
+                                   show_fwhm=True,**kwargs
+                                   ):
+        """
+        Show the normalized counts (saved using set_apertures_photos) as a function
+        of the aperture raduis. This lines will be colored by the catalogue magnitude
+        of the stars.
+        
+                                   
+        Parameters
+        -----------
+                                   
+        ax: [mpl.Axes]             The axes where the image will be shown.
+                                   if *cbar* is not False, the dimension of this
+                                   axes will be reduced to fit an errorbar 
+
+        savefile: [string]         Give the name of the file where the plot should be
+                                   saved (no extention, pdf and png will be made)
+                                   If None, nothing will be saved, the plot will be
+                                   shown instead (but see *show*)
+                                   
+        show: [bool]               set to False to avoid displaying the plot
+                                   
+        cmap: [mpl.cm]             a matplotlib cmap. This will be used to set
+                                   the color of the lines as a function of the
+                                   catalogue magnitude.
+                                   
+        cbar: [bool or ax]         provide here an ax where the colorbar should be
+                                   drawn. You can also set True to have a default one
+                                   or set False to avoid having a colorbar.
+        Return
+        ------
+        dict (with plot information)
+        """
+        if not self.has_apertures_photos():
+            raise AttributeError("no 'apertures_photos' defined")
+        
+        # ---------------
+        # -- Setting 
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if ax is None:
+            fig = mpl.figure(figsize=[8,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+        
+        # -- Properties -- #
+
+        # -----------------
+        # - Data To show
+        counts = self.apertures_photos['counts']  /np.mean(self.apertures_photos['counts'],axis=0)
+        # ------------------
+        # - Colors  
+        catmag = self.catalogue.mag[self.apertures_photos['idx_catalogue']]
+        catmag_range = self.apertures_photos['property']['catmag_range']
+        
+        if catmag_range is None:
+            catmag_range = [catmag.min(),catmag.max()]
+        else:    
+            if catmag_range[0] is None:
+                catmag_range[0] = catmag.min()
+                
+            if catmag_range[1] is None:
+                catmag_range[1] = catmag.max()
+            
+        cmap = mpl.cm.jet if cmap is None else cmap
+        
+        colors = cmap((catmag-catmag_range[0])/(catmag_range[1]-catmag_range[0]))
+        
+        alpha = kwargs.pop("alpha",0.5)
+        used_mask = self.apertures_photos["aperture_curve"]["maskused"]
+        
+        # ------------------
+        # - Da Plot
+        pl = [ax.plot(self.apertures_curve[0],c_ , color=color,
+                      alpha=alpha,zorder=6,**kwargs)
+              for c_,color in zip(counts.T[used_mask],colors[used_mask])]
+
+        if (~used_mask).any():
+            pl.append(ax.plot(self.apertures_curve[0],counts.T[~used_mask].T , color="0.7",alpha=np.min(alpha,0.3),zorder=5,**kwargs))
+            
+        pl.append(ax.plot(*self.apertures_curve , color="k",
+                         alpha=1,zorder=8,lw=3,**kwargs))
+
+        if show_fwhm:
+            maxidx = self.get_max_aperture_index()
+            ax.axhline(self.apertures_curve[1][maxidx],ls="-",lw=1,color="0.5")
+            ax.axvline(self.apertures_curve[0][maxidx],ls="-",lw=1,color="0.5")
+            ax.axvline(self.fwhm.value / 2. / self.pixel_size_arcsec,
+                       ls="--",lw=1,color="0.5")
+            
+        # ----------------------
+        # - colorbar
+        # - this means it is not an ax
+        if cbar:
+            from ..utils.mpladdon import colorbar,insert_ax
+            if "imshow" not in dir(cbar):
+                axcar = ax.insert_ax(space=.05,pad=0.03,location="right")
+            else:
+                axcar = cbar
+            cbar = axcar.colorbar(cmap,vmin=catmag_range[0],vmax=catmag_range[1],
+                                label="catalogue magnitude",alpha=alpha)
+            
+        # -- Save the data -- #
+        self._plot["figure"] = fig
+        self._plot["ax"]     = ax
+        self._plot["pl"]     = pl
+
+        # -------------
+        # -Output
+        if set_axes_labels:
+            ax.set_xlabel(r"$\mathrm{Aperture\ radius\ in\ pixels}$",fontsize="x-large")
+            ax.set_ylabel(r"$\mathrm{Normalized\ counts\ per\ apertures}$",fontsize="x-large")
+            
+        fig.figout(savefile=savefile,show=show)        
+        return self._plot
+
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -1111,7 +1419,44 @@ class Image( BaseObject ):
     def has_catalogue(self):
         return False if self.catalogue is None\
           else True
+
+    # ----------------      
+    # -- Aperture Photo
+    # APERTURE PHOTOMETRIES
+    @property
+    def apertures_photos(self):
+        """
+        """
+        if self._derived_properties['apertures_photos'] is None:
+            self._derived_properties['apertures_photos'] = {}
+            
+        return self._derived_properties['apertures_photos']
+    
+    def has_apertures_photos(self):
+        return not len(self.apertures_photos.keys())==0
+
+    # -- derived properties
+    @property
+    def apertures_curve(self):
+        """ This is the clipped mean photo_aperture curves"""
+        if not self.has_apertures_photos():
+            raise AttributeError("no 'apertures_photos' defined. see set_apertures_photos")
         
+        return self.apertures_photos["radius"],self.apertures_photos["aperture_curve"]["counts"]
+
+    def _aperture_func(self,radius):
+        from scipy.interpolate import interp1d
+        return interp1d(*self.apertures_curve,
+                        kind="quadratic")(radius)
+    # FWHM
+    @property
+    def fwhm(self):
+        if not self.has_fwhm():
+            raise AttributeError("'fwhm' is not defined")
+        return self._derived_properties["fwhm"]
+
+    def has_fwhm(self):               
+        return not self._derived_properties["fwhm"] is None
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
@@ -1926,7 +2271,7 @@ class SexObjects( BaseObject ):
         
 
     def set_catalogue(self,catalogue,force_it=True,
-                      default_isolation_def = 5*units.arcsec):
+                      default_isolation_def = 10*units.arcsec):
         """
         Parameters
         ---------

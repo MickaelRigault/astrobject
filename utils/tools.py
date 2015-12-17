@@ -79,7 +79,7 @@ def flux_to_mag(flux,dflux,wavelength):
     if dflux is None:
         return -2.5*np.log10(F_Lxlambda2) - 2.406, None
     err = -2.5*np.log(10) * dflux / flux
-    return -2.5*np.log10(F_Lxlambda2) - 2.406, err
+    return -2.5*np.log10(F_Lxlambda2) - 2.406, np.abs(err)
 
 def mag_to_flux(mag,magerr,wavelength):
     """
