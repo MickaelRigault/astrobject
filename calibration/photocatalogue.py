@@ -50,8 +50,8 @@ class PhotoCatalogue( BaseObject ):
         """
         maskdict = dict(catmag_range=catmag_range,
                         isolated_only=isolated_only)
-        if not self.instrument.has_apertures_photos() or redo_aperture_photos or \
-          (catmat_range is not None and catmag_range != self.aperture_photos["properties"]["catmag_range"]):
+        if not self.instrument.has_apertures_photos() or redo_apertures_photos or \
+          (catmag_range is not None and catmag_range != self.apertures_photos["properties"]["catmag_range"]):
             self.instrument.set_apertures_photos(**maskdict)
         if not self.instrument.has_fwhm():
             self.instrument.derive_fwhm(set_it=True,force_it=False)

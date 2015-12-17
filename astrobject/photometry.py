@@ -661,7 +661,12 @@ class Image( BaseObject ):
             raise AttributeError("set 'aperture_photos' first")
         
         delta_counts = (self.apertures_curve[1][1:] - self.apertures_curve[1][:-1]) / self.apertures_curve[1][:-1]
-        idx = np.min((np.argwhere(delta_counts*100 < percent_gain)))+1
+        goods = (np.argwhere(delta_counts*100 < percent_gain))
+        if len(goods) ==0:
+            print "WARNING the maximum radius of the aperture photometries is too small"
+            return len(self.apertures_curve)
+        
+        idx = np.min(goods)+1
         if idx>= len(self.apertures_curve[0]):
             print "WARNING maximum aperture index is the highest measured aperture raduis"
             
