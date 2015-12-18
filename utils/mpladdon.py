@@ -205,7 +205,7 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
     # -- Plot 
     ax.add_collection(collec)
     
-    axcar = ax.insert_ax(fraction=0.9, space=.05, pad=0.05, location='bottom')
+    axcar = ax.insert_ax(fraction=0.9, space=.08, pad=0.05, location='bottom')
     cbar = axcar.colorbar(cmap, vmin=vmin, vmax=vmax, label=cblabel)
 
     return collec, cbar
