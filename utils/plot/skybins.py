@@ -3,6 +3,14 @@
 
 """
 Classes for binning sky coordinates
+
+Currently there are two fully functional Bins classes:
+- SkyBins provides rectangular bins in (RA, Dec)
+- HealpixBins provides binning based on HEALPix (requires healpy)
+
+To make a custom binner, use the BaseBins class as parent and add methods 
+'hist' (counts the hits per bin) and  'boundary' (provides boundary of bin
+to draw the polygon) 
 """
 
 import warnings
@@ -10,11 +18,81 @@ import numpy as np
 
 from ...astrobject.baseobject import BaseObject
 #import astrobject.astrobject import baseobject as b
+
+try:
+    import healpy as hp
+    HEALPY_IMPORTED = True
+except ImportError:
+    HEALPY_IMPORTED = False
+
 _d2r = np.pi / 180 
 
 __all__ = ["SkyBins","HealpixBins"]
 
-class SkyBins( BaseObject ):
+class BaseBins( BaseObject ):
+    """
+    Basic sky binning class
+    Currently only defines the methods to split bins that cross RA = 180 deg
+    """
+    def fix_edges(self, ra_bd, edge):
+        """
+        Make sure that there is no mix between RA = -180 and 180
+        Assumes that the sign of the median has the required sign
+        """
+        ra_med = np.median(ra_bd)
+        if ra_med < 0:
+            ra_bd[np.abs(ra_bd) > 180 - edge] = -180 + edge            
+        else:                    
+            ra_bd[np.abs(ra_bd) > 180 - edge] = 180 - edge
+
+        return ra_bd
+
+    def check_crossing(self, ra, dec, max_stepsize):
+        """
+        check whether bin boundary crosses the 180 degree line
+        If so split patch in two
+        """
+        ra_bd = np.concatenate((ra, [ra[0]]))
+        dec_bd = np.concatenate((dec, [dec[0]]))
+        
+        cr = np.where((np.abs(ra_bd[1:] - ra_bd[:-1]) > 180) &
+                      ((180 - np.abs(ra_bd[1:]) < max_stepsize) |
+                       (180 - np.abs(ra_bd[:-1]) < max_stepsize)))
+
+        true_cr = []
+        for cross in cr[0]:
+            if np.abs(dec_bd[cross]) < 90 and np.abs(dec_bd[cross + 1]) < 90:
+                true_cr.append(cross)
+
+        if len(true_cr) > 0:
+            return True
+        return False
+
+    def split_bin(self, ra_bd, dec_bd, max_stepsize, edge):
+        """
+        """
+        ra_bd = self.fix_edges(ra_bd, edge)
+
+        out = []
+        if self.check_crossing(ra_bd, dec_bd, max_stepsize):
+            ra_bd1 = ra_bd.copy()
+            ra_bd2 = ra_bd.copy()
+
+            # This assumes that the bins do not cover more than 90 deg in RA
+            ra_bd1[ra_bd1 > 90] = -180 + edge
+            ra_bd2[ra_bd2 < -90] = 180 - edge
+           
+            for r in [ra_bd1, ra_bd2]:
+                # Only draw if really on two sides and not just because of 
+                # non-matching sign of 180
+                if np.any(np.abs(r) < 180 - edge):
+                    out.append((r, dec_bd))
+        else:
+            out.append((ra_bd, dec_bd))
+
+        return out
+
+class SkyBins( BaseBins ):
     """
     Object to collect all information for rectangular binning.
     
@@ -104,7 +182,7 @@ class SkyBins( BaseObject ):
     # ========================== #
     # = Utilities for plotting = #
     # ========================== #
-    def boundary(self, k, steps=None, max_stepsize=None):
+    def boundary(self, k, steps=None, max_stepsize=None, edge=1e-6):
         """
         Return boundary of a bin; used for drawing polygons.
         If steps is None, max_stepsize is used to automatically determine 
@@ -127,7 +205,7 @@ class SkyBins( BaseObject ):
         ra = np.concatenate([ra1, ra2[1:], ra3[1:], ra4[1:-1]])
         dec = np.concatenate([dec1, dec2[1:], dec3[1:], dec4[1:-1]])
         
-        return ra, dec
+        return self.split_bin(ra, dec, max_stepsize, edge) 
         
     def _draw_line(self, ra1, dec1, ra2, dec2, steps=None, 
                    max_stepsize=None):
@@ -204,9 +282,99 @@ class SkyBins( BaseObject ):
     
 
 
-class HealpixBins( BaseObject ):
+class HealpixBins( BaseBins ):
     """
+    HEALPix Binner
     """
-    _properties_keys = ["ra_min", "ra_max", "dec_min", "dec_max"]
+    _properties_keys = ["nside", "nest", "max_stepsize"]
 
-    _derived_keys = ["nbins"]
+    _derived_keys = ["nbins"] 
+
+    def __init__(self, nside=8, nest=True, max_stepsize=5, empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        self.create(nside=nside, nest=nest, max_stepsize=max_stepsize)
+
+    def create(self, nside=8, nest=True, max_stepsize=5):
+        """
+        """
+        if not HEALPY_IMPORTED:
+            raise ValueError("HealpixBins requires the healpy package.")
+
+        self._properties["nside"] = nside
+        self._properties["nest"] = nest
+                         
+        self._properties["max_stepsize"] = max_stepsize
+        #self.__update__()
+
+    # =========== #
+    # = Binning = #
+    # =========== #
+    def hist(self, ra, dec):
+        """
+        Return the counts per bin for a list a coordinates.
+        """
+        pixels = hp.ang2pix(self.nside,(90 - dec) * _d2r, ra * _d2r, 
+                            nest=self.nest)
+        binned = np.histogram(pixels, bins=range(hp.nside2npix(self.nside) + 1))
+        
+        return binned[0]
+
+    # ========================== #
+    # = Utilities for plotting = #
+    # ========================== #
+    def boundary(self, k, steps=None, max_stepsize=None, edge=1e-6):
+        """
+        Return boundary of a bin; used for drawing polygons.
+        If steps is None, max_stepsize is used to automatically determine
+        the appropriate step size.
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        if steps is None:
+            steps = self._determine_steps(max_stepsize=max_stepsize)
+
+        bd = hp.boundaries(self.nside, k, step=steps, nest=self.nest)
+        dec_raw, ra_raw = hp.vec2ang(np.transpose(bd))
+
+        ra = ((ra_raw / _d2r + 180) % 360) - 180
+        dec = 90 - dec_raw / _d2r
+
+        return self.split_bin(ra, dec, max_stepsize, edge) 
+
+    def _determine_steps(self, max_stepsize=None):
+        """
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        return np.ceil(hp.nside2resol(self.nside) / _d2r / max_stepsize) + 1
+
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def nside(self):
+        """HEALPix NSIDE parameter"""
+        return self._properties["nside"]
+
+    @property
+    def nest(self):
+        """HEALPix NESTED parameter"""
+        return self._properties["nest"]
+
+    @property
+    def max_stepsize(self):
+        """maximum stepsize for boundary in degrees"""
+        return self._properties["max_stepsize"]
+
+    # --------------------
+    # - Derived Properties
+    @property
+    def nbins(self):
+        """number of bins"""
+        return hp.nside2npix(self._properties["nside"])

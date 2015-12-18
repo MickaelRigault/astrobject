@@ -57,8 +57,25 @@ def specplot(ax,x,y,var=None,
 # --------------------- #
 @make_method(mpl.Axes)
 def skyplot(ax, ra, dec, color=None, **kwargs):
-    """This function in a build-in axes method that allows easily plotting points 
-    on the sky.
+    """
+    Build-in axes method for easy plotting of points on the sky.
+
+    ax: [matplotlib.axes]          where the data will be displayed
+                                   should be using Mollweide or Hammer
+                                   projection (not strictly enforced)
+
+    ra, dec: [N array, N array]    arrays of sky coordinates (RA, Dec)
+                                   in degrees
+
+    - options -
+
+    color: [string]                color to be used for the plot
+
+    - kwargs goes to ax.plot -
+
+    Return
+    ------
+    pl (output of ax.plot)
     """
     from .plot.skyplot import convert_radec_azel
     # -----------------------
@@ -77,13 +94,26 @@ def skyplot(ax, ra, dec, color=None, **kwargs):
 
 @make_method(mpl.Axes)
 def skyscatter(ax, ra, dec, **kwargs):
-    """This function in a build-in axes method that allows simple scatter plots
-    easily plot a spectrum.
+    """
+    Build-in axes method for scatter plots of points on the sky.
+
+    ax: [matplotlib.axes]          where the data will be displayed
+                                   should be using Mollweide or Hammer
+                                   projection (not strictly enforced)
+
+    ra, dec: [N array, N array]    arrays of sky coordinates (RA, Dec)
+                                   in degrees
+
+    - kwargs goes to ax.scatter -
+
+    Return
+    ------
+    sc (output of ax.scatter)
     """
     from .plot.skyplot import convert_radec_azel
     # -----------------------
     # - Properties of plot
-    default_kwargs = dict(marker='o', s=30, #edgecolor='none',
+    default_kwargs = dict(marker='o', s=30,
                           cmap=mpl.cm.RdYlBu_r)
 
     propplot = kwargs_update(default_kwargs,**kwargs)
@@ -95,15 +125,56 @@ def skyscatter(ax, ra, dec, **kwargs):
     return sc
 
 @make_method(mpl.Axes)
-def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
+def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
+            vmin=None, vmax=None, cmap=mpl.cm.Blues, cblabel=None, **kwargs):
     """This function in a build-in axes method that makes a sky histogram of the 
     coordinates.
     
     """
+    """
+    Build-in axes method for 2d-histograms of points on the sky.
+
+    ax: [matplotlib.axes]          where the data will be displayed
+                                   should be using Mollweide or Hammer
+                                   projection (not strictly enforced)
+
+    ra, dec: [N array, N array]    arrays of sky coordinates (RA, Dec)
+                                   in degrees
+
+    - options -
+    
+    bins [Bins object]             object that bins the coordinates and
+                                   provides the boundaries for drawing
+                                   polygons 
+                                   (see the documentation of 
+                                   utils/plot/skybins.py)
+
+    steps [int]                    number of steps between bin verices
+                                   (if None, it will be determined based on
+                                   max_stepsize)
+    
+    max_stepsize [float]           maximal stepsize used to determined
+                                   steps if None
+    
+    edges [float]                  edge to be left near RA = 180 deg
+
+    vmin,vmax: [float,float]       minimal and maximal values for the colormapping.
+
+    cmap: [mpl.cm]                 a colormap
+    
+    clabel: [string]               colorbar label
+
+    - kwargs goes to matplotlib.collections.PolyCollection -
+
+    Return
+    ------
+    collection (output of matplotlib.collections.PolyCollection)
+    cbar       (output of ax.colorbar)
+    """
     # -----------------------
     # - Properties of plot
     from matplotlib.patches import Polygon
-    from matplotlib.collections import PatchCollection
+    from matplotlib.collections import PatchCollection, PolyCollection
 
     from .plot.skybins import SkyBins
     from .plot.skyplot import convert_radec_azel
@@ -111,29 +182,33 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, **kwargs):
     if bins is None:
         bins = SkyBins()
 
-    default_kwargs = dict(cmap=mpl.cm.Blues)
-
-    propplot = kwargs_update(default_kwargs,**kwargs)
-
     hist = bins.hist(ra, dec)
 
     patches = []
+    p_idx = []
     for k in xrange(len(hist)):
-        ra_bd, dec_bd = bins.boundary(k, steps=steps,
-                                      max_stepsize=max_stepsize)
+        radec_bd = bins.boundary(k, steps=steps, max_stepsize=max_stepsize,
+                                 edge=edge)
+        for r, d in radec_bd:
+            coord_bd = np.asarray(convert_radec_azel(r, d, edge=edge)).T
+            patches.append(coord_bd)
+            p_idx.append(k)
 
-        coord_bd = np.asarray(convert_radec_azel(ra_bd, dec_bd, edge=0.0001)).T
+    c = np.asarray(hist[np.asarray(p_idx)])
+    vmin = c.min() if vmin is None else vmin
+    vmax = c.max() if vmax is None else vmax
+    color = cmap((c-vmin)/float(vmax-vmin))
 
-        patches.append(Polygon(coord_bd, True))
-
-    p = PatchCollection(patches, **propplot)
-    p.set_edgecolor('face')
-    p.set_array(hist)
-        
-    # -- Plot 
-    ax.add_collection(p)
+    collec = PolyCollection(patches, facecolors=color, **kwargs)
+    collec.set_edgecolor('face')
     
-    return p
+    # -- Plot 
+    ax.add_collection(collec)
+    
+    axcar = ax.insert_ax(fraction=0.9, space=.08, pad=0.05, location='bottom')
+    cbar = axcar.colorbar(cmap, vmin=vmin, vmax=vmax, label=cblabel)
+
+    return collec, cbar
 
 # --------------------- #
 # - Patchs Plots      - #
