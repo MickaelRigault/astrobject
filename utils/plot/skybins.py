@@ -3,6 +3,14 @@
 
 """
 Classes for binning sky coordinates
+
+Currently there are two fully functional Bins classes:
+- SkyBins provides rectangular bins in (RA, Dec)
+- HealpixBins provides binning based on HEALPix (requires healpy)
+
+To make a custom binner, use the BaseBins class as parent and add methods 
+'hist' (counts the hits per bin) and  'boundary' (provides boundary of bin
+to draw the polygon) 
 """
 
 import warnings

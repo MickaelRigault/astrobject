@@ -57,8 +57,25 @@ def specplot(ax,x,y,var=None,
 # --------------------- #
 @make_method(mpl.Axes)
 def skyplot(ax, ra, dec, color=None, **kwargs):
-    """This function in a build-in axes method that allows easily plotting points 
-    on the sky.
+    """
+    Build-in axes method for easy plotting of points on the sky.
+
+    ax: [matplotlib.axes]          where the data will be displayed
+                                   should be using Mollweide or Hammer
+                                   projection (not strictly enforced)
+
+    ra, dec: [N array, N array]    arrays of sky coordinates (RA, Dec)
+                                   in degrees
+
+    - options -
+
+    color: [string]                color to be used for the plot
+
+    - kwargs goes to ax.plot -
+
+    Return
+    ------
+    pl (output of ax.plot)
     """
     from .plot.skyplot import convert_radec_azel
     # -----------------------
@@ -77,13 +94,26 @@ def skyplot(ax, ra, dec, color=None, **kwargs):
 
 @make_method(mpl.Axes)
 def skyscatter(ax, ra, dec, **kwargs):
-    """This function in a build-in axes method that allows simple scatter plots
-    easily plot a spectrum.
+    """
+    Build-in axes method for scatter plots of points on the sky.
+
+    ax: [matplotlib.axes]          where the data will be displayed
+                                   should be using Mollweide or Hammer
+                                   projection (not strictly enforced)
+
+    ra, dec: [N array, N array]    arrays of sky coordinates (RA, Dec)
+                                   in degrees
+
+    - kwargs goes to ax.scatter -
+
+    Return
+    ------
+    sc (output of ax.scatter)
     """
     from .plot.skyplot import convert_radec_azel
     # -----------------------
     # - Properties of plot
-    default_kwargs = dict(marker='o', s=30, #edgecolor='none',
+    default_kwargs = dict(marker='o', s=30,
                           cmap=mpl.cm.RdYlBu_r)
 
     propplot = kwargs_update(default_kwargs,**kwargs)
@@ -100,6 +130,46 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
     """This function in a build-in axes method that makes a sky histogram of the 
     coordinates.
     
+    """
+    """
+    Build-in axes method for 2d-histograms of points on the sky.
+
+    ax: [matplotlib.axes]          where the data will be displayed
+                                   should be using Mollweide or Hammer
+                                   projection (not strictly enforced)
+
+    ra, dec: [N array, N array]    arrays of sky coordinates (RA, Dec)
+                                   in degrees
+
+    - options -
+    
+    bins [Bins object]             object that bins the coordinates and
+                                   provides the boundaries for drawing
+                                   polygons 
+                                   (see the documentation of 
+                                   utils/plot/skybins.py)
+
+    steps [int]                    number of steps between bin verices
+                                   (if None, it will be determined based on
+                                   max_stepsize)
+    
+    max_stepsize [float]           maximal stepsize used to determined
+                                   steps if None
+    
+    edges [float]                  edge to be left near RA = 180 deg
+
+    vmin,vmax: [float,float]       minimal and maximal values for the colormapping.
+
+    cmap: [mpl.cm]                 a colormap
+    
+    clabel: [string]               colorbar label
+
+    - kwargs goes to matplotlib.collections.PolyCollection -
+
+    Return
+    ------
+    collection (output of matplotlib.collections.PolyCollection)
+    cbar       (output of ax.colorbar)
     """
     # -----------------------
     # - Properties of plot
@@ -136,8 +206,9 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
     ax.add_collection(collec)
     
     axcar = ax.insert_ax(fraction=0.9, space=.05, pad=0.05, location='bottom')
+    cbar = axcar.colorbar(cmap, vmin=vmin, vmax=vmax, label=cblabel)
 
-    return collec, axcar.colorbar(cmap, vmin=vmin, vmax=vmax, label=cblabel)
+    return collec, cbar
 
 # --------------------- #
 # - Patchs Plots      - #
