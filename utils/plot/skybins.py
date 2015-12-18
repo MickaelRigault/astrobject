@@ -21,7 +21,70 @@ _d2r = np.pi / 180
 
 __all__ = ["SkyBins","HealpixBins"]
 
-class SkyBins( BaseObject ):
+class BaseBins( BaseObject ):
+    """
+    Basic sky binning class
+    Currently only defines the methods to split bins that cross RA = 180 deg
+    """
+    def fix_edges(self, ra_bd, edge):
+        """
+        Make sure that there is no mix between RA = -180 and 180
+        Assumes that the sign of the median has the required sign
+        """
+        ra_med = np.median(ra_bd)
+        if ra_med < 0:
+            ra_bd[np.abs(ra_bd) > 180 - edge] = -180 + edge            
+        else:                    
+            ra_bd[np.abs(ra_bd) > 180 - edge] = 180 - edge
+
+        return ra_bd
+
+    def check_crossing(self, ra, dec, max_stepsize):
+        """
+        check whether bin boundary crosses the 180 degree line
+        If so split patch in two
+        """
+        ra_bd = np.concatenate((ra, [ra[0]]))
+        dec_bd = np.concatenate((dec, [dec[0]]))
+        
+        cr = np.where((np.abs(ra_bd[1:] - ra_bd[:-1]) > 180) &
+                      ((180 - np.abs(ra_bd[1:]) < max_stepsize) |
+                       (180 - np.abs(ra_bd[:-1]) < max_stepsize)))
+
+        true_cr = []
+        for cross in cr[0]:
+            if np.abs(dec_bd[cross]) < 90 and np.abs(dec_bd[cross + 1]) < 90:
+                true_cr.append(cross)
+
+        if len(true_cr) > 0:
+            return True
+        return False
+
+    def split_bin(self, ra_bd, dec_bd, max_stepsize, edge):
+        """
+        """
+        ra_bd = self.fix_edges(ra_bd, edge)
+
+        out = []
+        if self.check_crossing(ra_bd, dec_bd, max_stepsize):
+            ra_bd1 = ra_bd.copy()
+            ra_bd2 = ra_bd.copy()
+
+            # This assumes that the bins do not cover more than 90 deg in RA
+            ra_bd1[ra_bd1 > 90] = -180 + edge
+            ra_bd2[ra_bd2 < -90] = 180 - edge
+           
+            for r in [ra_bd1, ra_bd2]:
+                # Only draw if really on two sides and not just because of 
+                # non-matching sign of 180
+                if np.any(np.abs(r) < 180 - edge):
+                    out.append((r, dec_bd))
+        else:
+            out.append((ra_bd, dec_bd))
+
+        return out
+
+class SkyBins( BaseBins ):
     """
     Object to collect all information for rectangular binning.
     
@@ -111,7 +174,7 @@ class SkyBins( BaseObject ):
     # ========================== #
     # = Utilities for plotting = #
     # ========================== #
-    def boundary(self, k, steps=None, max_stepsize=None):
+    def boundary(self, k, steps=None, max_stepsize=None, edge=1e-6):
         """
         Return boundary of a bin; used for drawing polygons.
         If steps is None, max_stepsize is used to automatically determine 
@@ -134,7 +197,7 @@ class SkyBins( BaseObject ):
         ra = np.concatenate([ra1, ra2[1:], ra3[1:], ra4[1:-1]])
         dec = np.concatenate([dec1, dec2[1:], dec3[1:], dec4[1:-1]])
         
-        return ra, dec
+        return self.split_bin(ra, dec, max_stepsize, edge) 
         
     def _draw_line(self, ra1, dec1, ra2, dec2, steps=None, 
                    max_stepsize=None):
@@ -211,7 +274,7 @@ class SkyBins( BaseObject ):
     
 
 
-class HealpixBins( BaseObject ):
+class HealpixBins( BaseBins ):
     """
     HEALPix Binner
     """
@@ -255,7 +318,7 @@ class HealpixBins( BaseObject ):
     # ========================== #
     # = Utilities for plotting = #
     # ========================== #
-    def boundary(self, k, steps=None, max_stepsize=None):
+    def boundary(self, k, steps=None, max_stepsize=None, edge=1e-6):
         """
         Return boundary of a bin; used for drawing polygons.
         If steps is None, max_stepsize is used to automatically determine
@@ -273,7 +336,7 @@ class HealpixBins( BaseObject ):
         ra = ((ra_raw / _d2r + 180) % 360) - 180
         dec = 90 - dec_raw / _d2r
 
-        return ra, dec
+        return self.split_bin(ra, dec, max_stepsize, edge) 
 
     def _determine_steps(self, max_stepsize=None):
         """
