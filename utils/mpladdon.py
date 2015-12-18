@@ -113,11 +113,6 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
         bins = SkyBins()
 
     hist = bins.hist(ra, dec)
-    #print hist
-    #print np.where(hist == 0)
-    #hist = np.arange(1, bins.nbins + 1)
-    #hist = np.zeros(bins.nbins)
-    #hist[7] = 1
 
     patches = []
     p_idx = []
@@ -140,9 +135,9 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
     # -- Plot 
     ax.add_collection(collec)
     
-    axcar = ax.insert_ax(fraction=0.9,space=.05,pad=0.03)
+    axcar = ax.insert_ax(fraction=0.9, space=.05, pad=0.05, location='bottom')
 
-    return collec, axcar.colorbar(cmap,vmin=vmin,vmax=vmax,label=cblabel)
+    return collec, axcar.colorbar(cmap, vmin=vmin, vmax=vmax, label=cblabel)
 
 # --------------------- #
 # - Patchs Plots      - #
