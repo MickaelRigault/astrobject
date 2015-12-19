@@ -588,7 +588,8 @@ class Image( BaseObject ):
         """
         """
         from .instruments import instrument
-        radec = "%s %s"%(self.wcs.getCentreWCSCoords()[0],self.wcs.getCentreWCSCoords()[1])
+        radec = "%s %s"%(self.wcs.getCentreWCSCoords()[0],
+                         self.wcs.getCentreWCSCoords()[1])
         radius = np.max(self.wcs.getHalfSizeDeg())*np.sqrt(2)
         cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
                                     **kwargs)
@@ -600,29 +601,37 @@ class Image( BaseObject ):
     def derive_fwhm(self,percent_gain=0.2,
                     set_it=True,force_it=False):
         """
-        This is the size in *units* of the full width half maximum.
-        (Remark that fhwm is a diameter, not a radius)
+        Based on the arpetures_photos, this methods derive the full width half maximum.
+        The maximum is defined with the increase of flux from 1 radius to the next is
+        lower than *percent_gain* (in percent of the radius' flux). 
+        
+        (Remark: the fhwm is a diameter, not a radius, and is given in
+        astropy.units.arcsec)
         
         Parameters
         ----------
-        catmag_range: [2D-array / None]
-                                   The magnitude range (of the catalogue) used to
-                                   derive the zero point.
-                                   If None the current one (self.catmag_range) will
-                                   be used. otherwise this will overwirte it.
 
-        isolated_only: [bool]      Use only the isolated stars (you should)
-
+        - options -
+        
+        percent_gain: [float]      The fraction of flux gain from on radius to the next
+                                   one. The first radius below this criteria will is
+                                   the "radius at maximum".
+                                   (see get_max_aperture_index)
+        set_it, force_it [bool, bool]
+                                   Shall this method update the current fwhm of this
+                                   instance ? If it already is set, you have to set
+                                   *force_it* to True to overwitre the former one.
         Return
         ------
-        float (if set_it is False)
+        fwhm in astropy.units (arcsec)
         """
         
         maxidx = self.get_max_aperture_index(percent_gain=percent_gain)
         
         # -- guess area
         r_refined = np.linspace(1,20,1000)
-        r_fwhm = r_refined[np.argmin(np.abs(self._aperture_func(r_refined)- self.apertures_curve[1][maxidx]/2.))] * 2
+        r_fwhm = r_refined[np.argmin(np.abs(self._aperture_func(r_refined)- \
+                                            self.apertures_curve[1][maxidx]/2.))] * 2
         
         
         if set_it:
@@ -653,9 +662,31 @@ class Image( BaseObject ):
     # ----------- #
     #  Aperture   #
     # ----------- #
-    def get_max_aperture_index(self,percent_gain=0.5):
-        """This methods enable to fetch the maximum raduis to get the entire
-        star fluxes"""
+    def get_max_aperture_index(self,percent_gain=0.2):
+        """
+        This methods enable to fetch the maximum raduis to get the entire
+        star fluxes.
+
+        Based on the arpetures_photos, this methods derive the full width half maximum.
+        The maximum is defined with the increase of flux from 1 radius to the next is
+        lower than *percent_gain* (in percent of the radius' flux). 
+        
+        (Remark: the fhwm is a diameter, not a radius, and is given in
+        astropy.units.arcsec)
+        
+        Parameters
+        ----------
+
+        - options -
+        
+        percent_gain: [float]      The fraction of flux gain from on radius to the next
+                                   one. The first radius below this criteria will is
+                                   the "radius at maximum"
+
+        Return
+        ------
+        index (of apertures_curve:apertures_curve[0][index] to get the maximum radius)
+        """
         
         if not self.has_apertures_photos():
             raise AttributeError("set 'aperture_photos' first")
@@ -746,7 +777,7 @@ class Image( BaseObject ):
         if not self.has_sepobjects():
             raise AttributeError("no 'sepobjects'.  This is required")
 
-        if isolated_only and not self.catalogue.around_defined():
+        if isolated_only and not self.catalogue._is_around_defined():
             raise AttributeError("no 'around' not defined in the catalogue."+ \
                                  " Run catalogue.defined_around or set isolated_only to False")
             
@@ -2307,7 +2338,7 @@ class SexObjects( BaseObject ):
             print "WARNING the given 'catalogue' has no pixel coordinates. Cannot load it"
             return
         
-        if not catalogue.around_defined():
+        if not catalogue._is_around_defined():
             catalogue.define_around(default_isolation_def)
             
         self._side_properties["catalogue"] = catalogue
@@ -2399,10 +2430,14 @@ class SexObjects( BaseObject ):
                             catmag_range=[None,None],clipping=[3,3]):
         
         """This methods look for the stars and return the mean ellipse parameters"""
+        if not self.has_catalogue():
+            apply_catmask = False
+        
         if apply_catmask:
             idx = self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
                                     catmag_range=catmag_range)
-            
+        else:
+            idx = np.ones(self.nobjects, dtype=bool)
         # -- add input test
          # -- apply the masking
         a_clipped,_alow,_ahigh = sigmaclip(self.get("a")[idx],*clipping)
@@ -2511,11 +2546,17 @@ class SexObjects( BaseObject ):
         from matplotlib.patches import Ellipse
         
         # -- maskout non matched one if requested
-        if apply_catmask:
+        if not self.has_catalogue():
+            apply_catmask = False
+            
+        if apply_catmask and self.has_catalogue():
             kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
                               catmag_range=catmag_range)
             mask = self.get_indexes(**kwargsmask)
-        
+        else:
+            kwargsmask = {}
+            mask = np.ones(self.nobjects,dtype=bool)
+            
         x,y = self.data["x"][mask],self.data["y"][mask]
         # -------------
         # - Properties
@@ -2551,10 +2592,16 @@ class SexObjects( BaseObject ):
         """This methods enable to show the histogram of any given
         key."""
         # -- Properties -- #
+        if not self.has_catalogue():
+            apply_catmask = False
+            
         if apply_catmask:
             kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
                               catmag_range=catmag_range)
             mask = self.get_indexes(**kwargsmask)
+        else:
+            kwargsmask = {}
+            mask = np.ones(self.nobjects,dtype=bool)
         
         v = self.get(toshow)[mask]
 
@@ -2617,10 +2664,15 @@ class SexObjects( BaseObject ):
         # ------------------- #
         # - axes            - #
         # ------------------- #
+        if not self.has_catalogue():
+            apply_catmask = False
         if apply_catmask:
             kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
                               catmag_range=catmag_range)
             mask = self.get_indexes(**kwargsmask)
+        else:
+            kwargsmask = {}
+            mask = np.ones(self.nobjects,dtype=bool)
         # -------------
         # - Properties
         
@@ -2719,7 +2771,8 @@ class SexObjects( BaseObject ):
                        "cat_magerr":self.catalogue.mag_err[icat],
                        #"cat_ra":self.catalogue.ra[icat],
                        #"cat_dec":self.catalogue.dec[icat],
-                       "is_isolated":self.catalogue.isolatedmask[icat] if self.catalogue.around_defined() else None,
+                       "is_isolated":self.catalogue.isolatedmask[icat] \
+                       if self.catalogue._is_around_defined() else None,
                        "is_star":self.catalogue.starmask[icat],
                        #"sep_a":self.get("a")[i],
                        #"sep_b":self.get("b")[i],

@@ -182,6 +182,18 @@ class Catalogue( BaseObject ):
         
     def create(self,data,header,force_it=True,**build):
         """
+        This is a Central Method, this will set to the instance the fundamental
+        parameters data, header upon which most of the instance functionnality is
+        based.
+
+        Parameters
+        ----------
+
+        data: [astropy.TableColumns, dictionnary or numpy.ndarray (withkey)]
+                                   the data associated to the catalogue. It must have
+                                   ra, dec, and magnitude entries. The keys associated
+                                   to these are set in _build_properties (key_ra,
+                                   key_dec, key_mag ...). See also set_mag_keys
         """
         if self.has_data() and force_it is False:
             raise AttributeError("'data' is already defined."+\
@@ -284,7 +296,7 @@ class Catalogue( BaseObject ):
         """
         """
         mask = self.idx_to_mask(idx_only) if idx_only is not None \
-          else np.ones(self.ndata,dtype=bool)
+          else np.ones(self.nobjects,dtype=bool)
         if lbda is not None:
             self.lbda = lbda
         elif self.lbda is None:
@@ -309,7 +321,7 @@ class Catalogue( BaseObject ):
         return pmap
     
     def idx_to_mask(self,idx):
-        mask = np.zeros(self.ndata,dtype=bool)
+        mask = np.zeros(self.nobjects,dtype=bool)
         for i in idx:
             mask[i] = True
         return mask
@@ -403,7 +415,7 @@ class Catalogue( BaseObject ):
           else True
           
     @property
-    def ndata(self):
+    def nobjects(self):
         if self.data is None:
             return 0
         
@@ -413,7 +425,7 @@ class Catalogue( BaseObject ):
         return len(self.data.values()[0])
 
     @property
-    def ndata_in_fov(self):
+    def nobjects_in_fov(self):
         return len(self.ra)
     
     # ---------------
@@ -438,11 +450,11 @@ class Catalogue( BaseObject ):
         return self._side_properties["fovmask"]
     
     def _load_default_fovmask_(self):
-        self._side_properties["fovmask"] = np.ones(self.ndata,dtype=bool)
+        self._side_properties["fovmask"] = np.ones(self.nobjects,dtype=bool)
         
     @fovmask.setter
     def fovmask(self,newmask):
-        if len(newmask) != self.ndata:
+        if len(newmask) != self.nobjects:
             raise ValueError("the given 'mask' must have the size of 'ra'")
         self._side_properties["fovmask"] = newmask
 
@@ -534,7 +546,7 @@ class Catalogue( BaseObject ):
         return True
     
     @property
-    def objectclass(self):
+    def objecttype(self):
         if "key_class" not in self._build_properties.keys():
             raise AttributeError("no 'key_class' provided in the _build_properties.")
         
@@ -549,8 +561,8 @@ class Catalogue( BaseObject ):
         if "value_star" not in self._build_properties.keys():
             return None
 
-        flag = self.objectclass == self._build_properties["value_star"]
-        return flag.data  #not self.fovmask already in objectclass
+        flag = self.objecttype == self._build_properties["value_star"]
+        return flag.data  #not self.fovmask already in objecttype
 
     def has_starmask(self):
         return False if self.starmask is None \
@@ -573,17 +585,18 @@ class Catalogue( BaseObject ):
     def define_around(self,ang_distance):
         """
         """
-        idxcatalogue = self.sky_radec.search_around_sky(self.sky_radec, ang_distance)[0]
+        idxcatalogue = self.sky_radec.search_around_sky(self.sky_radec,
+                                                        ang_distance)[0]
         self._derived_properties["naround"] = np.bincount(idxcatalogue)
 
-    def around_defined(self):
+    def _is_around_defined(self):
         return False if self._derived_properties["naround"] is None\
           else True
         
     @property
     def nobjects_around(self):
         """ """
-        if not self.around_defined():
+        if not self._is_around_defined():
             print "INFORMATION: run 'define_around' to set nobject_around"
         return self._derived_properties["naround"]
     
@@ -591,7 +604,7 @@ class Catalogue( BaseObject ):
     def isolatedmask(self):
         """
         """
-        if not self.around_defined():
+        if not self._is_around_defined():
             raise AttributeError("no 'nobjects_around' parameter derived. Run 'define_around'")
         
         return (self.nobjects_around == 1)
