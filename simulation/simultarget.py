@@ -194,8 +194,9 @@ class TransientGenerator( BaseObject ):
         # - Axis definition
         if ax is None:
             ax_default = dict(fig=None, figsize=(12, 6), 
-                                   rect=[0.1, 0.1, 0.8, 0.8], 
-                                   projection='mollweide')
+                              rect=[0.1, 0.1, 0.8, 0.8], 
+                              projection='mollweide',
+                              xlabelpad=None)
             if cscale is not None:
                 ax_default['figsize'] = (12,8)
                 
@@ -243,7 +244,8 @@ class TransientGenerator( BaseObject ):
         if ax is None:
             ax_default = dict(fig=None, figsize=(12, 6),
                               rect=[0.1, 0.1, 0.8, 0.8],
-                              projection='mollweide')
+                              projection='mollweide',
+                              xlabelpad=None)
             ax_kw, kwargs = kwargs_extract(ax_default, **kwargs)
             fig, ax = ax_skyplot(**ax_kw)
         elif ("MollweideTransform" not in dir(ax) and

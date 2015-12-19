@@ -9,6 +9,7 @@ longitude direction to get a celestial plot.
 
 import numpy as np
 import matplotlib.pyplot as mpl
+import warnings
 
 _d2r = np.pi / 180 
 
@@ -18,11 +19,23 @@ __all__ = ["ax_skyplot"]
 # = Axis setup                 = #
 # ============================== #
 def ax_skyplot(fig=None, figsize=(12, 6), rect=[0.1, 0.1, 0.8, 0.8], 
-               projection='mollweide'): 
+               projection='mollweide', xlabelpad=None): 
     """
     Initialize axis for skyplot and make grid and labels nicer.
     [Fill in kwargs]
     """
+    # Work around to get correct xlabel position in older matplotlib
+    import matplotlib as m
+    mv = m.__version__.split('.')
+    if int(mv[0]) < 2 and int(mv[1]) < 5:
+        warnings.warn('You are using matplotlib version < 1.5.0. '+
+                      'The padding of the xlabel has been adjusted. '+
+                      'You can use the option "xlabelpad" to adjust.')
+        if xlabelpad is None:
+            xlabelpad = 165
+        else:
+            xlabelpad += 165
+
     allowed_proj = ['mollweide', 'hammer']
 
     if fig is None:
@@ -37,7 +50,8 @@ def ax_skyplot(fig=None, figsize=(12, 6), rect=[0.1, 0.1, 0.8, 0.8],
     xlabels = [u'%i\xb0'%ra for ra in range(150,-1,-30) + range(330,209,-30)]
     ax.set_xticklabels(xlabels)
 
-    ax.set_xlabel(r"$\mathrm{RA\ [deg]}$", fontsize="x-large")
+    ax.set_xlabel(r"$\mathrm{RA\ [deg]}$", fontsize="x-large", 
+                  labelpad=xlabelpad)
     ax.set_ylabel(r"$\mathrm{Dec\ [deg]}$", fontsize="x-large")
 
     return fig, ax
