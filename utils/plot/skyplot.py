@@ -19,7 +19,7 @@ __all__ = ["ax_skyplot"]
 # = Axis setup                 = #
 # ============================== #
 def ax_skyplot(fig=None, figsize=(12, 6), rect=[0.1, 0.1, 0.8, 0.8], 
-               projection='mollweide', xlabelpad=None): 
+               projection='mollweide', xlabelpad=None, xlabelmode='hist'): 
     """
     Initialize axis for skyplot and make grid and labels nicer.
     [Fill in kwargs]
@@ -28,13 +28,21 @@ def ax_skyplot(fig=None, figsize=(12, 6), rect=[0.1, 0.1, 0.8, 0.8],
     import matplotlib as m
     mv = m.__version__.split('.')
     if int(mv[0]) < 2 and int(mv[1]) < 5:
+        xlabeladjust = {'show': 180, 
+                        'hist': 165}
+        
+        if xlabelmode not in xlabeladjust.keys():
+            raise ValueError('Unknown xlabelmode. Know values: %2'%
+                             (', '.join(xlabeladjust.keys())))
+            
         warnings.warn('You are using matplotlib version < 1.5.0. '+
                       'The padding of the xlabel has been adjusted. '+
                       'You can use the option "xlabelpad" to adjust.')
+
         if xlabelpad is None:
-            xlabelpad = 165
+            xlabelpad = xlabeladjust[xlabelmode]
         else:
-            xlabelpad += 165
+            xlabelpad += xlabeladjust[xlabelmode]
 
     allowed_proj = ['mollweide', 'hammer']
 
