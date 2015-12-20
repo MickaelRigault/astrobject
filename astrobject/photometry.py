@@ -15,8 +15,7 @@ from .baseobject   import BaseObject
 from ..utils.tools import kwargs_update,flux_to_mag
 
 
-__all__ = ["image","sexobjects",
-           "photopoint","lightcurve","photomap"]
+__all__ = ["image","photopoint","lightcurve","photomap","sexobjects"]
 
 
 def image(filename=None,astrotarget=None,**kwargs):
