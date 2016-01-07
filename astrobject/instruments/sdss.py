@@ -268,11 +268,12 @@ class SDSSCatalogue( Catalogue ):
     source_name = "SDSS"
     
     def __init__(self, catalogue_file=None,empty=False,
-                 key_mag=None,key_magerr=None):
+                 key_mag=None,key_magerr=None,key_ra=None,key_dec=None):
         """
         """
         self.__build__(data_index=2,key_mag=key_mag,
-                       key_magerr=key_magerr)
+                       key_magerr=key_magerr,
+                       key_ra=key_ra,key_dec=key_dec)
         if empty:
             return
         

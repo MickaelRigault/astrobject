@@ -3,10 +3,12 @@
 
 from sncosmo import get_bandpass
 from astropy import coordinates
+from astropy.table.table import TableColumns
+
 import pyfits as pf
 import numpy as np
 from ...utils.decorators import _autogen_docstring_inheritance
-from ...utils.tools import kwargs_update,mag_to_flux
+from ...utils.tools import kwargs_update,mag_to_flux,load_pkl
 
 from ...astrobject.photometry import Image,photopoint,photomap
 from ..baseobject import BaseObject,astrotarget
@@ -135,28 +137,31 @@ class Catalogue( BaseObject ):
 
     
     def __init__(self, catalogue_file=None,empty=False,
-                 data_index=0,key_mag=None,key_magerr=None):
+                 data_index=0,
+                 key_mag=None,key_magerr=None,
+                 key_ra=None,key_dec=None):
         """
         """
         self.__build__(data_index=data_index,
-                       key_mag=key_mag,key_magerr=key_magerr)
+                       key_mag=key_mag,key_magerr=key_magerr,
+                       key_ra=key_ra,key_dec=key_dec)
         if empty:
             return
         if catalogue_file is not None:
             self.load(catalogue_file)
 
     def __build__(self,data_index=0,
-                  key_mag=None,key_magerr=None):
+                  key_mag=None,key_magerr=None,
+                  key_ra=None,key_dec=None):
         """
         """
         super(Catalogue,self).__build__()
         self._build_properties = dict(
             data_index = data_index,
-            key_ra = "X_WORLD",
-            key_dec = "Y_WORLD"
             )
         self.set_mag_keys(key_mag,key_magerr)
-        
+        self.set_coord_keys(key_ra,key_dec)
+            
     # =========================== #
     # = Main Methods            = #
     # =========================== #
@@ -166,15 +171,33 @@ class Catalogue( BaseObject ):
     # ------------------- #
     def load(self,catalogue_file,**kwargs):
         """
+        kwargs can have any build option like key_ra, key_mag etc.
         """
-        fits   = pf.open(catalogue_file)
-        header = fits[self._build_properties["data_index"]].header
-        data   = fits[self._build_properties["data_index"]].data
-        if type(data) == pf.fitsrec.FITS_rec:
-            from astrobject.utils.tools import fitsrec_to_dict
-            from astropy.table import TableColumns
-            data = TableColumns(fitsrec_to_dict(data))
-            
+        # ---------------------
+        # - Parsing the input
+        if catalogue_file.endswith(".fits"):
+            # loading from fits file
+            fits   = pf.open(catalogue_file)
+            header = fits[self._build_properties["data_index"]].header
+            data   = fits[self._build_properties["data_index"]].data
+            if type(data) == pf.fitsrec.FITS_rec:
+                from astrobject.utils.tools import fitsrec_to_dict
+                data = TableColumns(fitsrec_to_dict(data))
+        elif catalogue_file.endswith(".pkl"):
+            # loading from pkl
+            fits = None
+            header = None
+            data = load_pkl(catalogue_file)
+            if not type(data) is TableColumns:
+                try:
+                    data = TableColumns(data)
+                except:
+                    print "WARNING Convertion of 'data' into astropy TableColumns failed"
+        else:
+            raise TypeError("the given catalogue_file must be a .fits or.pkl")
+
+        # ---------------------
+        # - Calling Creates
         self.create(data,header,**kwargs)
         self._properties["filename"] = catalogue_file
         self._derived_properties["fits"] = fits
@@ -203,7 +226,12 @@ class Catalogue( BaseObject ):
         self._properties["header"] = header if header is not None \
           else pf.Header()
         self._build_properties = kwargs_update(self._build_properties,**build)
-      
+        # -------------------------------
+        # - Try to get the fundamentals
+        if self._build_properties['key_ra'] is None:
+            self._automatic_key_match_("ra")
+        if self._build_properties['key_dec'] is None:
+            self._automatic_key_match_("dec")
     def writeto(self,savefile,force_it=True):
         """
         """
@@ -218,6 +246,11 @@ class Catalogue( BaseObject ):
         self._build_properties["key_mag"] = key_mag
         self._build_properties["key_magerr"] = key_magerr
 
+    def set_coord_keys(self,key_ra,key_dec):
+        """
+        """
+        self._build_properties["key_ra"] = key_ra
+        self._build_properties["key_dec"] = key_dec
         
     def set_wcs(self,wcs,force_it=False,update_fovmask=True):
         """
@@ -400,7 +433,41 @@ class Catalogue( BaseObject ):
             
         return axout
     
+    # =========================== #
+    # Internal Methods            #
+    # =========================== #
+    def _automatic_key_match_(self, key):
+        """
+        """
+        try:
+            knownkeys = self.data.keys()
+        except:
+            print "WARNING no automatic key available (data.keys() failed)"
+            return
+        vkey = [k for k in knownkeys if key in k.lower()]
+        if len(vkey) >1:
+            print "WARNING ambiguous %s key. Use set_coord_keys. "%key+", ".join(vkey)
+            return
+        if len(vkey) ==0:
+            print "WARNING no match found for the %s key. Use set_coord_keys. "%key
+            print "       known keys: "+", ".join(knownkeys)
+            return
+          
+        self._build_properties['key_%s'%key] = vkey[0]
+
+
         
+    def _automatic_key_ra_match_(self):
+        """
+        """
+        self._automatic_key_match_("ra")
+
+    def _automatic_key_dec_match_(self):
+        """
+        """
+        self._automatic_key_match_("dec")
+
+    
     # =========================== #
     # Properties and Settings     #
     # =========================== #
