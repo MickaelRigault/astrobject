@@ -6,6 +6,7 @@
 
 import numpy as np
 import copy
+import warnings
 
 from ..utils.tools import load_pkl,dump_pkl
 
@@ -13,6 +14,7 @@ from astropy import cosmology
 from astropy import units
 COSMO_DEFAULT = cosmology.Planck13
 
+from sncosmo import SFD98Map
 
 __version__ = 0.1
 __all__     = ["astrotarget"]
@@ -177,8 +179,8 @@ class AstroTarget( BaseObject ):
     # -------------------- #
     _properties_keys         = ["zcmb","ra","dec","name"]
     
-    _side_properties_keys    = ["cosmology","litrature_name",
-                                "type","mwebmv"]
+    _side_properties_keys    = ["cosmology","literature_name",
+                                "type","mwebmv","sfd98_dir"]
         
     _derived_properties_keys = ["distmeter","distmpc",
                                 "arc_per_kpc"]
@@ -190,8 +192,8 @@ class AstroTarget( BaseObject ):
     def __init__(self,name=None,zcmb=None,
                  ra=None,dec=None,
                  type_=None,cosmo=COSMO_DEFAULT,
-                 load_from=None,empty=False,**kwargs
-                 ):
+                 load_from=None,empty=False,sfd98_dir=None,
+                 **kwargs):
         """
          = Initialize the AstroTarget Function =
         
@@ -220,6 +222,12 @@ class AstroTarget( BaseObject ):
 
         empty: [bool]              Does not do anything, just loads an empty object.
                                    (Careful with that)
+        
+        sfd98_dir: [string]        directory of SFD98 dust map files if not set
+                                   in .astropy/config/sncosmo.cfg
+                                   files SFD_[dust,mask]_4096_[n,s]gp.fits are
+                                   available at http://sncosmo.github.io/data/dust/[file]
+
         Returns
         -------
         Void
@@ -234,14 +242,14 @@ class AstroTarget( BaseObject ):
             return
 
         self.define(name,zcmb,ra,dec,
-                    cosmo=cosmo,type_=type_,
+                    cosmo=cosmo,type_=type_,sfd98_dir=sfd98_dir,
                     **kwargs)
         return
     # =========================== #
     # = Main Methods            = #
     # =========================== #
     def define(self,name,zcmb,ra,dec,
-               cosmo=COSMO_DEFAULT,type_=None,
+               cosmo=COSMO_DEFAULT,type_=None,sfd98_dir=None,
                forced_mwebmv=None):
         """
         This function enables you to define the fundamental object parameter
@@ -252,8 +260,9 @@ class AstroTarget( BaseObject ):
         self.radec = ra,dec
         self.type  = type_
         self.set_cosmo(cosmo)
-        self.set_mwebmv(forced_mwebmv,force_it=True)
         self._update_()
+        if forced_mwebmv is not None:
+            self.set_mwebmv(forced_mwebmv,force_it=True)
 
     def define_from_properties(self,properties,
                                side_properties={}):
@@ -300,13 +309,13 @@ class AstroTarget( BaseObject ):
         return self._properties["name"]
     
     @property
-    def _litrature_name(self):
-        return self._side_properties["litrature_name"]
+    def _literature_name(self):
+        return self._side_properties["literature_name"]
     
     @name.setter
     def name(self,value):
         self._properties["name"] = value
-        self._check_litrature_name_()
+        self._check_literature_name_()
                           
     # ------------------ #
     # - Redshift       - #
@@ -339,13 +348,15 @@ class AstroTarget( BaseObject ):
             raise SyntaxError("radec must have two input parameters: ra,dec")
         
         self._properties["ra"],self._properties["dec"] = value
-        self._update_mwebmv_()
+        self._side_properties["mwebmv"] = None
 
     # ------------------ #
     # - MW Extinction  - #
     # ------------------ #
     @property
     def mwebmv(self):
+        if self._side_properties["mwebmv"] is None:
+            self._update_mwebmv_()
         return self._side_properties["mwebmv"]
     
     def set_mwebmv(self,value,force_it=False):
@@ -355,6 +366,14 @@ class AstroTarget( BaseObject ):
                     "Set force_it to True if you really know what you are doing.")
         self._side_properties["mwebmv"] = value
     
+    @property
+    def sfd98_dir(self):
+        return self._side_properties["sfd98_dir"]
+
+    def set_sfd98_dir(self, value):
+        self._side_properties['sfd98_dir'] = value
+        self._update_mwebmv_()
+
     # ------------------ #
     # - SN Type        - #
     # ------------------ #
@@ -382,7 +401,7 @@ class AstroTarget( BaseObject ):
     @property
     def distmpc(self):
         if self.cosmo is None or self.zcmb is None:
-            raise AttributeError("'cosmo' and 'redshift' requiered.")
+            raise AttributeError("'cosmo' and 'redshift' required.")
         return self.cosmo.luminosity_distance(self.zcmb).value
     
     @property
@@ -411,19 +430,27 @@ class AstroTarget( BaseObject ):
     # = Internal Tools        = #
     # ========================= #
     def _update_(self):
-        self._update_mwebmv_()
+        """
+        Does not call _update_mewbmv_ because extinction should 
+        only be fetched on demand.
+        """
         self._update_distance_()
-        self._check_litrature_name_()
+        self._check_literature_name_()
         
-    def _update_mwebmv_(self,verbose=False):
-        if verbose:print "_update_mwebmv_ to be done"
+    def _update_mwebmv_(self):
+        try:
+            m = SFD98Map(mapdir=self.sfd98_dir)
+            self.set_mwebmv(m.get_ebv((self.ra, self.dec)), force_it=True)
+        except IOError:
+            warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map driectory.")
+                
             
-    def _check_litrature_name_(self,verbose=False):
-        if verbose:print "_check_litrature_name_ to be done"
+    def _check_literature_name_(self,verbose=False):
+        if verbose:print "_check_literature_name_ to be done"
         if self.name is None:
-            self._side_properties["litrature_name"] = None
+            self._side_properties["literature_name"] = None
         
     def _update_distance_(self):
-        """Do Nothing so far since the distance are derived on the flight"""
+        """Do nothing so far since the distance are derived on the fly"""
         pass
           

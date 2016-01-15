@@ -57,15 +57,17 @@ class TransientGenerator( BaseObject ):
     
     _properties_keys = ["transient_coverage",
                         "event_coverage"]
+    
+    _side_properties_keys = ["sfd98_dir"]
         
-    _derived_properties_keys = ["ratefunc","simul_parameters"]
+    _derived_properties_keys = ["ratefunc","simul_parameters","mwebmv"]
 
     
 
     def __init__(self,zrange=[0.0,0.2], ratekind="basic", # How deep
                  mdj_range=[57754.0,58849.0],
                  ra_range=(-180,180),dec_range=(-20,60), # Where, see also kwargs
-                 ntransients=None, empty=False,**kwargs):
+                 ntransients=None,empty=False,sfd98_dir=None,**kwargs):
         """
         """
         self.__build__()
@@ -75,13 +77,13 @@ class TransientGenerator( BaseObject ):
         self.create(zrange,
                     ratekind=ratekind, ntransients=ntransients,
                     ra_range=ra_range, dec_range=dec_range,
-                    mdj_range=mdj_range,
+                    mdj_range=mdj_range,sfd98_dir=sfd98_dir,
                     **kwargs)
 
     def create(self,zrange,ratekind="basic",ntransients=None,
                mdj_range=[57754.0,58849.0],
                ra_range=(-180,180),dec_range=(-90,90),
-               mw_exclusion=0,transientpror={}):
+               mw_exclusion=0,sfd98_dir=None,transientpror={}):
         """
         """
         # == Add the Input Test == #
@@ -127,7 +129,7 @@ class TransientGenerator( BaseObject ):
                                                            **kwargs)
         if update:
             self._update_()
-                            
+
     def set_transient_parameters(self,ratekind="basic",
                                  update=True,type_=None):
         """
@@ -150,21 +152,28 @@ class TransientGenerator( BaseObject ):
     # --------------------------- #
     # - Get Methods             - #
     # --------------------------- #
-    def get_transients(self,index=None):
+    def get_transients(self,index=None,pass_mwebmv=True):
         """loops over the transientsources to load the transients objects.
         This method could be a bit slow..."""
-        return [transient(**s) for s in self.get_transientsource(index)]
+        return [transient(**s) for s in self.get_transientsource(index, pass_mwebmv)]
     
-    def get_transientsource(self,index=None):
+    def get_transientsource(self,index=None,pass_mwebmv=True):
         """dictionary containing the fundamental parameters that enable to
         load the transient objects"""
         if index is not None and "__iter__" not in dir(index):
             index = [index]
 
+        # If self.mwebmv remains None, something went wrong and
+        # pass_mwebmb is set to None. This should already have
+        # resulted in a warning, no need for another one. 
+        if pass_mwebmv and self.mwebmv is None:
+            pass_mwebmv = False
+
         return [dict(name="simul%d"%i,ra=self.ra[i],dec=self.dec[i], zcmb=self.zcmb[i],
-                mjd=self.mjd[i],type_=self.transient_coverage["transienttype"],
-                lightcurve=None)
-                for i in range(self.ntransient) if index is None or i in index]
+                     mjd=self.mjd[i],type_=self.transient_coverage["transienttype"],
+                     lightcurve=None, 
+                     forced_mwebmv=(self.mwebmv[i] if pass_mwebmv else None))
+                for i in xrange(self.ntransient) if index is None or i in index]
 
     # --------------------------- #
     # - Plots Methods           - #
@@ -297,7 +306,16 @@ class TransientGenerator( BaseObject ):
                        ra_range=self.ra_range,
                        dec_range=self.dec_range,
                        mw_exclusion=self._get_event_property_("mw_exclusion"))
-        
+        self._derived_properties['mwebmv'] = None
+
+    def _update_mwebmv_(self):
+        try:
+            m = sncosmo.SFD98Map(mapdir=self.sfd98_dir)
+            self._derived_properties["mwebmv"] = m.get_ebv((self.ra, self.dec))
+        except IOError:
+            warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map directory.")
+                 
+
     def _update_(self):
         """This module create the derived values based on the
         fundamental ones"""
@@ -382,7 +400,7 @@ class TransientGenerator( BaseObject ):
                 warnings.warn("MW exclusion was ignored when calculating covered area.")
 
         return area_sr / _d2r ** 2
-        
+
     # --------------------
     # - Target Coverage
     @property
@@ -428,6 +446,33 @@ class TransientGenerator( BaseObject ):
     def dec(self):
         """Loop over the transient sources to get the ra"""        
         return np.asarray(self.simul_parameters['dec'])
+
+    # ------------------------
+    # - derived transient info
+
+    @property
+    def mwebmv(self):
+        """Return MW E(B-V) (if None or not up to date fetch from SFD98 map)"""
+        if self._derived_properties['mwebmv'] is None:
+            self._update_mwebmv_()
+        
+        # if it is still None after update, some thing went wrong
+        # likely map files were missing or in wrong directory
+        if self._derived_properties['mwebmv'] is None:
+            return None
+        else:
+            return np.asarray(self._derived_properties['mwebmv'])
+    
+    # ------------------
+    # - Side properties
+
+    @property
+    def sfd98_dir(self):
+        return self._side_properties["sfd98_dir"]
+
+    def set_sfd98_dir(self, value):
+        self._side_properties['sfd98_dir'] = value
+        self._update_mwebmv_()
 
     # -----------------------
     # - LightCuve Properties
