@@ -3,13 +3,15 @@
 
 from sncosmo import get_bandpass
 from astropy import coordinates
-from astropy.table.table import TableColumns
+from astropy.table.table import Table,TableColumns
 
 import pyfits as pf
 import numpy as np
 from ...utils.decorators import _autogen_docstring_inheritance
 from ...utils.tools import kwargs_update,mag_to_flux,load_pkl
+from ...utils import shape
 
+from .. import astrometry
 from ...astrobject.photometry import Image,photopoint,photomap
 from ..baseobject import BaseObject,astrotarget
 __all__ = ["Instrument"]
@@ -71,7 +73,9 @@ class Instrument( Image ):
                                            **kwargs)
         flux = self.count_to_flux(count)
         var  = self.count_to_flux(err)**2
-        return photopoint(self.lbda,flux,var,source="image",
+        return photopoint(self.lbda,flux,var,
+                          source="image",mjd=self.mjd_obstime,
+                          zp=self.mab0,bandname=self.bandpass.name,
                           instrument_name=self.instrument_name)
     
     @_autogen_docstring_inheritance(Image.get_target_aperture,"Image.get_target_aperture")
@@ -122,7 +126,12 @@ class Instrument( Image ):
     @property
     def mjd_obstime(self):
         raise NotImplementedError("'obstime' must be implemented")
-    
+
+############################################
+#                                          #
+# Base Instrument: CATALOGUE               #
+#                                          #
+############################################
 
 class Catalogue( BaseObject ):
     """
@@ -132,8 +141,7 @@ class Catalogue( BaseObject ):
     
     _properties_keys = ["filename","data","header"]
     _side_properties_keys = ["wcs","fovmask","matchedmask","lbda"]
-    _derived_properties_keys = ["fits","wcsx","wcsy",
-                                "naround"]
+    _derived_properties_keys = ["fits","naround","contours"]
 
     
     def __init__(self, catalogue_file=None,empty=False,
@@ -147,6 +155,7 @@ class Catalogue( BaseObject ):
                        key_ra=key_ra,key_dec=key_dec)
         if empty:
             return
+        
         if catalogue_file is not None:
             self.load(catalogue_file)
 
@@ -183,6 +192,7 @@ class Catalogue( BaseObject ):
             if type(data) == pf.fitsrec.FITS_rec:
                 from astrobject.utils.tools import fitsrec_to_dict
                 data = TableColumns(fitsrec_to_dict(data))
+                
         elif catalogue_file.endswith(".pkl"):
             # loading from pkl
             fits = None
@@ -222,7 +232,7 @@ class Catalogue( BaseObject ):
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        self._properties["data"] = data
+        self._properties["data"] = Table(data)
         self._properties["header"] = header if header is not None \
           else pf.Header()
         self._build_properties = kwargs_update(self._build_properties,**build)
@@ -230,8 +240,37 @@ class Catalogue( BaseObject ):
         # - Try to get the fundamentals
         if self._build_properties['key_ra'] is None:
             self._automatic_key_match_("ra")
+            
         if self._build_properties['key_dec'] is None:
             self._automatic_key_match_("dec")
+
+        self._update_contours_()
+        
+    def join(self,datatable):
+        """
+        The Methods enable add data to the current catalogue.
+        This is based on astropy.Table join:
+          "
+            The join() method allows one to merge these two tables into a single table
+            based on matching values in the “key columns”.
+          "
+        We use the join_type='outer'
+        (http://docs.astropy.org/en/stable/table/operations.html)
+        """
+        # ---------------------
+        # - Input Test
+        if type(datatable) is not Table:
+            try:
+                datatable = Table(datatable)
+            except:
+                raise TypeError("the given datatable is not an astropy.Table and cannot be converted into.")
+
+        from astropy.table import join
+        
+        self._properties["data"] = join(self.data,datatable)
+        self._update_fovmask_()
+
+            
     def writeto(self,savefile,force_it=True):
         """
         """
@@ -258,11 +297,8 @@ class Catalogue( BaseObject ):
         if self.has_wcs() and force_it is False:
             raise AttributeError("'wcs' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
-
-        if wcs is not None and "coordsAreInImage" not in dir(wcs):
-            raise TypeError("'wcs' solution not recognize, should be an astLib.astWCS")
-
-        self._side_properties["wcs"] = wcs
+                    
+        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
         
         if update_fovmask:
             if self.has_wcs():
@@ -290,7 +326,7 @@ class Catalogue( BaseObject ):
         """
         if wcs is not None:
             if "coordsAreInImage" not in dir(wcs):
-                raise TypeError("'wcs' solution not recognize, should be an astLib.astWCS")
+                raise TypeError("'wcs' solution not recognize")
             
             self.fovmask = np.asarray([wcs.coordsAreInImage(ra,dec)
                                        for ra,dec in zip(self.data[self._build_properties["key_ra"]],
@@ -298,9 +334,10 @@ class Catalogue( BaseObject ):
         elif ra_range is None or dec_range is None:
             raise AttributeError("please provide either 'wcs' and ra_range *and* dec_range")
         else:
-            self.fovmask = (self.ra>ra_range[0]) & (self.ra<ra_range[0]) \
-              (self.dec>dec_range[0]) & (self.dec<dec_range[0]) \
-
+            self.fovmask = (self.ra>ra_range[0]) & (self.ra<ra_range[1]) \
+              (self.dec>dec_range[0]) & (self.dec<dec_range[1])
+            self._fovmask_ranges = [ra_range,dec_range]
+            
     def set_matchedmask(self,matchedmask):
         """This methods enable to set to matchedmask, this mask is an addon
         mask that indicate which point from the catalogue (after the fov cut)
@@ -363,7 +400,7 @@ class Catalogue( BaseObject ):
     # PLOT METHODS          #
     # --------------------- #
     def display(self,ax,wcs_coords=True,draw=True,
-                apply_machedmask=True,
+                apply_machedmask=True,draw_contours=True,
                 show_nonmatched=True,propout={},
                 **kwargs):
         """
@@ -427,7 +464,15 @@ class Catalogue( BaseObject ):
             prop_ = kwargs_update(prop,**propextra)
             if len(x_)>0 and show_:
                 axout.append(ax.plot(x_,y_,**prop_))
-        
+
+        if self.contours is not None and wcs_coords and draw_contours:
+            from matplotlib.patches import Polygon
+            from matplotlib.pyplot import cm
+            patch = shape.polygon_to_patch(self.contours,fc=mpl.cm.Blues(0.6,0.1),
+                                           ec=mpl.cm.binary(0.8,0.9),lw=2)
+            
+            ax.add_patch(patch)
+            
         if draw:
             ax.figure.canvas.draw()
             
@@ -436,6 +481,29 @@ class Catalogue( BaseObject ):
     # =========================== #
     # Internal Methods            #
     # =========================== #
+    # ------------------
+    # --  Update
+    def _update_fovmask_(self):
+        """
+        """
+        if self.has_wcs():
+            self.set_fovmask(wcs=self.wcs)
+        elif "_fovmask_ranges" in dir(self):
+            self.set_fovmask(ra_range=self._fovmask_ranges[0],
+                             dec_range=self._fovmask_ranges[1])
+        return
+    
+    def _update_contours_(self):
+        """
+        """
+        if not shape.HAS_SHAPELY:
+            self._derived_properties["contours"] = None
+        # -- This roughly take 0.2s for 1e4 objects
+        self._derived_properties["contours"] = shape.get_contour_polygon(np.asarray(self._ra),
+                                                                         np.asarray(self._dec))
+        
+    # ------------------
+    # --  Key match
     def _automatic_key_match_(self, key):
         """
         """
@@ -488,8 +556,11 @@ class Catalogue( BaseObject ):
         
         if self.header is not None and "NAXIS2" in self.header:
             return self.header["NAXIS2"]
+
+        if type(self.data) is dict:
+            return len(self.data.values()[0])
         
-        return len(self.data.values()[0])
+        return len(self.data)
 
     @property
     def nobjects_in_fov(self):
@@ -540,17 +611,25 @@ class Catalogue( BaseObject ):
     @property
     def ra(self):
         """Barycenter position along world x axis"""
+        return self._ra[self.fovmask]
+    
+    @property
+    def _ra(self):
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["key_ra"]][self.fovmask]
-
+        return self.data[self._build_properties["key_ra"]]
+    
     @property
     def dec(self):
         """arycenter position along world y axis"""
+        return self._dec[self.fovmask]
+    
+    @property
+    def _dec(self):
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["key_dec"]][self.fovmask]
-
+        return self.data[self._build_properties["key_dec"]]
+        
     @property
     def sky_radec(self):
         """This is an advanced radec methods tight to astropy SkyCoords"""
@@ -560,23 +639,32 @@ class Catalogue( BaseObject ):
     @property
     def mag(self):
         """Generic magnitude"""
+        return self._mag[self.fovmask]
+
+    @property
+    def _mag(self):
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
         if not self._is_keymag_set_():
             raise AttributeError("no 'key_mag' defined. see self.set_mag_keys ")
         
-        return self.data[self._build_properties["key_mag"]][self.fovmask]
-
+        return self.data[self._build_properties["key_mag"]]
+        
     @property
     def mag_err(self):
+        """Generic magnitude RMS error"""
+        return self._mag_err[self.fovmask]
+
+    @property
+    def _mag_err(self):
         """Generic magnitude RMS error"""
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
         if not self._is_keymag_set_():
             raise AttributeError("no 'key_magerr' defined. see self.set_mag_keys ")
         
-        return self.data[self._build_properties["key_magerr"]][self.fovmask]
-
+        return self.data[self._build_properties["key_magerr"]]
+    
     # ----------------
     # - Fluxes
     @property
@@ -614,11 +702,14 @@ class Catalogue( BaseObject ):
     
     @property
     def objecttype(self):
+        return self._objecttype[self.fovmask]
+
+    @property
+    def _objecttype(self):
         if "key_class" not in self._build_properties.keys():
             raise AttributeError("no 'key_class' provided in the _build_properties.")
         
-        return self.data[self._build_properties["key_class"]][self.fovmask]
-        
+        return self.data[self._build_properties["key_class"]]
     @property
     def starmask(self):
         """ This will tell which of the datapoints is a star
@@ -675,4 +766,9 @@ class Catalogue( BaseObject ):
             raise AttributeError("no 'nobjects_around' parameter derived. Run 'define_around'")
         
         return (self.nobjects_around == 1)
-        
+
+    # ----------------------
+    # - Shapely
+    @property
+    def contours(self):
+        return self._derived_properties["contours"]

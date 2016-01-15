@@ -9,8 +9,8 @@ import pyfits as pf
 from scipy.stats import sigmaclip
 
 from astropy     import units,coordinates
-from astLib      import astWCS
 
+from . import astrometry
 from .baseobject   import BaseObject 
 from ..utils.tools import kwargs_update,flux_to_mag
 
@@ -44,7 +44,9 @@ def image(filename=None,astrotarget=None,**kwargs):
     return Image(filename,astrotarget=astrotarget,
                  **kwargs)#.copy()
 
-def photopoint(lbda,flux,var,source=None,
+def photopoint(lbda,flux,var,
+               zp=None,bandname=None,
+               mjd=None,source=None,
                instrument_name=None,**kwargs):
     """
     Get the basic object containing  photometric point information
@@ -59,12 +61,18 @@ def photopoint(lbda,flux,var,source=None,
 
     var: [float]               The variance associated to the point's flux.
 
-    - option -
+    zp: [float]                Zeropoint of the instrument's image
 
+    bandname: [string]         Name of the Bandpass though which the observation is made
+        
+    - option -
+    
     empty: [bool]              Set True to return an empty object.
 
     - other options ; not exhautive ; goes to 'create' -
 
+    mjd: [float]               Modified Julian Data of the observation
+    
     source: [string]           Staten the origin of the point (e.g. image, ...)
 
     instrument_name:[string]   Give a name of the intrument that enable to take the
@@ -76,6 +84,7 @@ def photopoint(lbda,flux,var,source=None,
     """
     return PhotoPoint(lbda,flux,var,source=source,
                       instrument_name=instrument_name,
+                      mjd=mjd,zp=zp,bandname=bandname,
                       **kwargs)
 
 def photomap(fluxes=None,variances=None,ra=None,dec=None,lbda=None,
@@ -348,8 +357,8 @@ class Image( BaseObject ):
         #  Everythin looks good !    #
         # -------------------------- #
         try:
-            wcs_ = astWCS.WCS(filename,
-                              extensionName=index)
+            wcs_ = astrometry.WCS(filename,
+                                  extensionName=index)
         except:
             wcs_ = None
             
@@ -358,6 +367,9 @@ class Image( BaseObject ):
                     header=fits[index].header,
                     filename=filename,fits=fits,
                     force_it=True)
+        
+        # -- closing the fits file
+        fits.close()
         
     def create(self,rawdata,variance,wcs,
                background=None,header=None,exptime=None,
@@ -393,14 +405,11 @@ class Image( BaseObject ):
         self.set_background(background)
         # -- Side, exposure time
         self._side_properties["exptime"] = exptime
-          
-        if wcs is not None and wcs.__module__ != "astLib.astWCS":
-            print "WARNING: only astLib.astWCS wcs solution is implemented"
-            print " ----> No wcs solution loaded"
-            self._side_properties["wcs"]     = None
-        else:
-            self._side_properties["wcs"]     = wcs
 
+        # -------------------
+        # - WCS solution
+        self._side_properties["wcs"]     = astrometry.get_wcs(wcs,verbose=True)
+        self.wwcs =wcs
         self._update_()
 
 
@@ -555,6 +564,8 @@ class Image( BaseObject ):
             
     def set_fwhm(self,value,force_it=True):
         """
+        value is the value of the fwhm. If no units is provided (astropy units)
+        arcsec will be assumed.
         """
         if self.has_fwhm() and not force_it:
             raise AttributeError("'fwhm' is already defined."+\
@@ -562,6 +573,9 @@ class Image( BaseObject ):
 
         if value<0:
             raise ValueError("the 'fwhm' must be positive")
+        if type(value) is not units.quantity.Quantity:
+            value *= units.arcsec
+            
         self._derived_properties['fwhm'] = value
         
     # ------------------- #
@@ -650,6 +664,7 @@ class Image( BaseObject ):
                 catmag_range = self.apertures_photos["property"]["catmag_range"]
             else:
                 catmag_range = [None,None]
+                
         if calibrate:
             if verbose: print "Loading the aperture Photometries"
             self.calibration_module.calibrate(catmag_range=catmag_range)
@@ -1495,6 +1510,17 @@ class Image( BaseObject ):
 
     def has_fwhm(self):               
         return not self._derived_properties["fwhm"] is None
+
+    @property
+    def fwhm_pxl(self):
+        """
+        """
+        if not self.has_wcs():
+            raise AttributeError("no wcs solution loaded")
+        if not self.has_fwhm():
+            raise AttributeError("no fwhm loaded")
+        
+        return self.fwhm.value / self.pixel_size_arcsec
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
@@ -1533,14 +1559,15 @@ class PhotoPoint( BaseObject ):
 
     __nature__ = "PhotoPoint"
 
-    _properties_keys = ["lbda","flux","var"]
-    _side_properties_keys = ["source","intrument_name","target"]
+    _properties_keys = ["lbda","flux","var","mjd","bandname","zp"]
+    _side_properties_keys = ["source","intrument_name","target","zpsys"]
     _derived_properties_keys = []
     
     # =========================== #
     # = Constructor             = #
     # =========================== #
-    def __init__(self,lbda,flux,var,
+    def __init__(self,lbda=None,flux=None,var=None,mjd=None,
+                 bandname=None,zp=None,zpsys="ab",
                  empty=False,**kwargs):
         """
         Initialize the PhotoPoint object
@@ -1554,6 +1581,12 @@ class PhotoPoint( BaseObject ):
         flux: [float]              The flux (*not magnitude*) of the photometric point.
 
         var: [float]               The variance associated to the point's flux.
+
+        mjd: [float]               Modify Julian Date of the Observation
+
+        bandpass: [string]         Name of the Bandpass though which the observation is made
+
+        zp: [float]                Zeropoint of the instrument's image
         
         - option -
 
@@ -1573,14 +1606,17 @@ class PhotoPoint( BaseObject ):
         self.__build__()
         if empty:
             return
-
-        self.create(lbda,flux,var,**kwargs)    
+        prop = kwargs_update(dict(mjd=mjd,zp=zp,bandname=bandname),
+                             **kwargs)
+        self.create(lbda,flux,var,**prop)    
+        
         
     # =========================== #
     # = Main Methods            = #
     # =========================== #
     def create(self,lbda,flux,var,
                source=None,instrument_name=None,
+               mjd=None,zp=None,bandname=None,zpsys="ab",
                force_it=False):
         """This method create the object"""
         if self.flux is not None and not force_it:
@@ -1595,6 +1631,13 @@ class PhotoPoint( BaseObject ):
 
         self._side_properties["source"] = source
         self._side_properties["instrument_name"] = instrument_name
+        
+        # -- Interactive ones
+        self._side_properties["zpsys"] = zpsys
+        self.mjd = mjd
+        self.zp = zp
+        self.bandname = bandname
+        
         self._update_()
 
     def display(self,ax,toshow="flux",**kwargs):
@@ -1667,8 +1710,61 @@ class PhotoPoint( BaseObject ):
 
     def has_data(self):
         return not self.flux is None
+
+    @property
+    def mjd(self):
+        return self._properties["mjd"]
+    
+    def has_mjd(self):
+        return not self.mjd is None
+    
+    @mjd.setter
+    def mjd(self,value):
+        if value < 48987:
+            print "Information mjd prior to 1993..."
+        elif value > 58849.0:
+            print "Information mjd posterior to 2020..."
+        
+        self._properties["mjd"] = value
+
+    @property
+    def zp(self):
+        return self._properties["zp"]
+    
+    @zp.setter
+    def zp(self,value):
+        if value <0:
+            raise ValueError("a zp cannot be negative")
+        if value >35:
+            print "WARNING the given zp is above 35..."
+        
+        self._properties["zp"] = value
+        
+    @property
+    def bandname(self):
+        return self._properties["bandname"]
+    
+    @bandname.setter
+    def bandname(self,value):
+        if type(value) != str:
+            raise TypeError("The bandname must be a string")
+        self._properties["bandname"] = value
+
+    @property
+    def bandpass(self):
+        """
+        """
+        if self.bandname is None:
+            raise AttributeError("No bandname given")
+        
+        from sncosmo import get_bandpass
+        return get_bandpass(self.bandname)
+        
     # ------------
     # - Side
+    @property
+    def zpsys(self):
+        return self._side_properties["zpsys"]
     
     # -- source
     @property
@@ -1752,6 +1848,20 @@ class LightCurve( BaseObject ):
             self.add_photopoint(p,t)
             
 
+    # ------------------ #
+    # - Get Method     - #
+    # ------------------ #
+    def get_data(self):
+        """
+        This will be an SN cosmo like data. This is based on astropy table
+        """
+        from astropy.table.table import Table
+        return Table(data=[self.times, self.bandnames,
+                           self.fluxes,np.sqrt(self.fluxesvar),
+                           self.zps,[p.zpsys for p in self.photopoints]
+                           ],
+                    names=["time","band","flux","fluxerr","zp","zpsys"])
+    
     # ------------------ #
     # - I/O Photopoint - #
     # ------------------ #
@@ -1847,6 +1957,9 @@ class LightCurve( BaseObject ):
     # = Properties and Settings = #
     # =========================== #
     @property
+    def npoints(self):
+        return len(self.photopoints)
+    @property
     def photopoints(self):
         return self._properties['photopoints']
     
@@ -1854,6 +1967,12 @@ class LightCurve( BaseObject ):
     def times(self):
         return self._properties['times']
     
+    @property
+    def lbda(self):
+        return self._derived_properties['lbda']
+
+    # -------------
+    # - On the flight
     @property
     def fluxes(self):
         return [p.flux for p in self.photopoints]
@@ -1871,10 +1990,14 @@ class LightCurve( BaseObject ):
         return [p.magvar for p in self.photopoints]
     
     @property
-    def lbda(self):
-        return self._derived_properties['lbda']
+    def bandnames(self):
+        # - a unique lbda is tested while loading so this should be always the same
+        return [p.bandname for p in self.photopoints]
 
-
+    @property
+    def zps(self):
+        # - a unique lbda is tested while loading so this should be always the same
+        return [p.zp for p in self.photopoints]
 
 #######################################
 #                                     #
@@ -2036,10 +2159,7 @@ class PhotoMap( BaseObject ):
             raise AttributeError("'wcs' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        if wcs is not None and "coordsAreInImage" not in dir(wcs):
-            raise TypeError("'wcs' solution not recognize, should be an astLib.astWCS")
-
-        self._side_properties["wcs"] = wcs
+        self._side_properties["wcs"] = astrometry.get_wcs(wcs,verbose=True)
 
     def set_refmap(self, photomap,force_it=False):
         """
@@ -2302,10 +2422,7 @@ class SexObjects( BaseObject ):
             raise AttributeError("'wcs' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        if wcs is not None and "coordsAreInImage" not in dir(wcs):
-            raise TypeError("'wcs' solution not recognize, should be an astLib.astWCS")
-
-        self._side_properties["wcs"] = wcs
+        self._side_properties["wcs"] = astronomy.get_wcs(wcs)
         
 
     def set_catalogue(self,catalogue,force_it=True,

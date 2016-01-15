@@ -12,6 +12,14 @@ HST_INFO = {
                  "lat":np.NaN}
     }
 
+DATAINDEX = 1
+
+# -------------------- #
+# - Instrument Info  - #
+# -------------------- #
+
+
+    
 def hst(*args,**kwargs):
     return HST(*args,**kwargs)
 
@@ -20,6 +28,11 @@ def is_hst_file(filename):
     return True if pf.getheader(filename).get("TELESCOP") == "HST" \
       else False
 
+def which_band_is_file(filename):
+    """
+    """
+    print "to be done"
+    
 class HST( Instrument ):
     """This is the umage object custom for HST data"""
 
@@ -31,8 +44,8 @@ class HST( Instrument ):
         super(HST,self).__build__()
         # -- How to read the image
         self._build_properties = dict(
-                data_index = 1,
-                error_index = 1,
+                data_index = DATAINDEX,
+                error_index = DATAINDEX,
                 header_exptime = "EXPTIME"
                 )
         

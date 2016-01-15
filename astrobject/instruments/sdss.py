@@ -17,6 +17,9 @@ SDSS_INFO = {"u":{"lbda":3551,"ABmag0":22.46},
                  "lon": 32.780,
                  "lat":-105.82}
             }
+
+DATAINDEX = 0
+
 # -------------------- #
 # - Instrument Info  - #
 # -------------------- #
@@ -46,7 +49,7 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"13
     
     # -----------
     # - DL info
-    columns = ["cl",
+    columns = ["cl","objID",
                "RAJ2000","e_RAJ2000","DEJ2000","e_DEJ2000",
                #"ObsDate","Q"#"mode","SDSS9",
                ]
@@ -145,7 +148,7 @@ class SDSS( Instrument ):
     """
     instrument_name = "SDSS"
     
-    def __build__(self,data_index=0):
+    def __build__(self,data_index=DATAINDEX):
         """
         """
         # -- Load the basic builds

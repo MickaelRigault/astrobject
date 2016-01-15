@@ -210,6 +210,47 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
 
     return collec, cbar
 
+
+# --------------------- #
+# - WCS Plots         - #
+# --------------------- #
+@make_method(mpl.Axes)
+def wcsplot(ax, wcs, exp_order=10,
+            fc=mpl.cm.Blues(0.6,0.1),ec=mpl.cm.binary(0.8,1),
+            draw_corner=False,
+            **kwargs):
+    """
+    Comments TO BE DONE
+    """
+    from matplotlib.patches import Polygon
+    # -----------------
+    # - verticles
+    if "has_contours" not in dir(wcs) or not wcs.has_contours():
+        npoints = 2+exp_order
+        width = np.linspace(0,wcs.header["NAXIS1"],npoints)
+        heigh = np.linspace(0,wcs.header["NAXIS2"],npoints)
+        v1 = np.asarray([np.ones(npoints-1)*0, width[:-1]]).T
+        v2 = np.asarray([heigh[:-1], np.ones(npoints-1)*wcs.header["NAXIS1"]]).T
+        v3 = np.asarray([np.ones(npoints-1)*wcs.header["NAXIS2"], width[::-1][:-1]]).T
+        v4 = np.asarray([heigh[::-1][:-1], np.ones(npoints-1)*0]).T
+        v = np.asarray([wcs.pix2wcs(i,j)
+                        for i,j in np.concatenate([v1,v2,v3,v4],axis=0)])
+    else:
+        from .shape import polygon_to_vertices
+        v = polygon_to_vertices(wcs.contours)
+        
+    poly = Polygon(v,fc=fc,ec=ec,lw=1,**kwargs)
+    # ------------------
+    # - Draw
+    # The point used
+    pl = ax.plot(v.T[0],v.T[1],ls="None",marker="o",mfc=fc,mec=ec,
+            visible=draw_corner)
+    # The actual Patch
+    ax.add_patch(poly)
+    # ------------------
+    # - Returns
+    return pl, poly
+    
 # --------------------- #
 # - Patchs Plots      - #
 # --------------------- #

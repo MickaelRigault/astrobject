@@ -17,6 +17,9 @@ STELLA_INFO = {"up":{"lbda":3580,"ABmag0":None},
                     "lat":-16.5122172}
               }
 
+DATAINDEX = 1
+
+    
 def stella(*args,**kwargs):
     return STELLA(*args,**kwargs)
 
@@ -51,7 +54,7 @@ class STELLA( Instrument ):
         super(STELLA,self).__build__()
         # -- How to read the image
         self._build_properties = dict(
-                data_index = 1,
+                data_index = DATAINDEX,
                 header_exptime = "EXPT"
                 )
 
@@ -96,7 +99,11 @@ class STELLA( Instrument ):
     @property
     def mab0(self):
         if self._properties["mab0"] is None:
-            self.mab0 = self.header["ZEROPNT"]
+            try:
+                self.mab0 = self.header["ZEROPNT"]
+            except:
+                print "WARNING: No default zeropoint in the header"
+                self.mab0 = 0 
         return self._properties["mab0"]
 
     @mab0.setter

@@ -5,7 +5,7 @@ from .baseobject import AstroTarget
 
 __all__     = ["transient"]
 
-def snIa(args,**kwargs):
+def snIa(*args,**kwargs):
     print "not ready yet"
     return Supernova(*args,**kwargs)
 
