@@ -163,6 +163,12 @@ class TransientGenerator( BaseObject ):
         if index is not None and "__iter__" not in dir(index):
             index = [index]
 
+        # If self.mwebmv remains None, something went wrong and
+        # pass_mwebmb is set to None. This should already have
+        # resulted in a warning, no need for another one. 
+        if pass_mwebmv and self.mwebmv is None:
+            pass_mwebmv = False
+
         return [dict(name="simul%d"%i,ra=self.ra[i],dec=self.dec[i], zcmb=self.zcmb[i],
                      mjd=self.mjd[i],type_=self.transient_coverage["transienttype"],
                      lightcurve=None, 
@@ -306,9 +312,8 @@ class TransientGenerator( BaseObject ):
         try:
             m = sncosmo.SFD98Map(mapdir=self.sfd98_dir)
             self._derived_properties["mwebmv"] = m.get_ebv((self.ra, self.dec))
-            print 'MW E(B-V) updated'
         except IOError:
-            warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map driectory.")
+            warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map directory.")
                  
 
     def _update_(self):
@@ -450,7 +455,13 @@ class TransientGenerator( BaseObject ):
         """Return MW E(B-V) (if None or not up to date fetch from SFD98 map)"""
         if self._derived_properties['mwebmv'] is None:
             self._update_mwebmv_()
-        return np.asarray(self._derived_properties['mwebmv'])
+        
+        # if it is still None after update, some thing went wrong
+        # likely map files were missing or in wrong directory
+        if self._derived_properties['mwebmv'] is None:
+            return None
+        else:
+            return np.asarray(self._derived_properties['mwebmv'])
     
     # ------------------
     # - Side properties
