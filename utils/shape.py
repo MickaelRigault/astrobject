@@ -5,8 +5,10 @@
    and Patch for astrobjects"""
 
 import numpy as np
+import matplotlib.pyplot as mpl
+from matplotlib.patches import Polygon
 try:
-    from shapely.geometry import MultiPoint, polygon
+    from shapely.geometry import MultiPoint, polygon, multipolygon
     HAS_SHAPELY = True
 except ImportError:
     _ERRORMESSAGE = "you do not have shapely installed."
@@ -43,6 +45,24 @@ def polygon_to_patch(polygon_,**kwargs):
     """
     **kwargs is the properties of the returned matplotlib polygon patch.
     """
-    from matplotlib.patches import Polygon
     return Polygon(polygon_to_vertices(polygon_), **kwargs)
 
+
+def draw_polygon(ax,polygon_,**kwargs):
+    """
+    """
+    from .tools import kwargs_update
+
+    defaultprop = dict(fc=mpl.cm.Blues(0.6,0.1),
+                       ec=mpl.cm.binary(0.8,0.9),lw=2)
+    
+    prop = kwargs_update(defaultprop,**kwargs)
+    
+    if type(polygon_) is polygon.Polygon:
+        patch = polygon_to_patch(polygon_,**prop)
+        ax.add_patch(patch)
+    elif type(polygon_) is multipolygon.MultiPolygon:
+        for p_ in polygon_:
+            draw_polygon(ax,p_,**prop)
+    else:
+        raise TypeError("Only Polygon implemented")

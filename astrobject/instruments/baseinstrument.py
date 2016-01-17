@@ -267,9 +267,18 @@ class Catalogue( BaseObject ):
 
         from astropy.table import join
         
-        self._properties["data"] = join(self.data,datatable)
+        self._properties["data"] = join(self.data,datatable,join_type='outer')
         self._update_fovmask_()
 
+    def merge(self,catalogue_):
+        """
+        """
+        if "__nature__" not in dir(catalogue_) or catalogue_.__nature__ != "Catalogue":
+            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+
+        self.join(catalogue_.data)
+        self._derived_properties["contours"] = self.contours.union(catalogue_.contours)
+        
             
     def writeto(self,savefile,force_it=True):
         """
@@ -466,12 +475,7 @@ class Catalogue( BaseObject ):
                 axout.append(ax.plot(x_,y_,**prop_))
 
         if self.contours is not None and wcs_coords and draw_contours:
-            from matplotlib.patches import Polygon
-            from matplotlib.pyplot import cm
-            patch = shape.polygon_to_patch(self.contours,fc=mpl.cm.Blues(0.6,0.1),
-                                           ec=mpl.cm.binary(0.8,0.9),lw=2)
-            
-            ax.add_patch(patch)
+            shape.draw_polygon(ax,self.contours)
             
         if draw:
             ax.figure.canvas.draw()

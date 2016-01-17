@@ -43,7 +43,7 @@ class ImageCollection( BaseObject ):
     # ========================= #
     # = Images IO             = #
     # ========================= #
-    def add_image(self,new_image):
+    def add_image(self,new_image,load_catalogue=True):
         """
         This method enables to save the given image in the self.images container (dict).
         To save speed and memory the given is saved as it is i.e., if its a filename
@@ -56,7 +56,12 @@ class ImageCollection( BaseObject ):
         Parameters
         ----------
         new_image: [string or astrobject's Image (or children)]
-        
+
+        - option -
+
+        load_catalogue: [bool]     run the 'download_catalogue' method to
+                                   download the corresponding catalogue if
+                                   it does not exist yet.
         Return
         ------
         Void
@@ -72,7 +77,8 @@ class ImageCollection( BaseObject ):
         else:
             # -- Issue
             raise TypeError("the given new_image must be a image-file or an astrobject imnage")
-
+        if load_catalogue:
+            self.download_catalogue()
     def remove_image(self,id):
         """
         """
@@ -113,13 +119,8 @@ class ImageCollection( BaseObject ):
         # Catalogue
         if not im.has_catalogue() and self.has_catalogue():
             # --- Check if the current catalogue is big enough
-            if np.max(im.wcs.getHalfSizeDeg())*2 > self._radiuscatalogue:
-                self.download_catalogue(radius=np.max(im.wcs.getHalfSizeDeg())*2)
-                
             im.set_catalogue(self.catalogue.copy())
 
-        # --------------
-        # - TEMPORARY
         return im
 
     # ========================== #
@@ -162,29 +163,20 @@ class ImageCollection( BaseObject ):
 
 
     def download_catalogue(self,source="sdss",
-                           force_it=False,set_it=True,
-                           radec=None,radius=2,
                            **kwargs):
         """
-        remark, a catalogue size of 1 or 2 degree have a comparable speed (~1.5s)
         """
-        if not self.has_target():
-            if radec is None or radius is None:
-                raise ValueError("No Target loaded, no ra,dec,radius given... no catalogue to load")
-            ra,dec = radec
-        else:
-            ra,dec = self.target.ra,self.target.dec
-
-        self._radiuscatalogue = radius
+        for id_ in self._imageids:
+            # -- Loop over the images, check what is needed
+            if not self.has_catalogue() or \
+              not self.catalogue.contours.contains(self.images[id_]["wcs"].contours):
+                new_cat = self._get_id_catalogue_(id_,source=source,**kwargs)
+                if not self.has_catalogue():
+                    self.set_catalogue(new_cat)
+                else:
+                    self.catalogue.merge(new_cat)
+                
         
-        radec = "%s %s"%(ra,dec)
-        cat = inst.catalogue(source=source,radec=radec,radius="%sd"%self._radiuscatalogue,
-                             **kwargs)
-        if not set_it:
-            return cat
-        
-        self.set_catalogue(cat,force_it=force_it)
-
     def show_skypatches(self,ax=None,
                         savefile=None,show=True,
                         fc="None",ec="k",**kwargs):
@@ -212,6 +204,7 @@ class ImageCollection( BaseObject ):
         # ----------------------
         # -  output
         fig.figout(savefile=savefile,show=show)
+        
     # ========================== #
     # = INTERNAL               = #
     # ========================== #
@@ -226,6 +219,18 @@ class ImageCollection( BaseObject ):
                              "These are: "+", ".join(self.images.keys()))
         return True
 
+    def _get_id_catalogue_(self,id_,source="sdss",radius_degree=None,**kwargs):
+        """
+        """
+        print "downloading catalogue for %s"%id_
+        radec = "%s %s"%(self.images[id_]['wcs'].getCentreWCSCoords()[0],
+                         self.images[id_]['wcs'].getCentreWCSCoords()[1])
+        img_radius= np.max(self.images[id_]['wcs'].getHalfSizeDeg())*2
+        radius = img_radius if radius_degree is None or radius_degree<img_radius \
+          else radius_degree
+          
+        return inst.catalogue(source=source,radec=radec,radius="%sd"%radius,
+                             **kwargs)
     # =============== #
     # = IO images   = #
     # =============== #

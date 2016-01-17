@@ -367,7 +367,12 @@ class AstroTarget( BaseObject ):
         self._side_properties["mwebmv"] = value
     
     @property
-    def sfd98_dir(self):
+    def _sfd98_dir(self):
+        """Director where the maps are. Default option set"""
+        if self._side_properties["sfd98_dir"] is None:
+            from ..utils.io import get_default_sfd98_dir
+            self._side_properties["sfd98_dir"] = get_default_sfd98_dir(download_if_needed=True)
+            
         return self._side_properties["sfd98_dir"]
 
     def set_sfd98_dir(self, value):
@@ -439,7 +444,7 @@ class AstroTarget( BaseObject ):
         
     def _update_mwebmv_(self):
         try:
-            m = SFD98Map(mapdir=self.sfd98_dir)
+            m = SFD98Map(mapdir=self._sfd98_dir)
             self.set_mwebmv(m.get_ebv((self.ra, self.dec)), force_it=True)
         except IOError:
             warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map driectory.")

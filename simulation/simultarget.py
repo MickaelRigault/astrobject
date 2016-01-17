@@ -80,10 +80,10 @@ class TransientGenerator( BaseObject ):
                     mdj_range=mdj_range,sfd98_dir=sfd98_dir,
                     **kwargs)
 
-    def create(self,zrange,ratekind="basic",ntransients=None,
+    def create(self,zrange,ratekind="basic",ntransients=None,type_=None,
                mdj_range=[57754.0,58849.0],
                ra_range=(-180,180),dec_range=(-90,90),
-               mw_exclusion=0,sfd98_dir=None,transientpror={}):
+               mw_exclusion=0,sfd98_dir=None,transientprop={}):
         """
         """
         # == Add the Input Test == #
@@ -98,8 +98,8 @@ class TransientGenerator( BaseObject ):
                                    "zcmb_range":zrange,"mdj_range":mdj_range,
                                    "mw_exclusion":mw_exclusion})
         
-        self.set_transient_parameters(ratekind=ratekind,
-                                      update=False,**transientpror)
+        self.set_transient_parameters(ratekind=ratekind,type_=type_,
+                                      update=False,**transientprop)
         
         self._update_()
         
@@ -179,9 +179,36 @@ class TransientGenerator( BaseObject ):
     # - Plots Methods           - #
     # --------------------------- #
     def show_skycoverage(self, ax=None, savefile=None, show=True, cscale=None, 
-                         cblabel=None, **kwargs):
+                         cblabel=None, cmargin = 5,**kwargs):
         """This function enable to draw on the sky the position of the
-        transients"""
+        transients
+
+        Parameters:
+        -----------
+        ax [matplotlib axis]       This axis must have Mollweide or Hammer projection
+
+        - color options -
+
+        cscale: [None/array]       array used to set a color scale to the markers
+
+        cblabel: [string]          label of the colorbar (if any)
+
+        cmargin: [float<100]       to avoid outlier issue in the colorbars, this
+                                   enable to set vmin and vmax value, being the
+                                   `cmargin`% and 100-`cmargin`% limits of the array
+                                   (set 0 to effectively remove this option)
+        
+        - output option -
+
+        savefile, show [string, bool] Output options
+
+        -- kwargs goes to skyscatter -> mpl's scatter --
+
+        Returns:
+        --------
+        dict of the plot parameters
+        
+        """
         import matplotlib.pyplot as mpl
         from ..utils.mpladdon import figout, skyplot
         from ..utils.plot.skyplot import ax_skyplot
@@ -226,7 +253,12 @@ class TransientGenerator( BaseObject ):
             pl = ax.skyplot(self.ra, self.dec, **kwargs)
             cb = None
         else:
-            pl = ax.skyscatter(self.ra, self.dec, c=c, **kwargs)
+            # --------------------
+            # - To avoid outliers
+            from scipy import percentile
+            vmin, vmax =  percentile(self.mwebmv,[cmargin,100-cmargin])
+            # - Da plot
+            pl = ax.skyscatter(self.ra, self.dec, c=c, vmin=vmin, vmax=vmax,**kwargs)
             cb = fig.colorbar(pl, orientation='horizontal', shrink=0.85, pad=0.08)
             if cblabel is not None:
                 cb.set_label(cblabel, fontsize="x-large") 
@@ -310,7 +342,7 @@ class TransientGenerator( BaseObject ):
 
     def _update_mwebmv_(self):
         try:
-            m = sncosmo.SFD98Map(mapdir=self.sfd98_dir)
+            m = sncosmo.SFD98Map(mapdir=self._sfd98_dir)
             self._derived_properties["mwebmv"] = m.get_ebv((self.ra, self.dec))
         except IOError:
             warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map directory.")
@@ -467,7 +499,12 @@ class TransientGenerator( BaseObject ):
     # - Side properties
 
     @property
-    def sfd98_dir(self):
+    def _sfd98_dir(self):
+        """Director where the maps are. Default option set"""
+        if self._side_properties["sfd98_dir"] is None:
+            from ..utils.io import get_default_sfd98_dir
+            self._side_properties["sfd98_dir"] = get_default_sfd98_dir(download_if_needed=True)
+    
         return self._side_properties["sfd98_dir"]
 
     def set_sfd98_dir(self, value):
@@ -673,11 +710,12 @@ class RateGenerator( _PropertyGenerator_ ):
         (comoving volumetric rate at each redshift in units of yr^-1 Mpc^-3.)
         """
         return self.rate_basic(z)
+
     
-    def rate_Ia_ptflike(self,z):
+    def rate_Ia_basiclow(self,z):
         """
         """
-        return self.rate_basic(z)
+        return self.rate_basic(z) / 10
     # ========================== #
     # = *** Rates              = #
     # ========================== #
@@ -695,6 +733,7 @@ class RateGenerator( _PropertyGenerator_ ):
     def known_Ia_rates(self):
         return self._parse_rate_("rate_Ia")
 
+    
 class LightCurveGenerator( _PropertyGenerator_ ):
     """
     """

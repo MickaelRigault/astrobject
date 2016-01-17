@@ -603,7 +603,7 @@ class Image( BaseObject ):
         from .instruments import instrument
         radec = "%s %s"%(self.wcs.getCentreWCSCoords()[0],
                          self.wcs.getCentreWCSCoords()[1])
-        radius = np.max(self.wcs.getHalfSizeDeg())*np.sqrt(2)
+        radius = np.max(self.wcs.getHalfSizeDeg())*2
         cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
                                     **kwargs)
         if not set_it:
