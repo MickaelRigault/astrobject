@@ -256,7 +256,7 @@ class TransientGenerator( BaseObject ):
             # --------------------
             # - To avoid outliers
             from scipy import percentile
-            vmin, vmax =  percentile(self.mwebmv,[cmargin,100-cmargin])
+            vmin, vmax =  percentile(c,[cmargin,100-cmargin])
             # - Da plot
             pl = ax.skyscatter(self.ra, self.dec, c=c, vmin=vmin, vmax=vmax,**kwargs)
             cb = fig.colorbar(pl, orientation='horizontal', shrink=0.85, pad=0.08)
