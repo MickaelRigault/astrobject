@@ -3,3 +3,4 @@
 #
 
 from simultarget import *
+from simulsurvey import *

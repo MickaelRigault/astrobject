@@ -16,7 +16,15 @@ from ..utils import random
 
 _d2r = np.pi / 180
 
-__all__ = ["transient_generator","generate_transients"]
+__all__ = ["sn_generator","transient_generator","generate_transients"]
+
+
+def sn_generator(zrange,ratekind="basic",**kwargs):
+    """
+    This function enable to load the generator of Type Ia supernovae
+    """
+    return SNIaGenerator(ratekind=ratekind,zrange=zrange,
+                         **kwargs)
 
 def transient_generator(zrange,ratekind="basic",
                         ra_range=[-180,180], dec_range=[-90,90],
@@ -66,7 +74,7 @@ class TransientGenerator( BaseObject ):
 
     def __init__(self,zrange=[0.0,0.2], ratekind="basic", # How deep
                  mdj_range=[57754.0,58849.0],
-                 ra_range=(-180,180),dec_range=(-20,60), # Where, see also kwargs
+                 ra_range=(-180,180),dec_range=(-90,90), # Where, see also kwargs
                  ntransients=None,empty=False,sfd98_dir=None,**kwargs):
         """
         """
@@ -299,15 +307,8 @@ class TransientGenerator( BaseObject ):
         else:
             fig = ax.fig
 
-        #if cmap is None:
-        #    cmap = mpl.cm.Blues
-
-        # maybe these arrays can be integrate into the generator
         collec, cb = ax.skyhist(self.ra, self.dec, cblabel=cblabel, **kwargs)
-        # cb = fig.colorbar(collec, orientation='horizontal', shrink=0.85, 
-        #                   pad=0.08, cmap=cmap, vmin=vmin, vmax=vmax)
-        # if cblabel:
-        #     cb.set_label(cblabel, fontsize="x-large") 
+        cb.set_label(cblabel, fontsize="x-large") 
 
         # ------------------- #
         # -- Save the data -- #
@@ -564,29 +565,33 @@ class SNIaGenerator( TransientGenerator ):
         param = lc["param_func"](self.zcmb,model=lc["model"],
                                  **lc["param_func_kwargs"])
         self._derived_properties["simul_parameters"]["lightcurve"] = param
+
         
     # -------------------- #
     # - Hacked Methods   - #
     # -------------------- #
-    
     def set_transient_parameters(self,ratekind="basic",
                                  lcsimulation="random",
-                                 lcmodel="salt2",type_="Ia",
+                                 lcmodel="salt2",type_=None,
                                  update=True,lcsimul_prop={}):
         """
         Add to the TransientGenerator the SN Ia properties
         """
         # - If this works, you are good to go
-        f = LightCurveGenerator().get_lightcurve_func(transient=type_,simulation=lcsimulation)
+        type_= "Ia" if type_ is None or "Ia" not in type_ else type_
+        f = LightCurveGenerator().get_lightcurve_func(transient=type_,
+                                                      simulation=lcsimulation)
         
-        super(SNIaGenerator,self).set_transient_parameters(type_=type_,ratekind=ratekind,update=False)
+        super(SNIaGenerator,self).set_transient_parameters(type_=type_,
+                                                           ratekind=ratekind,
+                                                           update=False)
+        
         self._properties["transient_coverage"]["lightcurve_prop"] = \
           {"simulation":lcsimulation,
               "model":lcmodel,
               "param_func":f,
               "param_func_kwargs":lcsimul_prop
               }
-            
         
         if update:
             self._update_()
@@ -594,7 +599,7 @@ class SNIaGenerator( TransientGenerator ):
     # ----------------- #
     # - Set Methods   - #
     # ----------------- #
-        
+    
     
     # =========================== #
     # = Properties and Settings = #
@@ -732,8 +737,12 @@ class RateGenerator( _PropertyGenerator_ ):
     @property
     def known_Ia_rates(self):
         return self._parse_rate_("rate_Ia")
-
     
+#######################################
+#                                     #
+# Generator: Light Curve              #
+#                                     #
+#######################################
 class LightCurveGenerator( _PropertyGenerator_ ):
     """
     """
@@ -761,6 +770,7 @@ class LightCurveGenerator( _PropertyGenerator_ ):
             
         elif transient == "Ia":
             avialable_lc = self.known_Ia_lightcurve_simulation
+
         else:
             raise ValueError("'%s' is not a known transient"%transient)
     

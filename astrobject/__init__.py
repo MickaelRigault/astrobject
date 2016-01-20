@@ -8,6 +8,7 @@ import transient
 import photometry   
 import multiband
 import collection
+import survey
 #from skybins      import *
 import instruments
 
