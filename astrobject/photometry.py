@@ -2422,7 +2422,7 @@ class SexObjects( BaseObject ):
             raise AttributeError("'wcs' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        self._side_properties["wcs"] = astronomy.get_wcs(wcs)
+        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
         
 
     def set_catalogue(self,catalogue,force_it=True,
