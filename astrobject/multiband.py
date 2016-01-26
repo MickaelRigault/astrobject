@@ -324,7 +324,7 @@ class MultiImages( MultiBands ):
         if self.images is None:
             self._properties['images'] = {}
 
-        label = image.band if label is None else label
+        label = image.bandname if label is None else label
         # -- Set the image
         self._properties['images'][label] = image
         # -- Insert the target inthere
@@ -364,7 +364,7 @@ class MultiImages( MultiBands ):
 
     @property
     def bands(self):
-        return [self.get_image(label).band
+        return [self.get_image(label).bandname
                 for label in self.labellist]
     # =========================== #
     # = Internal Tools          = #

@@ -57,15 +57,15 @@ class SimulSurvey( BaseObject ):
             raise AttributeError("cadence, genetor or instrument not set")
         self.observations.sort("time")
         params = [{"z":self.generator.zcmb[i],
-                   "c":self.generator.color[i],
-                   "x1":self.generator.x1[i],
-                   "x0":self.generator.lightcurve["x0"][i],
-                   "t0":self.generator.mjd[i]}
-                   for i in range(self.generator.ntransient)
-                   ]
+                    "c":self.generator.color[i],
+                    "x1":self.generator.x1[i],
+                    "x0":self.generator.lightcurve["x0"][i],
+                    "t0":self.generator.mjd[i]}
+                    for i in range(self.generator.ntransient)
+                    ]
         return sncosmo.realize_lcs(self.observations,
-                                   sncosmo.Model(source=self.generator.lightcurve_model),
-                                   params)
+                        sncosmo.Model(source=self.generator.lightcurve_model),
+                        params)
         
     
 
@@ -150,14 +150,14 @@ class SimulSurvey( BaseObject ):
     # ---------------------- #
     # - Recover Methods    - #
     # ---------------------- #
-    def recover_targets(self):
-        """
-        bunch threshold...
-        """
-
-    def recover_lightcurves(self):
-        """
-        """
+    #def recover_targets(self):
+    #    """
+    #    bunch threshold...
+    #    """
+    #
+    #def recover_lightcurves(self):
+    #    """
+    #    """
 
     # =========================== #
     # = Internal Methods        = #

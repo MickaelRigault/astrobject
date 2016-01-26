@@ -75,7 +75,10 @@ class Cadence( BaseObject ):
     def skynoises(self):
         """
         """
-        return np.random.rand(self.npointings)*50 + 100
+        sigma_PSF = 0.5 #is the standard deviation of the PSF in pixels 
+        sigma_pixel = 100  #is the background noise in a single pixel in counts
+        # see http://sncosmo.readthedocs.org/en/v1.1.x/_modules/sncosmo/simulation.html
+        return np.ones(self.npointings)* (4 * pi * sigma_PSF * sigma_pixel)
 
     @property
     def mjds(self):
