@@ -3,7 +3,7 @@
 
 """This module defines the photometric objects"""
 
-
+import warnings
 import numpy  as np
 import pyfits as pf
 from scipy.stats import sigmaclip
@@ -502,14 +502,18 @@ class Image( BaseObject ):
             raise TypeError("the input 'catalogue' must be an astrobject catalogue")
         # -------------------------
         # - Add the world_2_pixel
+        
         if not self.has_wcs():
             print "WARNING: no wcs solution. catalogue recorded, but most likely is useless"
+            
         else:
             # -- Lets only consider the objects in the FoV
             catalogue.set_wcs(self.wcs,force_it=True)
+            if catalogue.nobjects_in_fov < 1:
+                warnings.warn("WARNING No object in the field of view, catalogue not loaded")
+                return
+            
             # -- Lets save the pixel values
-            #catalogue.x,catalogue.y = np.asarray([self.coords_to_pixel(ra_,dec_)
-            #                                      for ra_,dec_ in zip(catalogue.ra,catalogue.dec)]).T
             if self.has_sepobjects():
                 self.sepobjects.set_catalogue(catalogue,force_it=True)
                 self.sepobjects.match_catalogue()
@@ -603,7 +607,7 @@ class Image( BaseObject ):
         from .instruments import instrument
         radec = "%s %s"%(self.wcs.getCentreWCSCoords()[0],
                          self.wcs.getCentreWCSCoords()[1])
-        radius = np.max(self.wcs.getHalfSizeDeg())*2
+        radius = np.max(self.wcs.getHalfSizeDeg())*np.sqrt(2)
         cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
                                     **kwargs)
         if not set_it:
@@ -2448,15 +2452,20 @@ class SexObjects( BaseObject ):
 
         if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
             raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+
         # -------------------------
         # - Add the world_2_pixel
         if not catalogue.has_wcs():
-            print "WARNING the given 'catalogue' has no pixel coordinates. Cannot load it"
+            warnings.warn("WARNING the given 'catalogue' has no pixel coordinates. Cannot load it")
             return
-        
+        if catalogue.nobjects_in_fov < 1:
+            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
+            return
+
+
         if not catalogue._is_around_defined():
             catalogue.define_around(default_isolation_def)
-            
+
         self._side_properties["catalogue"] = catalogue
 
     def match_catalogue(self,catalogue=None,force_it=False,arcsec_size=2):

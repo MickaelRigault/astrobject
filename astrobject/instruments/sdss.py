@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pyfits as pf
-from .baseinstrument import Instrument,Catalogue,get_bandpass
+from .baseinstrument import Instrument,get_bandpass
 from ...utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["sdss","SDSS_INFO"]
@@ -39,38 +39,6 @@ def which_band_is_file(filename):
         return None
     return pf.getheader(filename).get("FILTER")
 
-def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"13..22"}):
-    """
-    """
-    try:
-        from astroquery import vizier
-    except:
-        raise ImportError("install astroquery. (pip install astroquery)")
-    
-    # -----------
-    # - DL info
-    columns = ["cl","objID",
-               "RAJ2000","e_RAJ2000","DEJ2000","e_DEJ2000",
-               #"ObsDate","Q"#"mode","SDSS9",
-               ]
-    for band in SDSS_INFO["bands"]:
-        columns.append("%smag"%band)
-        columns.append("e_%smag"%band)
-    
-    columns = columns+extracolums
-    # - WARNING if discovered that some of the bandmag were missing if too many colums requested
-    c = vizier.Vizier(catalog="V/139", columns=columns, column_filters=column_filters)
-    c.ROW_LIMIT = 10000
-    try:
-        t = c.query_region(center,radius=radius).values()[0]
-    except:
-        raise IOError("Error while querying the given coords. You might not have an internet connection")
-    
-    cat = SDSSCatalogue(empty=True)
-    cat.create(t.columns,None,
-               key_class="cl",value_star=6,
-               key_ra="RAJ2000",key_dec="DEJ2000")
-    return cat
     
 # -------------------- #
 # - Inside tools     - #
@@ -260,35 +228,3 @@ class SDSS( Instrument ):
         self._derived_properties["sky"] = interpolate.bisplev(xinterpol,yinterpol,t)
         return t
 
-#################################
-#                               #
-# BASIC SDSS: Catalogue         #
-#                               #
-#################################
-class SDSSCatalogue( Catalogue ):
-    """
-    """
-    source_name = "SDSS"
-    
-    def __init__(self, catalogue_file=None,empty=False,
-                 key_mag=None,key_magerr=None,key_ra=None,key_dec=None):
-        """
-        """
-        self.__build__(data_index=2,key_mag=key_mag,
-                       key_magerr=key_magerr,
-                       key_ra=key_ra,key_dec=key_dec)
-        if empty:
-            return
-        
-        self.load(catalogue_file)        
-    
-    @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
-    def set_mag_keys(self,key_mag,key_magerr):
-        #
-        # add lbda def
-        #
-        super(SDSSCatalogue,self).set_mag_keys(key_mag,key_magerr)
-        if key_mag is not None:
-            bandpass = get_bandpass("sdss%s"%key_mag[0])
-            self.lbda = bandpass.wave_eff
-    

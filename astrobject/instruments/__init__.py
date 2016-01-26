@@ -6,8 +6,12 @@ import baseinstrument
 import sdss
 import hst
 import stella
+import ptf
 import survey
 import ztf
+import catalogues
+
 __all__ = ["instrument","baseinstrument",
-           "sdss","hst","stella",
+           "catalogues",
+           "sdss","hst","stella","ptf",
            "survey"]

@@ -714,6 +714,7 @@ class Catalogue( BaseObject ):
             raise AttributeError("no 'key_class' provided in the _build_properties.")
         
         return self.data[self._build_properties["key_class"]]
+    
     @property
     def starmask(self):
         """ This will tell which of the datapoints is a star
