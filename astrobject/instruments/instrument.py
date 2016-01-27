@@ -124,4 +124,4 @@ def get_instrument_wcs(filename):
         raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
                         "these are:"+", ".join(KNOWN_INSTRUMENTS))
     # -- good to go
-    return astrometry.WCS(filename,extensionName=index)
+    return astrometry.wcs(filename,extensionName=index)

@@ -25,7 +25,11 @@ def stella(*args,**kwargs):
 
 def is_stella_file(filename):
     """This tests if the input file is a SDSS one"""
-    return True if "STELLA" in pf.getheader(filename,ext=1).get("TELESCOP")\
+    try:
+        header = pf.getheader(filename,ext=1)
+    except:
+        return False
+    return True if "STELLA" in header.get("TELESCOP")\
       else False
 
 def which_band_is_file(filename):

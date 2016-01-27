@@ -11,7 +11,9 @@ import collection
 import survey
 #from skybins      import *
 import instruments
+import astrometry
 
 
 __all__ = ['baseobject','spectroscopy','photometry',
+           "astrometry",
            'multiband',"transient","instruments"]

@@ -227,11 +227,11 @@ def wcsplot(ax, wcs, exp_order=10,
     # - verticles
     if "has_contours" not in dir(wcs) or not wcs.has_contours():
         npoints = 2+exp_order
-        width = np.linspace(0,wcs.header["NAXIS1"],npoints)
-        heigh = np.linspace(0,wcs.header["NAXIS2"],npoints)
+        width = np.linspace(0,wcs._naxis1,npoints)
+        heigh = np.linspace(0,wcs._naxis2,npoints)
         v1 = np.asarray([np.ones(npoints-1)*0, width[:-1]]).T
-        v2 = np.asarray([heigh[:-1], np.ones(npoints-1)*wcs.header["NAXIS1"]]).T
-        v3 = np.asarray([np.ones(npoints-1)*wcs.header["NAXIS2"], width[::-1][:-1]]).T
+        v2 = np.asarray([heigh[:-1], np.ones(npoints-1)*wcs._naxis1]).T
+        v3 = np.asarray([np.ones(npoints-1)*wcs._naxis2, width[::-1][:-1]]).T
         v4 = np.asarray([heigh[::-1][:-1], np.ones(npoints-1)*0]).T
         v = np.asarray([wcs.pix2wcs(i,j)
                         for i,j in np.concatenate([v1,v2,v3,v4],axis=0)])

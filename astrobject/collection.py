@@ -223,9 +223,9 @@ class ImageCollection( BaseObject ):
         """
         """
         print "downloading catalogue for %s"%id_
-        radec = "%s %s"%(self.images[id_]['wcs'].getCentreWCSCoords()[0],
-                         self.images[id_]['wcs'].getCentreWCSCoords()[1])
-        img_radius= np.max(self.images[id_]['wcs'].getHalfSizeDeg())*2
+        radec = "%s %s"%(self.images[id_]['wcs'].central_coords[0],
+                         self.images[id_]['wcs'].central_coords[1])
+        img_radius= self.images[id_]['wcs'].diag_size/ 1.5
         radius = img_radius if radius_degree is None or radius_degree<img_radius \
           else radius_degree
           

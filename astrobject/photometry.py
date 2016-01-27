@@ -357,8 +357,8 @@ class Image( BaseObject ):
         #  Everythin looks good !    #
         # -------------------------- #
         try:
-            wcs_ = astrometry.WCS(filename,
-                                  extensionName=index)
+            wcs_ = astrometry.wcs(filename,
+                                  extension=index)
         except:
             wcs_ = None
             
@@ -611,11 +611,10 @@ class Image( BaseObject ):
         column_filters={"gmag":"13..22"}
         """
         from .instruments import instrument
-        radec = "%s %s"%(self.wcs.getCentreWCSCoords()[0],
-                         self.wcs.getCentreWCSCoords()[1])
-        radius = np.max(self.wcs.getHalfSizeDeg())*np.sqrt(2)
+        radec = "%s %s"%(self.wcs.central_coords[0],
+                         self.wcs.central_coords[1])
+        radius = self.wcs.diag_size/1.8 # not 2 to have some room around
         cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
-                                   column_filters=column_filters,
                                     **kwargs)
         if not set_it:
             return cat
@@ -1441,17 +1440,15 @@ class Image( BaseObject ):
     def pixel_size_deg(self):
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded")
-        return self.wcs.getPixelSizeDeg()
-    
+        pxl = self.wcs.wcs.get_cdelt()
+        if pxl[0] == pxl[1]:
+            return  pxl[0] + units.Unit(self.wcs.wcs.cunit[0]).in_units("degree")
+        return  pxl[0] + units.Unit(self.wcs.wcs.cunit[0]).in_units("degree"),\
+          pxl[1] + units.Unit(self.wcs.wcs.cunit[1]).in_units("degree")
     @property
     def pixel_size_arcsec(self):
         return self.pixel_size_deg*units.degree.in_units("arcsec")
 
-    @property
-    def worldcoords_boundaries(self):
-        if self.has_wcs() is False:
-            raise AttributeError("no wcs solution loaded")
-        return self.wcs.getImageMinMaxWCSCoords()
     
     # ----------------      
     # -- target tools

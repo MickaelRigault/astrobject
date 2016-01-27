@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as mpl
 from matplotlib.patches import Polygon
 try:
-    from shapely.geometry import MultiPoint, polygon, multipolygon
+    from shapely.geometry import MultiPoint,Point, polygon, multipolygon
     HAS_SHAPELY = True
 except ImportError:
     _ERRORMESSAGE = "you do not have shapely installed."
@@ -26,6 +26,13 @@ def get_contour_polygon(x,y):
     points = MultiPoint(np.asarray([x,y]).T)
     return points.convex_hull
 
+def point_in_contours(x,y,contours):
+    """
+    """
+    if not HAS_SHAPELY:
+        raise ImportError(_ERRORMESSAGE)
+    
+    return contours.contains(Point([x,y]))
 def polygon_to_vertices(polygon_):
     """
     """
