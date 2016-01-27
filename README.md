@@ -13,6 +13,7 @@ Python
 - pyfits
 - pickle
 - matplotlib
-- astropy
-- sep
-- astLib (to be moved to astropy)
+- astropy  (pip install astropy)
+- sep  (pip install sep)
+- sncosmo (pip install sncosmo)
+- shapely (pip install shapely)
