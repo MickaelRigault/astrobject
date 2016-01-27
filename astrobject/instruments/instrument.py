@@ -8,10 +8,11 @@ import catalogues
 import sdss
 import hst
 import stella
+import ptf
 
 __all__ = ["instrument","KNOWN_INSTRUMENTS"]
 
-KNOWN_INSTRUMENTS = ["sdss","hst","stella"]
+KNOWN_INSTRUMENTS = ["sdss","hst","stella","ptf"]
 
 def catalogue(source,radec,radius,extracolums=[],column_filters={"gmag":"13..22"},**kwargs):
     """
@@ -49,6 +50,10 @@ def instrument(filename,astrotarget=None,**kwargs):
     if stella.is_stella_file(filename):
         return stella.stella(filename,astrotarget=astrotarget,
                     **kwargs)
+    # - PTF
+    if ptf.is_ptf_file(filename):
+        return ptf.ptf(filename,astrotarget=astrotarget,
+                    **kwargs)
     
     # - Nothing else...
     raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
@@ -68,6 +73,10 @@ def which_band_is_file(filename):
     # - STELLA
     if stella.is_stella_file(filename):
         return stella.which_band_is_file(filename)
+
+    # - PTF
+    if ptf.is_ptf_file(filename):
+        return ptf.which_band_is_file(filename)
     
     # - Nothing else...
     raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
@@ -103,10 +112,12 @@ def get_instrument_wcs(filename):
     # - HST     
     elif hst.is_hst_file(filename):
         index = hst.DATAINDEX
-    
     # - STELLA
     elif stella.is_stella_file(filename):
         index = stella.DATAINDEX
+    # - PTF
+    elif ptf.is_stella_file(filename):
+        index = ptf.DATAINDEX
         
     else:
         # - Nothing else...

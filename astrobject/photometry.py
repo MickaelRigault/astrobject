@@ -601,14 +601,21 @@ class Image( BaseObject ):
         return ratio if ratio>1 else 1
     
     def download_catalogue(self,source="sdss",
-                           set_it=True,force_it=False,**kwargs):
+                           set_it=True,force_it=False,
+                           **kwargs):
         """
+        kwargs goes to instrument.catalogue
+        
+        example
+        -------
+        column_filters={"gmag":"13..22"}
         """
         from .instruments import instrument
         radec = "%s %s"%(self.wcs.getCentreWCSCoords()[0],
                          self.wcs.getCentreWCSCoords()[1])
         radius = np.max(self.wcs.getHalfSizeDeg())*np.sqrt(2)
         cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
+                                   column_filters=column_filters,
                                     **kwargs)
         if not set_it:
             return cat
