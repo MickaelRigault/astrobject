@@ -31,8 +31,9 @@ def point_in_contours(x,y,contours):
     """
     if not HAS_SHAPELY:
         raise ImportError(_ERRORMESSAGE)
-    
-    return contours.contains(Point([x,y]))
+    if "__iter__" not in dir(x):
+        return contours.contains(Point([x,y]))
+    return contours.contains(MultiPoint(np.asarray([x,y]).T))
 def polygon_to_vertices(polygon_):
     """
     """

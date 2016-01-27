@@ -143,8 +143,14 @@ class MASSCatalogue( Catalogue ):
         #
         super(MASSCatalogue,self).set_mag_keys(key_mag,key_magerr)
         if key_mag is not None:
-            self.lbda = "TO BE DEFINED"
-
+            if key_mag == "Jmag":
+                self.lbda = 12350
+            elif key_mag == "Hmag":
+                self.lbda = 16620
+            elif key_mag == "Kmag":
+                self.lbda = 21590
+            else:
+                raise ValueError("'%s' is not a recognized 2MASS band")
     # ----------------------- #
     # -  CATALOGUE HACK     - #
     # ----------------------- #

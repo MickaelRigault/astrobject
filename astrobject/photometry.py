@@ -1438,16 +1438,14 @@ class Image( BaseObject ):
           
     @property
     def pixel_size_deg(self):
+        
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded")
-        pxl = self.wcs.wcs.get_cdelt()
-        if pxl[0] == pxl[1]:
-            return  pxl[0] + units.Unit(self.wcs.wcs.cunit[0]).in_units("degree")
-        return  pxl[0] + units.Unit(self.wcs.wcs.cunit[0]).in_units("degree"),\
-          pxl[1] + units.Unit(self.wcs.wcs.cunit[1]).in_units("degree")
+        return self.wcs.pix_indeg
+          
     @property
     def pixel_size_arcsec(self):
-        return self.pixel_size_deg*units.degree.in_units("arcsec")
+        return self.pixel_size_deg.to("arcsec")
 
     
     # ----------------      
@@ -1523,12 +1521,7 @@ class Image( BaseObject ):
     def fwhm_pxl(self):
         """
         """
-        if not self.has_wcs():
-            raise AttributeError("no wcs solution loaded")
-        if not self.has_fwhm():
-            raise AttributeError("no fwhm loaded")
-        
-        return self.fwhm.value / self.pixel_size_arcsec
+        return self.fwhm.to("arcsec") / self.pixel_size_arcsec
     # =========================== #
     # = Internal Methods        = #
     # =========================== #

@@ -335,11 +335,10 @@ class Catalogue( BaseObject ):
         """
         if wcs is not None:
             if "coordsAreInImage" not in dir(wcs):
-                raise TypeError("'wcs' solution not recognize")
+                raise TypeError("'wcs' solution not recognized")
             
             self.fovmask = np.asarray([wcs.coordsAreInImage(ra,dec)
-                                       for ra,dec in zip(self.data[self._build_properties["key_ra"]],
-                                                         self.data[self._build_properties["key_dec"]])])
+                                       for ra,dec in zip(self._ra,self._dec)])
         elif ra_range is None or dec_range is None:
             raise AttributeError("please provide either 'wcs' and ra_range *and* dec_range")
         else:
