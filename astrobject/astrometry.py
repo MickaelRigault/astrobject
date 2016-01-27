@@ -6,6 +6,7 @@
 
 import numpy as np
 from ..utils import shape
+import warnings
 from astLib      import astWCS
 from astropy.wcs import WCS as pyWCS
 from astropy.io  import fits
@@ -21,7 +22,8 @@ def wcs(filename=None,header=None,extension=0):
         raise ValueError("'filename' or 'header' must be given")
     
     if "PV1_5" in header.keys():
-        print "potential issue with wcs SCAM parameters"
+        warnings.warn("WARNING potential issue with wcs SCAM parameters")
+        warnings.warn("WARNING astLib based wcs class used")
         return _WCSbackup(header,mode = "pyfits")
     
     return WCS(header)
