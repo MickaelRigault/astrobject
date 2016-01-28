@@ -29,7 +29,6 @@ def catalogue(source,radec,radius,extracolums=[],column_filters={"gmag":"13..22"
         return catalogues.fetch_wise_catalogue(radec,radius,
                                     extracolums=extracolums,
                                     column_filters=column_filters,**kwargs)
-        
     
     raise NotImplementedError("Only the SDSS, 2MASS source catalogues implemented")
 
@@ -124,4 +123,4 @@ def get_instrument_wcs(filename):
         raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
                         "these are:"+", ".join(KNOWN_INSTRUMENTS))
     # -- good to go
-    return astrometry.wcs(filename,extensionName=index)
+    return astrometry.wcs(filename,extension=index)
