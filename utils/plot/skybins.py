@@ -18,6 +18,7 @@ import numpy as np
 
 from ...astrobject.baseobject import BaseObject
 #import astrobject.astrobject import baseobject as b
+from .skyplot import rot_xz_sph
 
 try:
     import healpy as hp
@@ -378,3 +379,273 @@ class HealpixBins( BaseBins ):
     def nbins(self):
         """number of bins"""
         return hp.nside2npix(self._properties["nside"])
+
+
+class SurveyFieldBins( BaseBins ):
+    """
+    Binner for SurveyField objects
+    """
+    _properties_keys = ["ra", "dec", "width", "height", "max_stepsize"]
+
+    _derived_keys = ["nbins", "fields"] 
+
+    def __init__(self, ra, dec, width=7., height=7., max_stepsize=5, 
+                 empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        self.create(ra, dec, width=width, height=height, 
+                    max_stepsize=max_stepsize)
+
+    def create(self, ra, dec, width=7., height=7., max_stepsize=5):
+        """
+        """
+        self._properties["ra"] = ra
+        self._properties["dec"] = dec
+        self._properties["width"] = width
+        self._properties["height"] = height
+                         
+        self._properties["max_stepsize"] = max_stepsize
+
+        #self.__update__()
+
+    # =========== #
+    # = Binning = #
+    # =========== #
+    def hist(self, ra, dec):
+        """
+        Return the counts per bin for a list a coordinates.
+        """
+        return np.array([np.sum(f.coord_in_field(ra, dec)) 
+                         for f in self.fields])
+
+    def coord2field(self, ra, dec):
+        """
+        Return the lists of fields in which a list of coordinates fall.
+        Keep in mind that the fields will likely overlap.
+        """
+        bo = [f.coord_in_field(ra, dec) for f in self.fields]
+        
+        # Handle the single coordinate case first
+        if type(bo[0]) is bool:
+            return np.where(np.array(bo))[0]
+        
+        bo = np.array(bo)
+        return [np.where(bo[:,k])[0] for k in xrange(bo.shape[1])]
+
+    # ========================== #
+    # = Utilities for plotting = #
+    # ========================== #
+    def boundary(self, k, steps=None, max_stepsize=None, edge=1e-6):
+        """
+        Return boundary of a bin; used for drawing polygons.
+        If steps is None, max_stepsize is used to automatically determine
+        the appropriate step size.
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        ra, dec = self.fields[k].boundary(steps, max_stepsize, edge)
+
+        return self.split_bin(ra, dec, max_stepsize, edge) 
+
+    def _determine_steps(self, max_stepsize=None):
+        """
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        return np.ceil(hp.nside2resol(self.nside) / _d2r / max_stepsize) + 1
+
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def ra(self):
+        """RA of field center"""
+        return self._properties["ra"]
+
+    @property
+    def dec(self):
+        """Dec of field center"""
+        return self._properties["dec"]
+
+    @property
+    def width(self):
+        """field width"""
+        return self._properties["weight"]
+
+    @property
+    def height(self):
+        """field height"""
+        return self._properties["height"]
+
+    @property
+    def max_stepsize(self):
+        """maximum stepsize for boundary in degrees"""
+        return self._properties["max_stepsize"]
+
+    # --------------------
+    # - Derived Properties
+    @property
+    def nbins(self):
+        """number of bins"""
+        return len(self._properties["ra"])
+
+    @property
+    def fields(self):
+        """number of bins"""
+        args = zip(self.ra, self.dec, self.width, self.height, self.max_stepsize)
+
+        return [SurveyField(*a) for a in args]
+
+class SurveyField( BaseObject ):
+    """
+    SurveyField objects
+    """
+    _properties_keys = ["ra", "dec", "width", "height"]
+
+    _derived_keys = [] 
+
+    def __init__(self, ra, dec, width=7., height=7., max_stepsize=5, 
+                 empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        self.create(ra, dec, width=width, height=height, 
+                    max_stepsize=max_stepsize)
+
+    def create(self, ra, dec, width=7., height=7., max_stepsize=5):
+        """
+        """
+        self._properties["ra"] = ra
+        self._properties["dec"] = dec
+        self._properties["width"] = width
+        self._properties["height"] = height
+                         
+        self._properties["max_stepsize"] = max_stepsize
+
+        #self.__update__()
+
+    # =========== #
+    # = Binning = #
+    # =========== #
+    def coord_in_field(self, ra, dec):
+        """
+        Check whether coordinates are in the field
+        Returns bool if (ra, dec) floats, np.array of bools if (ra, dec) 
+        lists or np.arrays
+        """
+        single_val = False
+        if type(ra) is list:
+            ra = np.array(ra)
+        elif type(ra) is not np.array:
+            # Assume it is a float
+            ra = np.array([ra])
+            single_val = True
+
+        if type(dec) is list:
+            dec = np.array(dec)
+        elif type(dec) is not np.array:
+            # Assume it is a float
+            ra = np.array([dec])
+            single_val = True
+
+        if len(ra) != len(dec):
+            raise ValueError('ra and dec must be of same length')
+
+        ra -= self.ra
+        ra1, dec1 = rot_xz_sph(ra, dec, -self.dec)
+        
+        out = np.ones(ra1.shape, dtype=bool)
+        out[dec1 > self.height/2.] = False
+        out[dec1 < -self.heighth/2.] = False
+        out[ra1*np.cos(dec1*_d2r) > self.width/2.] = False
+        out[ra1*np.cos(dec1*_d2r) < -self.width/2.] = False
+        
+        if single_val:
+            return out[0]
+        return out
+
+    # ========================== #
+    # = Utilities for plotting = #
+    # ========================== #
+    def boundary(self, steps=None, max_stepsize=None, edge=1e-6):
+        """
+        Return boundary of the field; used for drawing polygons.
+        If steps is None, max_stepsize is used to automatically determine
+        the appropriate step size.
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        if steps is None:
+            steps = self._determine_steps(max_stepsize=max_stepsize)
+
+        dec1 = np.ones(steps) * (self.dec + self.height/2)
+        ra1 = self.ra + (np.linspace(-self.width/2, self.width/2, steps)
+                         / np.cos((self.dec + self.height/2)*_d2r))
+        
+        dec2 = np.linspace(self.dec + self.height/2, self.dec - self.height/2, steps)
+        ra2 = self.ra + self.width/2/np.cos(dec2*_d2r)
+
+        dec3 = np.ones(steps) * (self.dec - self.height/2)
+        ra3 = self.ra + (np.linspace(self.width/2, -self.width/2, steps)
+                         / np.cos((self.dec - self.height/2)*_d2r))
+    
+        dec4 = np.linspace(self.dec - self.height/2, self.dec + self.height/2, steps)
+        ra4 = self.ra - self.width/2/np.cos(dec4*_d2r)
+
+        ra = ((np.concatenate((ra1, ra2, ra3, ra4)) + 180) % 360 ) - 180
+        dec = np.concatenate((dec1, dec2, dec3, dec4))
+
+        return ra, dec
+        
+    def _determine_steps(self, max_stepsize=None):
+        """
+        """
+        if max_stepsize is None:
+            max_stepsize = self.max_stepsize
+
+        return np.ceil(max(self.height/max_stepsize, 
+                           self.width/max_stepsize)) + 1
+
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def ra(self):
+        """RA of field center"""
+        return self._properties["ra"]
+
+    @property
+    def dec(self):
+        """Dec of field center"""
+        return self._properties["dec"]
+
+    @property
+    def width(self):
+        """field width"""
+        return self._properties["weight"]
+
+    @property
+    def height(self):
+        """field height"""
+        return self._properties["height"]
+
+    @property
+    def max_stepsize(self):
+        """maximum stepsize for boundary in degrees"""
+        return self._properties["max_stepsize"]
+
+    # # --------------------
+    # # - Derived Properties
+    # @property
+    # def nbins(self):
+    #     """number of bins"""
+    #     return hp.nside2npix(self._properties["nside"])
+
