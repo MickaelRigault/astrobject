@@ -8,7 +8,7 @@ from astropy.table.table import Table,TableColumns
 import pyfits as pf
 import numpy as np
 from ...utils.decorators import _autogen_docstring_inheritance
-from ...utils.tools import kwargs_update,mag_to_flux,load_pkl
+from ...utils.tools import kwargs_update,mag_to_flux,load_pkl,dump_pkl
 from ...utils import shape
 
 from .. import astrometry
@@ -243,9 +243,23 @@ class Catalogue( BaseObject ):
             
         if self._build_properties['key_dec'] is None:
             self._automatic_key_match_("dec")
-
+    
         self._update_contours_()
-        
+
+
+    def extract(self,contours):
+        """
+        This method enables to get a (potential) sub part of the existing catalogue
+        based on the given 'contours'.
+        'contours' is a shapely.Polygon or a matplotlib.patches.Polygon
+        (see shape.point_in_contours)
+        """
+        mask = shape.point_in_contours(self._ra,self._dec,contours) # WRONG
+        copy_ = self.copy()
+        copy_.create(self.data[mask],None,force_it=True)
+        return copy_
+
+    
     def join(self,datatable):
         """
         The Methods enable add data to the current catalogue.
@@ -263,7 +277,7 @@ class Catalogue( BaseObject ):
             try:
                 datatable = Table(datatable)
             except:
-                raise TypeError("the given datatable is not an astropy.Table and cannot be converted into.")
+                raise TypeError("the given datatable is not an astropy. Table and cannot be converted into.")
 
         from astropy.table import join
         
@@ -282,8 +296,15 @@ class Catalogue( BaseObject ):
             
     def writeto(self,savefile,force_it=True):
         """
+        The catalogue will be saved as pkl or fits files. The fits wil be used if this
+        has a header, the pkl otherwise
         """
-        raise NotImplementedError("to be done")
+        if self.header is None or len(self.header.keys())==0:
+            self._writeto_pkl_(savefile)
+        else:
+            self._writeto_fits_(savefile,force_it=force_it)
+
+
     
     # --------------------- #
     # Set Methods           #
@@ -485,6 +506,17 @@ class Catalogue( BaseObject ):
     # Internal Methods            #
     # =========================== #
     # ------------------
+    # --  Save files
+    def _writeto_pkl_(self,savefile,force_it=True):
+        """This the current catalogue has a pkl file"""
+        if not savefile.endswith(".pkl"):
+            savefile +=".pkl"
+            
+        dump_pkl(self.data,savefile)
+    
+    def _writeto_fits_(self,savefile,force_it=True):
+        raise NotImplementedError("to be done")
+    # ------------------
     # --  Update
     def _update_fovmask_(self):
         """
@@ -502,12 +534,13 @@ class Catalogue( BaseObject ):
         if not shape.HAS_SHAPELY:
             self._derived_properties["contours"] = None
         # -- This roughly take 0.2s for 1e4 objects
-        self._derived_properties["contours"] = shape.get_contour_polygon(np.asarray(self._ra),
-                                                                         np.asarray(self._dec))
+        self._derived_properties["contours"] = \
+          shape.get_contour_polygon(np.asarray(self._ra),
+                                    np.asarray(self._dec))
         
     # ------------------
     # --  Key match
-    def _automatic_key_match_(self, key):
+    def _automatic_key_match_(self, key,build_key=None):
         """
         """
         try:
@@ -515,16 +548,20 @@ class Catalogue( BaseObject ):
         except:
             print "WARNING no automatic key available (data.keys() failed)"
             return
-        vkey = [k for k in knownkeys if key in k.lower()]
+        vkey = [k for k in knownkeys if key in k.lower() if not k.startswith("e_")]
         if len(vkey) >1:
             print "WARNING ambiguous %s key. Use set_coord_keys. "%key+", ".join(vkey)
             return
         if len(vkey) ==0:
+            if key.lower() == "dec":
+                return self._automatic_key_match_("de",build_key="dec")
             print "WARNING no match found for the %s key. Use set_coord_keys. "%key
             print "       known keys: "+", ".join(knownkeys)
             return
-          
-        self._build_properties['key_%s'%key] = vkey[0]
+
+        if build_key is None:
+            build_key = key
+        self._build_properties['key_%s'%build_key] = vkey[0]
 
 
         

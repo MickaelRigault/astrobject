@@ -2,24 +2,39 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import pyfits as pf
+from astropy.table import Table
 from .baseinstrument import Instrument
 
+
 __all__ = ["hst"]
+
+
+_FWHM_WFC3 = Table(data=[[2000,3000,4000,5000,6000,7000,8000,9000,10000,11000],
+                         [0.083,0.075,0.070,0.067,0.067,0.070,0.074,0.078,0.084,0.089]],
+                   names=["wavelength","FWHM"])
 
 HST_INFO = {
     "telescope":{
                  "lon":np.NaN,
-                 "lat":np.NaN}
+                 "lat":np.NaN},
+    # Windhorst et al 2010
+    "f225w":{"fwhm":0.092,
+             "mab0":24.06, # abmag @ e-/s
+             "skybkgd":25.46 # mag per arcsec 2
+             },
+    "f275w":{"fwhm":0.087,
+             "mab0":24.14,
+             "skybkgd":25.64 # mag per arcsec 2
+            }
+        
+             
     }
 
 DATAINDEX = 1
 
 # -------------------- #
 # - Instrument Info  - #
-# -------------------- #
-
-
-    
+# -------------------- #  
 def hst(*args,**kwargs):
     return HST(*args,**kwargs)
 
@@ -31,16 +46,68 @@ def is_hst_file(filename):
 def which_band_is_file(filename):
     """
     """
-    print "to be done"
-    
+    if not is_hst_file(filename):
+        return None
+    return pf.getheader(filename).get("FILTER")
+
+
+def get_psf(wavelength_angstrom,show=True):
+    """This function enables to get the fwhm in arcsec
+    for the given wavelength. This works for the WFC3.
+    http://documents.stsci.edu/hst/wfc3/documents/handbooks/cycle21/c06_uvis07.html
+    """
+    from scipy.interpolate import UnivariateSpline
+    interpolate = UnivariateSpline(_FWHM_WFC3["wavelength"],_FWHM_WFC3["FWHM"],k=4,s=0)
+    returned = interpolate(wavelength_angstrom)
+    # --------- #
+    # - Show  - #
+    # --------- #
+    if show:
+        _lbda = np.linspace(_FWHM_WFC3["wavelength"][0],_FWHM_WFC3["wavelength"][-1],100)
+        import matplotlib.pyplot as mpl
+        # ------------
+        # - Ax Plot
+        fig = mpl.figure(figsize=[10,8])
+        ax  = fig.add_axes([0.12,0.12,0.8,0.8])
+        ax.set_xlabel(r"$\mathrm{Wavelenth\ in\ \AA}$",fontsize="x-large")
+        ax.set_ylabel(r"$\mathrm{FWHM\ in\ arcsec}$",fontsize="x-large")
+        # ------------
+        # - Da Plot
+        ax.plot(_FWHM_WFC3["wavelength"],_FWHM_WFC3["FWHM"],ls="None",marker="o",
+                ms=10, label=r"$\mathrm{STScI\ data}$",
+                color=mpl.cm.Blues(0.8),mew=0,)
+        color_interpol = mpl.cm.Greens(0.8)
+        # - Interpolate
+        ax.plot(_lbda,interpolate(_lbda),ls="-",color=color_interpol,
+                label=r"$\mathrm{Interpolated\ values}$")
+        # - Estimated Value
+        ax.plot(wavelength_angstrom,returned,marker="s",ms=10,
+                mfc=color_interpol,mew=1,alpha=0.8,ls="None",
+                label=r"$\mathrm{Estimated\ value}$")
+        ax.axvline(wavelength_angstrom,ls="--",
+                   color=color_interpol,alpha=0.5)
+        ax.axhline(returned,ls="--",
+                   color=color_interpol,alpha=0.5)
+        # -- Legend
+        ax.legend(loc="best", frameon=False, fontsize="large",numpoints=1)
+        fig.show()
+        
+    return returned
+        
+########################################
+#                                      #
+# HST INSTRUMENT CLASS                 #
+#                                      #
+########################################    
 class HST( Instrument ):
     """This is the umage object custom for HST data"""
-
+    
     instrument_name = "HST"
     
     def __build__(self,**kargs):
         """
         """
+        self._properties_keys.append("used_amplifier")
         super(HST,self).__build__()
         # -- How to read the image
         self._build_properties = dict(
@@ -76,3 +143,57 @@ class HST( Instrument ):
     def mjd_obstime(self):
         """This is the Modify Julien Date at the start of the Exposure"""
         return self.fits[0].header["EXPSTART"]
+
+    @property
+    def mab0(self):
+        """zeropoint in ABmag
+        http://www.stsci.edu/hst/wfc3/phot_zp_lbn
+        ABMAG_ZEROPOINT = -2.5 Log (PHOTFLAM) - 21.10 - 5 Log (PHOTPLAM) + 18.6921 
+        """
+        return -2.5*np.log10(self.header["PHOTFLAM"]) - 21.10 \
+          - 5*np.log10(self.header["PHOTPLAM"]) + 18.6921
+          
+    # -------------------
+    # - Instrument Info
+    @property
+    def fwhm(self):
+        """
+        The FWHM in arcsec is based on WFC3 handbook.
+        See the module's get_psf() 
+        """
+        if self._derived_properties["fwhm"] is None:
+            self.set_fwhm(get_psf(self.bandpass.wave_eff, show=False) )
+            
+        return self._derived_properties["fwhm"]
+
+    @property
+    def used_amplifier(self):
+        """This is the amplifier used for the analysis"""
+        if self._properties["used_amplifier"] is None:
+            print "Default 'C' amplifier set for the hst image"
+            self._properties["used_amplifier"] = "C"
+            
+        return self._properties["used_amplifier"]
+
+    @used_amplifier.setter
+    def used_amplifier(self,value):
+        """Change the value of the amplifier [A,B,C, or D]"""
+        if value.upper() not in ["A","B","C","D"]:
+            raise ValueError("the amplifier must be A,B,C, or D")
+        
+        self._properties["used_amplifier"] = value.upper()
+    # ------------------------
+    # - Image Data Reduction
+    @property
+    def _gain(self):
+        """This is the calibrated gain"""
+        return self.fits[0].header["ATODGN%s"%self.used_amplifier]
+    
+    @property
+    def _readnoise(self):
+        """This is the calibrated read noise"""
+        return self.fits[0].header["READNSE%s"%self.used_amplifier]
+    
+    @property
+    def _biaslevel(self):
+        return self.fits[0].header["BIASLEV%s"%self.used_amplifier]

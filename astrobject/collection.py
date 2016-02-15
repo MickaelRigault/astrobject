@@ -7,37 +7,160 @@ import numpy as np
 
 from .baseobject import BaseObject
 from .instruments import instrument as inst
+from ..utils.tools import kwargs_update
 
+
+__all__ = ["ImageCollection"]
+
+#######################################
+#                                     #
+# Base Collection                     #
+#                                     #
+#######################################
+class Collection( BaseObject ):
+    """
+    """
+    __nature__ = "Collection"
+
+    _properties_keys = ["handler"]
+    _side_properties_keys = ["target"]
+    
+    def __init__(self):
+        """
+        """
+        self.__build__()
+        return 
+
+    # ========================== #
+    # = Generic Methods        = #
+    # ========================== #
+    def remove(self,id):
+        """This methods enable to remove the given data from the current instance"""
+        self._test_id_(id)
+        to_rm = self._handler.pop(id)
+        del to_rm
+
+    def rename(self,id,newid,force_it=False):
+        """This methods enable to change the id with which the data is accessed.
+        Remark: If the 'newid' already exists, an exception is raised except
+        if force_it is set to true. In that a case, this will overwrite
+        the 'newid' entry.
+        """
+        # -- Test if it is ok
+        self._test_id_(id)
+        if newid in self.list_id and not force_it:
+            raise ValueError("the newid '%s' already exists. Set force_it to true to overwrite it")
+        
+        # -- Do the switch
+        self._handler[newid] = self._handler.pop(id)
+        
+    # ----------------- #
+    # - Setter        - #
+    # ----------------- #
+    def set_target(self,newtarget):
+        """
+        Change (or create) an object associated to the given image.
+        This function will test if the object is withing the image
+        boundaries (expect if *test_inclusion* is set to False).
+        Set newtarget to None to remove the association between this
+        object and a target
+        """
+        if newtarget is None:
+            self._side_properties['target'] = None
+            return
+        
+        # -- Input Test -- #
+        if newtarget.__nature__ != "AstroTarget":
+            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
+        
+        # -- Seems Ok -- #
+        self._side_properties["target"] = newtarget.copy()
+
+    # ========================== #
+    # = Internal Tools         = #
+    # ========================== #
+    
+    def _test_id_(self,id):
+        """This methods tests if the given 'id' exists"""
+        if id not in self.list_id:
+            raise ValueError("%s is not a known image ID"%id +"\n"\
+                             "These are: "+", ".join(self.list_id))
+        return True
+    
+    # ========================== #
+    # = Properties             = #
+    # ========================== #
+    # ---------------------
+    # - Data Handlers
+    @property
+    def _handler(self):
+        """
+        This is where the data are recorded. Any data.
+        """
+        # - Handler are dictionnaries
+        if self._properties["handler"] is None:
+            self._properties["handler"] = {}
+            
+        return self._properties["handler"]
+
+    @property
+    def ndata(self):
+        return len(self._handler.keys())
+        
+    def has_data(self):
+        return len(self._handler.keys()) > 0
+    
+    @property
+    def list_id(self):
+        """This is the list of the known data id"""
+        if not self.has_data():
+            raise AttributeError("no data loaded")
+        
+        return np.sort(self._handler.keys()).tolist()
+    # ---------------------
+    # - Target
+    @property
+    def target(self):
+        """The associated target if loaded"""
+        return self._side_properties['target']
+    
+    def has_target(self):
+        return self.target is not None
 
 #######################################
 #                                     #
 # Image Collection                    #
 #                                     #
 #######################################
-class ImageCollection( BaseObject ):
+class ImageCollection( Collection ):
     """
     """
-    _properties_keys = ["images"]
-    _side_properties_keys = ["catalogue","target"]
+    _side_properties_keys = ["catalogue"]
     
-    def __init__(self,images=None,empty=False):
+    def __init__(self,images=None,empty=False,catalogue=None):
         """
         """
         self.__build__()
         if empty:
             return
         
-        self.create(images)
+        self.create(images,catalogue=catalogue)
 
         
-    def create(self,images):
+    def create(self,images,catalogue=None):
         """
         Loop over the images end add them to the instance. See add_image
         """
         if "__iter__" not in dir(images):
             images = [images]
-        
-        [self.add_image(i_) for i_ in images
+        # ---------------------------
+        # - dealing with catalogues
+        if catalogue is None:
+            catalogue = True
+        elif type(catalogue) is not bool: 
+            self.set_catalogue(catalogue)
+
+        [self.add_image(i_,load_catalogue=catalogue) for i_ in images
          if i_ is not None]
         
     # ========================= #
@@ -79,26 +202,41 @@ class ImageCollection( BaseObject ):
             raise TypeError("the given new_image must be a image-file or an astrobject imnage")
         if load_catalogue:
             self.download_catalogue()
-    def remove_image(self,id):
-        """
-        """
-        self._test_id_(id)
-        
-        to_rm = self.images.pop(id)
-        del to_rm
+            
 
     def load_images(self,verbose=True):
         """
         """
-        if verbose:
-            print "you have %s images to load. This might take some time"%(self.nimages)
-        [self._load_image_(id_) for id_ in self._imageids
+        [self._load_image_(id_) for id_ in self.list_id
          if self.images[id_]["image"] is None]
         # - done
             
     # ========================== #
     # = Get                    = #
     # ========================== #
+    def get_target_collection(self,target=None):
+        """
+        return a collection of images associated to the target.
+        if no target is given and a target has been set (set_target) the current
+        target will be used. If you give here a target, it will use it *without*
+        changing the current target. This method raise a ValueError is no target
+        accessible.
+        """
+        if target is None:
+            if not self.has_target():
+                raise ValueError("no target set to the instance and no input target")
+            target = self.target
+        elif "__nature__" not in dir(target) or target.__nature__ != "AstroTarget":
+            raise TypeError("The given 'target' must be an astrobject AstroTarget")
+        
+        good_images = [self.images[id_]["file"] for id_ in self.list_id
+                       if self.images[id_]["wcs"].coordsAreInImage(target.ra,target.dec)]
+            
+        im = ImageCollection(good_images)
+        
+        im.set_target(target)
+        return im
+            
     def get_image(self,id):
         """
         """
@@ -126,26 +264,9 @@ class ImageCollection( BaseObject ):
     # ========================== #
     # = Set                    = #
     # ========================== #
-    def set_target(self,newtarget):
-        """
-        Change (or create) an object associated to the given image.
-        This function will test if the object is withing the image
-        boundaries (expect if *test_inclusion* is set to False).
-        Set newtarget to None to remove the association between this
-        object and a target
-        """
-        if newtarget is None:
-            self._side_properties['target'] = None
-            return
-        
-        # -- Input Test -- #
-        if newtarget.__nature__ != "AstroTarget":
-            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
-        
-        # -- Seems Ok -- #
-        self._side_properties["target"] = newtarget.copy()
-
-
+    # --------------------- #
+    # - Catalogue Methods - #
+    # --------------------- #
     def set_catalogue(self,catalogue,force_it=False):
         """
         """
@@ -166,7 +287,7 @@ class ImageCollection( BaseObject ):
                            **kwargs):
         """
         """
-        for id_ in self._imageids:
+        for id_ in self.list_id:
             # -- Loop over the images, check what is needed
             if not self.has_catalogue() or \
               not self.catalogue.contours.contains(self.images[id_]["wcs"].contours):
@@ -176,10 +297,15 @@ class ImageCollection( BaseObject ):
                 else:
                     self.catalogue.merge(new_cat)
                 
-        
+    # ========================== #
+    # = Show                   = #
+    # ========================== #
     def show_skypatches(self,ax=None,
                         savefile=None,show=True,
-                        fc="None",ec="k",**kwargs):
+                        fc="None",ec="k",
+                        targetprop={},
+                        show_catalogue=True,show_target=True,
+                        **kwargs):
         """
         Plot On the sky the 
         """
@@ -199,26 +325,30 @@ class ImageCollection( BaseObject ):
         # ----------------------
         # -  loop over the images
         pl = [ax.wcsplot(self.images[id_]["wcs"],fc=fc,ec=ec,**kwargs)
-              for id_ in self._imageids if self.images[id_]["wcs"] is not None]
+              for id_ in self.list_id if self.images[id_]["wcs"] is not None]
 
+        # ----------------------
+        # - Catalogue
+        if self.has_catalogue() and show_catalogue:
+            self.catalogue.display(ax)
+        # ----------------------
+        # - Target
+        if self.has_target() and show_target:
+            default_markerprop = {
+                "marker":"o","mfc":"w",
+                "mec":"k","mew":1,"zorder":12,
+                "scalex":False,"scaley":False
+                }
+            prop = kwargs_update(default_markerprop,**targetprop)
+            pl = ax.plot(self.target.ra,self.target.dec,**prop)
+            
         # ----------------------
         # -  output
         fig.figout(savefile=savefile,show=show)
-        
+    
     # ========================== #
     # = INTERNAL               = #
     # ========================== #
-    def _test_id_(self,id):
-        """
-        """
-        if not self.has_images:
-            raise AttributeError("no images loaded")
-        
-        if id not in self.images.keys():
-            raise ValueError("%s is not a known image ID"%id +"\n"\
-                             "These are: "+", ".join(self.images.keys()))
-        return True
-
     def _get_id_catalogue_(self,id_,source="sdss",radius_degree=None,**kwargs):
         """
         """
@@ -278,34 +408,18 @@ class ImageCollection( BaseObject ):
     
     # ========================== #
     # = Properties             = #
-    # ========================== #
-    # -- Images
-    @property
-    def nimages(self):
-        return len(self.images.keys())
-    
+    # ========================== #    
     @property
     def images(self):
         """
         """
-        if self._properties["images"] is None:
-            self._properties["images"] = {}
-        return self._properties["images"]
+        return self._handler
 
-    def has_images(self):
-        return len(self.images.keys()) > 0
-    
     @property
     def _imageids(self):
-        return np.sort(self.images.keys())
+        print "_imageids to be changed to self.list_id"
+        return self.list_id
     
-    # -- Target
-    @property
-    def target(self):
-        return self._side_properties['target']
-
-    def has_target(self):
-        return not self.target is None
     
     # -- Catalogue
     @property
@@ -325,7 +439,22 @@ class ImageCollection( BaseObject ):
         return [self.images[id_]["image"].bandname
                   if self.images[id_]["image"] is not None \
                   else inst.which_band_is_file(self.images[id_]["file"])
-                for id_ in self._imageids]
+                for id_ in self.list_id]
     
-
+    
+#######################################
+#                                     #
+# Image Collection -> SED SOURCE      #
+#                                     #
+#######################################
+class PhotoCollection( Collection ):
+    """
+    """
+    
+    def __init__(self, photopoints=None,empty=True):
+        """
+        """
+        self.__build__()
+        
+        
     

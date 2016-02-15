@@ -107,15 +107,16 @@ class WCS(pyWCS):
 
     @property
     def pix_indeg(self):
-        pxl = self.wcs.get_cdelt()
-        if pxl[0] == pxl[1]:
-            return  pxl[0] * units.Unit(self.wcs.cunit[0]).in_units("degree")
-        return  pxl[0] * units.Unit(self.wcs.cunit[0]).in_units("degree"),\
-          pxl[1] * units.Unit(self.wcs.cunit[1]).in_units("degree")
+        """Size in degree. Returns astropy Quantity in degree"""
+        [cd1_1,cd1_2],[cd2_1,cd2_2] = self.wcs.cd
+        pxl = np.sqrt(cd1_1**2+cd2_1**2),np.sqrt(cd1_2**2+cd2_2**2)
+    
+        if (pxl[0]-pxl[1])/pxl[0] < 1e-2 : # equal to 1%
+            return  pxl[0] * units.Unit(self.wcs.cunit[0]).in_units("degree") * units.degree
+        
+        return  pxl[0] * units.Unit(self.wcs.cunit[0]).in_units("degree")* units.degree,\
+          pxl[1] * units.Unit(self.wcs.cunit[1]).in_units("degree")* units.degree
           
-
-
-
     
     @property
     def contours(self,exp_order=5):

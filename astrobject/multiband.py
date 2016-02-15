@@ -74,7 +74,6 @@ class MultiBands( BaseObject ):
     # ------------------- #
     # - Get Methods     - #
     # ------------------- #
-
     def get_photopoint(self,label):
         """This methods return the image associated to the
         given label"""
@@ -103,10 +102,7 @@ class MultiBands( BaseObject ):
 
     def rename_label(self,label,newlabel,force_it=False):
         """This methods allows you to change an photopoint label name
-        *label* to an other *newlabel*. If the *newlabel* already
-        existed, this will raise an exception except if force_it
-        is set to true. In such a case, the former *newlabel* entry
-        will be overwrite
+        *label* to an other *newlabel*. 
         """
         if label not in self.labellist:
             raise ValueError('%s is not a known label'%label)

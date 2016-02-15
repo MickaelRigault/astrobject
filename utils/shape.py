@@ -26,14 +26,37 @@ def get_contour_polygon(x,y):
     points = MultiPoint(np.asarray([x,y]).T)
     return points.convex_hull
 
+
 def point_in_contours(x,y,contours):
     """
+    This methods check if the given coordinate (x,y)
+    is within the contours, which could be a:
+      - matplotlib.patches.Polygon ; or
+      - Shapely.geometry.Polygon
+
+    x and y could be array of coordinates
+    Return
+    ------
+    bool (bool-array)
     """
     if not HAS_SHAPELY:
         raise ImportError(_ERRORMESSAGE)
+
+    # ----------------------
+    # - Matplotlib Polygon
+    if type(contours) is Polygon:
+        if "__iter__" not in dir(x):
+            return contours.contains_point([x,y])
+        
+        return np.asarray([contours.contains_point([x_,y_])
+                           for x_,y_ in zip(x,y)],dtype=bool)
+    
+    # ----------------------
+    # - Shapely Polygon
     if "__iter__" not in dir(x):
         return contours.contains(Point([x,y]))
     return contours.contains(MultiPoint(np.asarray([x,y]).T))
+
 def polygon_to_vertices(polygon_):
     """
     """

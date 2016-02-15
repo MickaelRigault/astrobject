@@ -21,7 +21,7 @@ __all__     = ["astrotarget"]
 
 
 def astrotarget(name=None,zcmb=None, ra=None, dec=None,
-               type_=None,forced_mwebmv=None,
+               type_=None,mwebmv=None,
                datasource={},**kwargs):
     """
     = Initialize the AstroTarget Function =
@@ -50,7 +50,8 @@ def astrotarget(name=None,zcmb=None, ra=None, dec=None,
     type_:[string]             type of the astro-object (galaxy, sn, Ia, Ibc...)
                                (no predifined list type so far, but this could append)
 
-    forced_mwebmv: [float]     Force the Milky way extinction for this object.
+    mwebmv (or forced_mwebmv): [float]
+                               Force the Milky way extinction for this object.
                                Otherwise this
                                extinction depend on the object *radec*.
                                ->Use this use Caution<-
@@ -88,13 +89,22 @@ def astrotarget(name=None,zcmb=None, ra=None, dec=None,
     if "name" in datasource.keys() and "object" not in datasource.keys():
         datasource["object"] = datasource["name"]
         
+    forced_mwebmv = kwargs.pop("forced_mwebmv",kwargs.pop("MWebmv",kwargs.pop("MWebv",None)))
+    
+    name = kwargs.pop("object",None)
+    dec = kwargs.pop("Dec",None)
+    ra = kwargs.pop("Ra",None)
+    type_ = kwargs.pop("type",None)
+    type_ = kwargs.pop("type",None)
+    empty = kwargs.pop("empty",False)
+    
     return AstroTarget(name=datasource.pop("object",name),
                        zcmb=datasource.pop("zcmb",zcmb),
                        ra=datasource.pop("ra",ra),
                        dec=datasource.pop("dec",dec),
                        type_=datasource.pop("type",type_),
-                       forced_mwebmv=datasource.pop("forced_mwebmv",forced_mwebmv),
-                       **kwargs).copy() # dont forget the copy
+                       forced_mwebmv=datasource.pop("mwebmv",forced_mwebmv),
+                       empty=empty).copy() # dont forget the copy
 
 #######################################
 #                                     #

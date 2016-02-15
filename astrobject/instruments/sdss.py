@@ -34,7 +34,7 @@ def is_sdss_file(filename):
 
 def which_band_is_file(filename):
     """This resuts the band of the given file if it is a
-    stella one"""
+    sdss one"""
     if not is_sdss_file(filename):
         return None
     return pf.getheader(filename).get("FILTER")
@@ -160,7 +160,6 @@ class SDSS( Instrument ):
         # -- return it
         return self._derived_properties["skyparam"]
 
-    
     # --------------------
     # - Band Information
     @property
@@ -188,7 +187,6 @@ class SDSS( Instrument ):
     
     # ------------
     # - Internal
-    
     @property
     def _cimg(self):
         if self.header is None:

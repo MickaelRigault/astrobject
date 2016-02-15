@@ -578,7 +578,7 @@ class Image( BaseObject ):
         if value<0:
             raise ValueError("the 'fwhm' must be positive")
         if type(value) is not units.quantity.Quantity:
-            value *= units.arcsec
+            value = value*units.arcsec
             
         self._derived_properties['fwhm'] = value
         
@@ -1445,6 +1445,9 @@ class Image( BaseObject ):
           
     @property
     def pixel_size_arcsec(self):
+        """Pixel size in arcsec. Based on wcs solution"""
+        if type(self.pixel_size_deg) is not units.quantity.Quantity:
+            return [ps.to("arcsec") for ps in self.pixel_size_deg]
         return self.pixel_size_deg.to("arcsec")
 
     
