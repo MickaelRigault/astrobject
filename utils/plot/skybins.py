@@ -475,7 +475,7 @@ class SurveyFieldBins( BaseBins ):
     @property
     def width(self):
         """field width"""
-        return self._properties["weight"]
+        return self._properties["width"]
 
     @property
     def height(self):
@@ -497,9 +497,8 @@ class SurveyFieldBins( BaseBins ):
     @property
     def fields(self):
         """number of bins"""
-        args = zip(self.ra, self.dec, self.width, self.height, self.max_stepsize)
-
-        return [SurveyField(*a) for a in args]
+        return [SurveyField(r, d, self.width, self.height, self.max_stepsize) 
+                for r, d in zip(self.ra, self.dec)]
 
 class SurveyField( BaseObject ):
     """
@@ -537,20 +536,23 @@ class SurveyField( BaseObject ):
     def coord_in_field(self, ra, dec):
         """
         Check whether coordinates are in the field
-        Returns bool if (ra, dec) floats, np.array of bools if (ra, dec) 
-        lists or np.arrays
+        Returns bool if (ra, dec) floats, np.ndarray of bools if (ra, dec) 
+        lists or np.ndarrays
+
+        TODO:
+        Test various cases of iterables that may break the method
         """
         single_val = False
         if type(ra) is list:
             ra = np.array(ra)
-        elif type(ra) is not np.array:
+        elif type(ra) is not np.ndarray:
             # Assume it is a float
             ra = np.array([ra])
             single_val = True
 
         if type(dec) is list:
             dec = np.array(dec)
-        elif type(dec) is not np.array:
+        elif type(dec) is not np.ndarray:
             # Assume it is a float
             ra = np.array([dec])
             single_val = True
@@ -563,7 +565,7 @@ class SurveyField( BaseObject ):
         
         out = np.ones(ra1.shape, dtype=bool)
         out[dec1 > self.height/2.] = False
-        out[dec1 < -self.heighth/2.] = False
+        out[dec1 < -self.height/2.] = False
         out[ra1*np.cos(dec1*_d2r) > self.width/2.] = False
         out[ra1*np.cos(dec1*_d2r) < -self.width/2.] = False
         
@@ -630,7 +632,7 @@ class SurveyField( BaseObject ):
     @property
     def width(self):
         """field width"""
-        return self._properties["weight"]
+        return self._properties["width"]
 
     @property
     def height(self):
