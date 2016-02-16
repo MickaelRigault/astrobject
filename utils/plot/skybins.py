@@ -28,7 +28,7 @@ except ImportError:
 
 _d2r = np.pi / 180 
 
-__all__ = ["SkyBins","HealpixBins"]
+__all__ = ["SkyBins","HealpixBins","SurveyFieldBins","SurveyField"]
 
 class BaseBins( BaseObject ):
     """
