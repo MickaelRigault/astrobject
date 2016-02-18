@@ -10,10 +10,11 @@ from astropy.table import Table
 
 from ..astrobject.baseobject import BaseObject
 from ..utils.tools import kwargs_update
+from ..utils.plot.skybins import SurveyField, SurveyFieldBins 
 from .simultarget import sn_generator,transient_generator
 
 
-__all__ = ["SimulSurvey"] # to be changed
+__all__ = ["SimulSurvey", "SurveyPlan"] # to be changed
 
 #######################################
 #                                     #
@@ -54,7 +55,7 @@ class SimulSurvey( BaseObject ):
         """
         """
         if not self.is_set():
-            raise AttributeError("cadence, genetor or instrument not set")
+            raise AttributeError("cadence, generator or instrument not set")
         self.observations.sort("time")
         params = [{"z":self.generator.zcmb[i],
                     "c":self.generator.color[i],
@@ -238,3 +239,81 @@ class SimulSurvey( BaseObject ):
             
         return self._derived_properties["observations"]
     
+#######################################
+#                                     #
+# Survey: Plan object                 #
+#                                     #
+#######################################
+class SurveyPlan( BaseObject ):
+    """
+    Survey Plan
+    contains the list of observation times, bands and pointings and
+    can return that times and bands, which a transient is observed at/with.
+    A list of fields can be given to simplify adding observations and avoid 
+    lookups whether an object is in a certain field.
+    Currently assumes a single instrument, especially for FoV width and height.
+    [This may be useful for the cadence property of SimulSurvey]
+    """
+    _properties_keys         = ["cadence", "width", "height"]
+    _side_properties_keys    = ["fields"]
+    _derived_properties_keys = []
+    
+    def __init__(self, mjd=None, ra=None, dec=None, band=None, obs_field=None,
+                 width=7., height=7., fields=None, empty=False):
+        """
+        Parameters:
+        ----------
+        TBA
+        
+        """
+        self.__build__()
+        if empty:
+            return
+    
+        self.create(mjd=mjd,ra=ra,dec=dec,band=band,obs_field=obs_field,
+                    fields=fields)
+
+    def create(self, mjd=None, ra=None, dec=None, band=None, obs_field=None,
+               width=7., height=7., fields=None):
+        """
+        """
+        self.set_fields(**fields)
+
+        self._properties["width"] = float(width)
+        self._properties["height"] = float(height)
+        self.add_observation(mjd,band,ra=ra,dec=dec,field=obs_field)
+
+    # =========================== #
+    # = Main Methods            = #
+    # =========================== #
+
+    # ---------------------- #
+    # - Get Methods        - #
+    # ---------------------- #
+    
+    # ---------------------- #
+    # - Setter Methods     - #
+    # ---------------------- #
+    def set_fields(self, ra=None, dec=None, **kwargs):
+        """
+        """
+        kwargs["width"] = kwargs.get("width", self.width)
+        kwargs["height"] = kwargs.get("height", self.height)
+
+        self._side_properties["fields"] = SurveyFieldBins(ra, dec, **kwargs)
+
+        if self.cadence is not None and np.any(np.isnan(self.cadence['field'])):
+            warnings.warning("cadence was already set, field pointing will be updated")
+            self._update_field_radec()
+
+    def add_observation(self, mjd, band, ra=None, dec=None, field=None):
+        """
+        """
+        if ra is None and dec is None and field is None:
+            raise ValueError("Either field or ra and dec must to specified.")
+        elif ra is None and dec is None:
+            if self.fields is None:
+                raise ValueError("Survey fields not defined.")
+            else:
+                pass 
+            

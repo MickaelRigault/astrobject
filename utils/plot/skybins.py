@@ -404,8 +404,8 @@ class SurveyFieldBins( BaseBins ):
         """
         self._properties["ra"] = ra
         self._properties["dec"] = dec
-        self._properties["width"] = width
-        self._properties["height"] = height
+        self._properties["width"] = float(width)
+        self._properties["height"] = float(height)
                          
         self._properties["max_stepsize"] = max_stepsize
 
@@ -523,8 +523,8 @@ class SurveyField( BaseObject ):
         """
         self._properties["ra"] = ra
         self._properties["dec"] = dec
-        self._properties["width"] = width
-        self._properties["height"] = height
+        self._properties["width"] = float(width)
+        self._properties["height"] = float(height)
                          
         self._properties["max_stepsize"] = max_stepsize
 
