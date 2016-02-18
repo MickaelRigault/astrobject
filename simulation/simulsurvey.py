@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 
 import sncosmo
-from astropy.table import Table
+from astropy.table import Table, vstack
 
 from ..astrobject.baseobject import BaseObject
 from ..utils.tools import kwargs_update
@@ -315,5 +315,53 @@ class SurveyPlan( BaseObject ):
             if self.fields is None:
                 raise ValueError("Survey fields not defined.")
             else:
-                pass 
-            
+                ra = self.fields.ra[field]
+                dec = self.fields.dec[field]
+        elif field is None:
+            field = np.array([np.nan for r in ra])
+
+        new_obs = Table({"MJD": mjd,
+                         "Band": band,
+                         "RA": ra,
+                         "Dec": dec,
+                         "Field": field})
+
+        if self._properties["cadence"] is None:
+            self._properties["cadence"] = new_obs
+        else:
+            self._properties["cadence"] = vstack((self._properties["cadence"], 
+                                                  new_obs))
+
+    # ================================== #
+    # = Observation time determination = #
+    # ================================== #
+    def observed_on(self, ra, dec, mjd_range=None):
+        """
+        mjd_range can be tuple are (2,N)-array 
+        where N is the length of ra and dec
+        """
+        # first get 
+
+
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def cadence(self):
+        """Table of observations"""
+        return self._properties["cadence"]
+
+    @property
+    def width(self):
+        """field width"""
+        return self._properties["width"]
+
+    @property
+    def height(self):
+        """field height"""
+        return self._properties["height"]
+
+    @property
+    def fields(self):
+        """Observation fields"""
+        return self._side_properties["fields"]

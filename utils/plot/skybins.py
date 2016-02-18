@@ -402,8 +402,8 @@ class SurveyFieldBins( BaseBins ):
     def create(self, ra, dec, width=7., height=7., max_stepsize=5):
         """
         """
-        self._properties["ra"] = ra
-        self._properties["dec"] = dec
+        self._properties["ra"] = np.array(ra)
+        self._properties["dec"] = np.array(dec)
         self._properties["width"] = float(width)
         self._properties["height"] = float(height)
                          
@@ -427,9 +427,9 @@ class SurveyFieldBins( BaseBins ):
         Keep in mind that the fields will likely overlap.
         """
         bo = [f.coord_in_field(ra, dec) for f in self.fields]
-        
+
         # Handle the single coordinate case first
-        if type(bo[0]) is bool:
+        if type(bo[0]) is np.bool_:
             return np.where(np.array(bo))[0]
         
         bo = np.array(bo)
@@ -554,7 +554,7 @@ class SurveyField( BaseObject ):
             dec = np.array(dec)
         elif type(dec) is not np.ndarray:
             # Assume it is a float
-            ra = np.array([dec])
+            dec = np.array([dec])
             single_val = True
 
         if len(ra) != len(dec):
