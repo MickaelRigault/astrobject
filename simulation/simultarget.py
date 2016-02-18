@@ -73,7 +73,7 @@ class TransientGenerator( BaseObject ):
     
 
     def __init__(self,zrange=[0.0,0.2], ratekind="basic", # How deep
-                 mdj_range=[57754.0,58849.0],
+                 mjd_range=[57754.0,58849.0],
                  ra_range=(-180,180),dec_range=(-90,90), # Where, see also kwargs
                  ntransients=None,empty=False,sfd98_dir=None,**kwargs):
         """
@@ -85,11 +85,11 @@ class TransientGenerator( BaseObject ):
         self.create(zrange,
                     ratekind=ratekind, ntransients=ntransients,
                     ra_range=ra_range, dec_range=dec_range,
-                    mdj_range=mdj_range,sfd98_dir=sfd98_dir,
+                    mjd_range=mjd_range,sfd98_dir=sfd98_dir,
                     **kwargs)
 
     def create(self,zrange,ratekind="basic",ntransients=None,type_=None,
-               mdj_range=[57754.0,58849.0],
+               mjd_range=[57754.0,58849.0],
                ra_range=(-180,180),dec_range=(-90,90),
                mw_exclusion=0,sfd98_dir=None,transientprop={}):
         """
@@ -103,7 +103,7 @@ class TransientGenerator( BaseObject ):
         # -- This will be directly used as random.radec inputs
         self.set_event_parameters(update=False,
                                   **{"ra_range":ra_range,"dec_range":dec_range,
-                                   "zcmb_range":zrange,"mdj_range":mdj_range,
+                                   "zcmb_range":zrange,"mjd_range":mjd_range,
                                    "mw_exclusion":mw_exclusion})
         
         self.set_transient_parameters(ratekind=ratekind,type_=type_,
@@ -120,13 +120,13 @@ class TransientGenerator( BaseObject ):
     def set_event_parameters(self,update=True,**kwargs):
         """
         Change the properties associated to the transient events.
-        Known properties: "ra_range","dec_range","zcmb_range","mdj_range",
+        Known properties: "ra_range","dec_range","zcmb_range","mjd_range",
                           "mw_exclusion"
 
         Set update to True to update the derived properties
         """
         known_event_prop = ["ra_range","dec_range","zcmb_range",
-                            "mw_exclusion","mdj_range"]
+                            "mw_exclusion","mjd_range"]
             
         for k in kwargs.keys():
             if k not in known_event_prop:
@@ -396,7 +396,7 @@ class TransientGenerator( BaseObject ):
     @property
     def mjd_range(self):
         """zcmb range used to draw transient"""
-        return self._get_event_property_("mdj_range")
+        return self._get_event_property_("mjd_range")
     # -----------------
     # - Rates
     @property
