@@ -93,6 +93,47 @@ class BaseBins( BaseObject ):
 
         return out
 
+    def imshow(self, values, ax=None, savefile=None, show=True, 
+               cblabel=r"$N_{SNe}$", **kwargs):
+        """
+        Plot values as pixels in the defined grid
+        [Currently copy of TransientGenerator.hist_skycoverage; this method is 
+        to take over most of the plotting of the former]
+        """
+        import matplotlib.pyplot as mpl
+        from ..utils.mpladdon import figout, skyhist
+        from ..utils.plot.skyplot import ax_skyplot
+        self._plot = {}
+
+        if ax is None:
+            ax_default = dict(fig=None, figsize=(12, 6),
+                              rect=[0.1, 0.1, 0.8, 0.8],
+                              projection='mollweide',
+                              xlabelpad=None,
+                              xlabelmode='hist')
+            ax_kw, kwargs = kwargs_extract(ax_default, **kwargs)
+            fig, ax = ax_skyplot(**ax_kw)
+        elif ("MollweideTransform" not in dir(ax) and
+              "HammerTransform" not in dir(ax)):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axis "+\
+                        "with Mollweide or Hammer projection. Transform "+\
+                        "function not found.")
+        else:
+            fig = ax.fig
+
+        collec, cb = ax.skyhist(self.ra, self.dec, cblabel=cblabel, **kwargs)
+        cb.set_label(cblabel, fontsize="x-large") 
+
+        # ------------------- #
+        # -- Save the data -- #
+        self._plot["figure"] = fig
+        self._plot["ax"]     = ax
+        self._plot["collection"] = collec
+        self._plot["cbar"] = cb
+
+        fig.figout(savefile=savefile,show=show)
+        return self._plot 
+
 class SkyBins( BaseBins ):
     """
     Object to collect all information for rectangular binning.
