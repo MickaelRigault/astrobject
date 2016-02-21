@@ -719,10 +719,10 @@ class RateGenerator( _PropertyGenerator_ ):
     # ----------------- #
     def rate_Ia_basic(self,z):
         """
-        Basic default rate function in sncosmo: returns ``1.e-4``.
+        More realistic value for low-z than sncosmo default
         (comoving volumetric rate at each redshift in units of yr^-1 Mpc^-3.)
         """
-        return self.rate_basic(z)
+        return 3.e-5
 
     
     def rate_Ia_basiclow(self,z):
