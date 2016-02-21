@@ -125,7 +125,7 @@ def skyscatter(ax, ra, dec, **kwargs):
     return sc
 
 @make_method(mpl.Axes)
-def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
+def skyhist(ax, ra=None, dec=None, values=None, bins=None, steps=None, max_stepsize=5, edge=1e-6,
             vmin=None, vmax=None, cmap=mpl.cm.Blues, cblabel=None, **kwargs):
     """This function in a build-in axes method that makes a sky histogram of the 
     coordinates.
@@ -138,10 +138,14 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
                                    should be using Mollweide or Hammer
                                    projection (not strictly enforced)
 
+    - options -
+
     ra, dec: [N array, N array]    arrays of sky coordinates (RA, Dec)
                                    in degrees
 
-    - options -
+    values: [N array]              array of values for each bin (can be used 
+                                   instead of ra and dec; must number of bins as
+                                   length)
     
     bins [Bins object]             object that bins the coordinates and
                                    provides the boundaries for drawing
@@ -182,11 +186,17 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
     if bins is None:
         bins = SkyBins()
 
-    hist = bins.hist(ra, dec)
+    if clabel is None:
+        clabel = ''
+
+    if values is None:
+        values = bins.hist(ra, dec)
+    else:
+        values = np.array(values)
 
     patches = []
     p_idx = []
-    for k in xrange(len(hist)):
+    for k in xrange(len(values)):
         radec_bd = bins.boundary(k, steps=steps, max_stepsize=max_stepsize,
                                  edge=edge)
         for r, d in radec_bd:
@@ -194,7 +204,7 @@ def skyhist(ax, ra, dec, bins=None, steps=None, max_stepsize=5, edge=1e-6,
             patches.append(coord_bd)
             p_idx.append(k)
 
-    c = np.asarray(hist[np.asarray(p_idx)])
+    c = np.asarray(values[np.asarray(p_idx)])
     vmin = c.min() if vmin is None else vmin
     vmax = c.max() if vmax is None else vmax
     color = cmap((c-vmin)/float(vmax-vmin))

@@ -19,6 +19,7 @@ import numpy as np
 from ...astrobject.baseobject import BaseObject
 #import astrobject.astrobject import baseobject as b
 from .skyplot import rot_xz_sph
+from ..tools import kwargs_extract,kwargs_update
 
 try:
     import healpy as hp
@@ -94,15 +95,15 @@ class BaseBins( BaseObject ):
         return out
 
     def imshow(self, values, ax=None, savefile=None, show=True, 
-               cblabel=r"$N_{SNe}$", **kwargs):
+               cblabel=None, **kwargs):
         """
         Plot values as pixels in the defined grid
         [Currently copy of TransientGenerator.hist_skycoverage; this method is 
         to take over most of the plotting of the former]
         """
         import matplotlib.pyplot as mpl
-        from ..utils.mpladdon import figout, skyhist
-        from ..utils.plot.skyplot import ax_skyplot
+        from ..mpladdon import figout, skyhist
+        from .skyplot import ax_skyplot
         self._plot = {}
 
         if ax is None:
@@ -121,7 +122,8 @@ class BaseBins( BaseObject ):
         else:
             fig = ax.fig
 
-        collec, cb = ax.skyhist(self.ra, self.dec, cblabel=cblabel, **kwargs)
+        collec, cb = ax.skyhist(values=values, cblabel=cblabel, bins=self, 
+                                **kwargs)
         cb.set_label(cblabel, fontsize="x-large") 
 
         # ------------------- #

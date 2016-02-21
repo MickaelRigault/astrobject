@@ -277,10 +277,10 @@ class SurveyPlan( BaseObject ):
                width=7., height=7., fields=None):
         """
         """
-        self.set_fields(**fields)
-
         self._properties["width"] = float(width)
         self._properties["height"] = float(height)
+        self.set_fields(**fields)
+
         self.add_observation(mjd,band,ra=ra,dec=dec,field=obs_field)
 
     # =========================== #
@@ -363,12 +363,12 @@ class SurveyPlan( BaseObject ):
 
             if single_coord:
                 if b:
-                    out['MJD'].append(obs['MJD'])
-                    out['Band'].append(obs['Band'])
+                    out['MJD'].extend(obs['MJD'].quantity.values)
+                    out['Band'].extend(obs['Band'].quantity.values)
             else:
                 for l in np.where(b)[0]:
-                    out[l]['MJD'].append(obs['MJD'])
-                    out[l]['Band'].append(obs['Band'])
+                    out[l]['MJD'].extend(obs['MJD'].quantity.values)
+                    out[l]['Band'].extend(obs['Band'].quantity.values)
 
         # Now get the other observations (those with a field number)
         if (self.fields is not None and 
@@ -387,14 +387,14 @@ class SurveyPlan( BaseObject ):
             if single_coord:
                 for l in b:
                     mask = (self.cadence['Field'] == l)
-                    out['MJD'].append(self.cadence['MJD'][mask])
-                    out['Band'].append(self.cadence['Band'][mask])
+                    out['MJD'].extend(self.cadence['MJD'][mask].quantity.value)
+                    out['Band'].extend(self.cadence['Band'][mask])
             else:
                 for k, idx in enumerate(b):
                     for l in idx:
                         mask = (self.cadence['Field'] == l)
-                        out[k]['MJD'].append(self.cadence['MJD'][mask])
-                        out[k]['Band'].append(self.cadence['Band'][mask])
+                        out[k]['MJD'].extend(self.cadence['MJD'][mask].quantity.value)
+                        out[k]['Band'].extend(self.cadence['Band'][mask])
 
         # Make Tables and sort by MJD
         if single_coord:
@@ -414,8 +414,9 @@ class SurveyPlan( BaseObject ):
                 return [t[i] for t, i in zip(tables, idx)]
             else:
                 ts = [t[i] for t, i in zip(tables, idx)]
-                return [t[(t['MJD'] >= mjd_range[0]) &
-                          (t['MJD'] <= mjd_range[1])] for r in ts]
+                return [t[(t['MJD'] >= mjd_range[0][k]) &
+                          (t['MJD'] <= mjd_range[1][k])] 
+                        for k, t in enumerate(ts)]
 
     # =========================== #
     # = Properties and Settings = #
