@@ -187,7 +187,7 @@ class TransientGenerator( BaseObject ):
     # - Plots Methods           - #
     # --------------------------- #
     def show_skycoverage(self, ax=None, savefile=None, show=True, cscale=None, 
-                         cblabel=None, cmargin = 5,**kwargs):
+                         cblabel=None, cmargin=5, mask=None, **kwargs):
         """This function enable to draw on the sky the position of the
         transients
 
@@ -206,6 +206,8 @@ class TransientGenerator( BaseObject ):
                                    `cmargin`% and 100-`cmargin`% limits of the array
                                    (set 0 to effectively remove this option)
         
+        mask: [None/bool. array]   mask for the scatter plot
+
         - output option -
 
         savefile, show [string, bool] Output options
@@ -235,6 +237,11 @@ class TransientGenerator( BaseObject ):
                              ' e.g. "redshift"')
         
         # ------------------
+        # - Mask 
+        if mask is None:
+            mask = np.ones(self.nstransient, dtype=bool)
+
+        # ------------------
         # - Axis definition
         if ax is None:
             ax_default = dict(fig=None, figsize=(12, 6), 
@@ -258,15 +265,16 @@ class TransientGenerator( BaseObject ):
         # ------------------
         # - Actual plotting
         if cscale is None:
-            pl = ax.skyplot(self.ra, self.dec, **kwargs)
+            pl = ax.skyplot(self.ra[mask], self.dec[mask], **kwargs)
             cb = None
         else:
             # --------------------
             # - To avoid outliers
             from scipy import percentile
-            vmin, vmax =  percentile(c,[cmargin,100-cmargin])
+            vmin, vmax =  percentile(c[mask],[cmargin,100-cmargin])
             # - Da plot
-            pl = ax.skyscatter(self.ra, self.dec, c=c, vmin=vmin, vmax=vmax,**kwargs)
+            pl = ax.skyscatter(self.ra[mask], self.dec[mask], c=c[mask], 
+                               vmin=vmin, vmax=vmax,**kwargs)
             cb = fig.colorbar(pl, orientation='horizontal', shrink=0.85, pad=0.08)
             if cblabel is not None:
                 cb.set_label(cblabel, fontsize="x-large") 
