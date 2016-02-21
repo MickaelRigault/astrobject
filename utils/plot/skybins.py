@@ -15,6 +15,7 @@ to draw the polygon)
 
 import warnings
 import numpy as np
+from copy import copy
 
 from ...astrobject.baseobject import BaseObject
 #import astrobject.astrobject import baseobject as b
@@ -585,6 +586,9 @@ class SurveyField( BaseObject ):
         TODO:
         Test various cases of iterables that may break the method
         """
+        ra = copy(ra)
+        dec = copy(dec)
+
         single_val = False
         if type(ra) is list:
             ra = np.array(ra)

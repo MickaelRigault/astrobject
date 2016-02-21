@@ -166,7 +166,7 @@ def skyhist(ax, ra=None, dec=None, values=None, bins=None, steps=None, max_steps
 
     cmap: [mpl.cm]                 a colormap
     
-    clabel: [string]               colorbar label
+    cblabel: [string]              colorbar label
 
     - kwargs goes to matplotlib.collections.PolyCollection -
 
@@ -186,8 +186,8 @@ def skyhist(ax, ra=None, dec=None, values=None, bins=None, steps=None, max_steps
     if bins is None:
         bins = SkyBins()
 
-    if clabel is None:
-        clabel = ''
+    if cblabel is None:
+        cblabel = ''
 
     if values is None:
         values = bins.hist(ra, dec)
