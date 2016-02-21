@@ -15,10 +15,12 @@ to draw the polygon)
 
 import warnings
 import numpy as np
+from copy import copy
 
 from ...astrobject.baseobject import BaseObject
 #import astrobject.astrobject import baseobject as b
 from .skyplot import rot_xz_sph
+from ..tools import kwargs_extract,kwargs_update
 
 try:
     import healpy as hp
@@ -92,6 +94,48 @@ class BaseBins( BaseObject ):
             out.append((ra_bd, dec_bd))
 
         return out
+
+    def imshow(self, values, ax=None, savefile=None, show=True, 
+               cblabel=None, **kwargs):
+        """
+        Plot values as pixels in the defined grid
+        [Currently copy of TransientGenerator.hist_skycoverage; this method is 
+        to take over most of the plotting of the former]
+        """
+        import matplotlib.pyplot as mpl
+        from ..mpladdon import figout, skyhist
+        from .skyplot import ax_skyplot
+        self._plot = {}
+
+        if ax is None:
+            ax_default = dict(fig=None, figsize=(12, 6),
+                              rect=[0.1, 0.1, 0.8, 0.8],
+                              projection='mollweide',
+                              xlabelpad=None,
+                              xlabelmode='hist')
+            ax_kw, kwargs = kwargs_extract(ax_default, **kwargs)
+            fig, ax = ax_skyplot(**ax_kw)
+        elif ("MollweideTransform" not in dir(ax) and
+              "HammerTransform" not in dir(ax)):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axis "+\
+                        "with Mollweide or Hammer projection. Transform "+\
+                        "function not found.")
+        else:
+            fig = ax.fig
+
+        collec, cb = ax.skyhist(values=values, cblabel=cblabel, bins=self, 
+                                **kwargs)
+        cb.set_label(cblabel, fontsize="x-large") 
+
+        # ------------------- #
+        # -- Save the data -- #
+        self._plot["figure"] = fig
+        self._plot["ax"]     = ax
+        self._plot["collection"] = collec
+        self._plot["cbar"] = cb
+
+        fig.figout(savefile=savefile,show=show)
+        return self._plot 
 
 class SkyBins( BaseBins ):
     """
@@ -402,10 +446,10 @@ class SurveyFieldBins( BaseBins ):
     def create(self, ra, dec, width=7., height=7., max_stepsize=5):
         """
         """
-        self._properties["ra"] = ra
-        self._properties["dec"] = dec
-        self._properties["width"] = width
-        self._properties["height"] = height
+        self._properties["ra"] = np.array(ra)
+        self._properties["dec"] = np.array(dec)
+        self._properties["width"] = float(width)
+        self._properties["height"] = float(height)
                          
         self._properties["max_stepsize"] = max_stepsize
 
@@ -427,9 +471,9 @@ class SurveyFieldBins( BaseBins ):
         Keep in mind that the fields will likely overlap.
         """
         bo = [f.coord_in_field(ra, dec) for f in self.fields]
-        
+
         # Handle the single coordinate case first
-        if type(bo[0]) is bool:
+        if type(bo[0]) is np.bool_:
             return np.where(np.array(bo))[0]
         
         bo = np.array(bo)
@@ -523,8 +567,8 @@ class SurveyField( BaseObject ):
         """
         self._properties["ra"] = ra
         self._properties["dec"] = dec
-        self._properties["width"] = width
-        self._properties["height"] = height
+        self._properties["width"] = float(width)
+        self._properties["height"] = float(height)
                          
         self._properties["max_stepsize"] = max_stepsize
 
@@ -542,6 +586,9 @@ class SurveyField( BaseObject ):
         TODO:
         Test various cases of iterables that may break the method
         """
+        ra = copy(ra)
+        dec = copy(dec)
+
         single_val = False
         if type(ra) is list:
             ra = np.array(ra)
@@ -554,7 +601,7 @@ class SurveyField( BaseObject ):
             dec = np.array(dec)
         elif type(dec) is not np.ndarray:
             # Assume it is a float
-            ra = np.array([dec])
+            dec = np.array([dec])
             single_val = True
 
         if len(ra) != len(dec):

@@ -73,7 +73,7 @@ class TransientGenerator( BaseObject ):
     
 
     def __init__(self,zrange=[0.0,0.2], ratekind="basic", # How deep
-                 mdj_range=[57754.0,58849.0],
+                 mjd_range=[57754.0,58849.0],
                  ra_range=(-180,180),dec_range=(-90,90), # Where, see also kwargs
                  ntransients=None,empty=False,sfd98_dir=None,**kwargs):
         """
@@ -85,11 +85,11 @@ class TransientGenerator( BaseObject ):
         self.create(zrange,
                     ratekind=ratekind, ntransients=ntransients,
                     ra_range=ra_range, dec_range=dec_range,
-                    mdj_range=mdj_range,sfd98_dir=sfd98_dir,
+                    mjd_range=mjd_range,sfd98_dir=sfd98_dir,
                     **kwargs)
 
     def create(self,zrange,ratekind="basic",ntransients=None,type_=None,
-               mdj_range=[57754.0,58849.0],
+               mjd_range=[57754.0,58849.0],
                ra_range=(-180,180),dec_range=(-90,90),
                mw_exclusion=0,sfd98_dir=None,transientprop={}):
         """
@@ -103,7 +103,7 @@ class TransientGenerator( BaseObject ):
         # -- This will be directly used as random.radec inputs
         self.set_event_parameters(update=False,
                                   **{"ra_range":ra_range,"dec_range":dec_range,
-                                   "zcmb_range":zrange,"mdj_range":mdj_range,
+                                   "zcmb_range":zrange,"mjd_range":mjd_range,
                                    "mw_exclusion":mw_exclusion})
         
         self.set_transient_parameters(ratekind=ratekind,type_=type_,
@@ -120,13 +120,13 @@ class TransientGenerator( BaseObject ):
     def set_event_parameters(self,update=True,**kwargs):
         """
         Change the properties associated to the transient events.
-        Known properties: "ra_range","dec_range","zcmb_range","mdj_range",
+        Known properties: "ra_range","dec_range","zcmb_range","mjd_range",
                           "mw_exclusion"
 
         Set update to True to update the derived properties
         """
         known_event_prop = ["ra_range","dec_range","zcmb_range",
-                            "mw_exclusion","mdj_range"]
+                            "mw_exclusion","mjd_range"]
             
         for k in kwargs.keys():
             if k not in known_event_prop:
@@ -187,7 +187,7 @@ class TransientGenerator( BaseObject ):
     # - Plots Methods           - #
     # --------------------------- #
     def show_skycoverage(self, ax=None, savefile=None, show=True, cscale=None, 
-                         cblabel=None, cmargin = 5,**kwargs):
+                         cblabel=None, cmargin=5, mask=None, **kwargs):
         """This function enable to draw on the sky the position of the
         transients
 
@@ -206,6 +206,8 @@ class TransientGenerator( BaseObject ):
                                    `cmargin`% and 100-`cmargin`% limits of the array
                                    (set 0 to effectively remove this option)
         
+        mask: [None/bool. array]   mask for the scatter plot
+
         - output option -
 
         savefile, show [string, bool] Output options
@@ -235,6 +237,11 @@ class TransientGenerator( BaseObject ):
                              ' e.g. "redshift"')
         
         # ------------------
+        # - Mask 
+        if mask is None:
+            mask = np.ones(self.nstransient, dtype=bool)
+
+        # ------------------
         # - Axis definition
         if ax is None:
             ax_default = dict(fig=None, figsize=(12, 6), 
@@ -258,15 +265,16 @@ class TransientGenerator( BaseObject ):
         # ------------------
         # - Actual plotting
         if cscale is None:
-            pl = ax.skyplot(self.ra, self.dec, **kwargs)
+            pl = ax.skyplot(self.ra[mask], self.dec[mask], **kwargs)
             cb = None
         else:
             # --------------------
             # - To avoid outliers
             from scipy import percentile
-            vmin, vmax =  percentile(c,[cmargin,100-cmargin])
+            vmin, vmax =  percentile(c[mask],[cmargin,100-cmargin])
             # - Da plot
-            pl = ax.skyscatter(self.ra, self.dec, c=c, vmin=vmin, vmax=vmax,**kwargs)
+            pl = ax.skyscatter(self.ra[mask], self.dec[mask], c=c[mask], 
+                               vmin=vmin, vmax=vmax,**kwargs)
             cb = fig.colorbar(pl, orientation='horizontal', shrink=0.85, pad=0.08)
             if cblabel is not None:
                 cb.set_label(cblabel, fontsize="x-large") 
@@ -396,7 +404,7 @@ class TransientGenerator( BaseObject ):
     @property
     def mjd_range(self):
         """zcmb range used to draw transient"""
-        return self._get_event_property_("mdj_range")
+        return self._get_event_property_("mjd_range")
     # -----------------
     # - Rates
     @property
@@ -711,10 +719,10 @@ class RateGenerator( _PropertyGenerator_ ):
     # ----------------- #
     def rate_Ia_basic(self,z):
         """
-        Basic default rate function in sncosmo: returns ``1.e-4``.
+        More realistic value for low-z than sncosmo default
         (comoving volumetric rate at each redshift in units of yr^-1 Mpc^-3.)
         """
-        return self.rate_basic(z)
+        return 3.e-5
 
     
     def rate_Ia_basiclow(self,z):
