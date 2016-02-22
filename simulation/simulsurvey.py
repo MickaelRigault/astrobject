@@ -26,11 +26,11 @@ class SimulSurvey( BaseObject ):
     Basic survey object
     (far from finished)
     """
-    _properties_keys         = ["generator","instruments","cadence"]
-    _side_properties_keys    = []
+    _properties_keys         = ["generator","instruments","plan"]
+    _side_properties_keys    = ["cadence"]
     _derived_properties_keys = ["observations"]
     
-    def __init__(self,generator=None,
+    def __init__(self,generator=None, plan=None,
                  instprop=None,
                  empty=False):
         """
@@ -43,7 +43,21 @@ class SimulSurvey( BaseObject ):
         self.__build__()
         if empty:
             return
-    
+
+        self.create(generator, plan, instprop)
+
+    def create(self, generator, plan, instprop):
+        """
+        """
+        if generator is not None:
+            self.set_target_generator(generator)
+
+        if plan is not None:
+            self.set_plan(plan)
+
+        if instprop is not None:
+            self.set_instruments(instprop)
+
     # =========================== #
     # = Main Methods            = #
     # =========================== #
@@ -68,9 +82,6 @@ class SimulSurvey( BaseObject ):
                         sncosmo.Model(source=self.generator.lightcurve_model),
                         params)
         
-    
-
-        
     # ---------------------- #
     # - Setter Methods     - #
     # ---------------------- #
@@ -90,16 +101,16 @@ class SimulSurvey( BaseObject ):
         self._properties["generator"] = generator
 
     # -------------
-    # - Cadences
-    def set_cadence(self,cadence):
+    # - SurveyPlan
+    def set_plan(self,plan):
         """
         """
         # ----------------------
         # - Load cadence here
-        if "__nature__" not in dir(cadence) or \
-          cadence.__nature__ != "Cadence":
-            raise TypeError("the input 'cadence' must be an astrobject Cadence")
-        self._properties["cadence"] = cadence
+        if "__nature__" not in dir(plan) or \
+          plan.__nature__ != "SurveyPlan":
+            raise TypeError("the input 'plan' must be an astrobject SurveyPlan")
+        self._properties["plan"] = plan
         
         # ----------------------------
         # - Set back the observations
@@ -174,34 +185,36 @@ class SimulSurvey( BaseObject ):
     def _reset_observations_(self):
         """
         """
-        self._derived_properties["observations"]
+        self._derived_properties["observations"] = None
         
     def _load_observations_(self):
         """
         """
         # -------------
         # - Input test
-        if self.cadence is None or self.instruments is None:
-            raise AttributeError("Cadence or Instruments is not set.")
+        if self.plan is None or self.instruments is None:
+            raise AttributeError("Plan or Instruments is not set.")
         
         # -----------------------
         # - Check if instruments exists
-        all_instruments = np.unique(self.cadence.bands)
+        all_instruments = np.unique(self.cadence["Band"])
         if not np.all([i in self.instruments.keys() for i in all_instruments]):
             raise ValueError("Some of the instrument in cadence have not been defined."+"\n"+
                              "given instruments :"+", ".join(all_instruments.tolist())+"\n"+
                              "known instruments :"+", ".join(self.instruments.keys()))
-        
+            
         # -----------------------
-        # - Lets build the table
-        self._derived_properties["observations"] = Table(
-            {"time":self.cadence.mjds,
-             "band":self.cadence.bands,
-             "skynoise":self.cadence.skynoises,
-             "gain":[self.instruments[b]["gain"] for b in self.cadence.bands],
-             "zp":[self.instruments[b]["zp"] for b in self.cadence.bands],
-             "zpsys":[self.instruments[b]["zpsys"] for b in self.cadence.bands]
-            })
+        # - Lets build the tables
+        self.plan.observe(self.generator.ra, self.generator.dec)
+
+        self._derived_properties["observations"] = [(Table(
+            {"time": obs["time"],
+             "band": obs["band"],
+             "skynoise": obs["skynoise"],
+             "gain":[self.instruments[b]["gain"] for b in obs["band"]],
+             "zp":[self.instruments[b]["zp"] for b in obs["band"]],
+             "zpsys":[self.instruments[b]["zpsys"] for b in obs["band"]]
+            }) if len(obs) > 0 else None) for obs in self.plan.observed]
     
     # =========================== #
     # = Properties and Settings = #
@@ -217,15 +230,26 @@ class SimulSurvey( BaseObject ):
         return self._properties["generator"]
 
     @property
-    def cadence(self):
-        """This is a table containing where the telescope is pointed with which band"""
-        return self._properties["cadence"]
+    def plan(self):
+        """This is the survey plan including field definitions and telescope pointings"""
+        return self._properties["plan"]
 
     def is_set(self):
         """This parameter is True if this has cadence, instruments and genetor set"""
         return not (self.instruments is None or \
                     self.generator is None or \
-                    self.cadence is None)
+                    self.plan is None)
+
+    # ------------------
+    # - Side properties
+    @property
+    def cadence(self):
+        """This is a table containing where the telescope is pointed with which band."""
+        if self._properties["plan"] is not None:
+            return self._properties["plan"].cadence
+        else:
+            raise ValueError("Property 'plan' not set yet")
+
                     
     # ------------------
     # - Derived values
@@ -254,11 +278,13 @@ class SurveyPlan( BaseObject ):
     Currently assumes a single instrument, especially for FoV width and height.
     [This may be useful for the cadence property of SimulSurvey]
     """
+    __nature__ = "SurveyPlan"
+
     _properties_keys         = ["cadence", "width", "height"]
     _side_properties_keys    = ["fields"]
-    _derived_properties_keys = []
+    _derived_properties_keys = ["observed"]
     
-    def __init__(self, mjd=None, ra=None, dec=None, band=None, obs_field=None,
+    def __init__(self, time=None, ra=None, dec=None, band=None, obs_field=None,
                  width=7., height=7., fields=None, empty=False):
         """
         Parameters:
@@ -270,10 +296,10 @@ class SurveyPlan( BaseObject ):
         if empty:
             return
     
-        self.create(mjd=mjd,ra=ra,dec=dec,band=band,obs_field=obs_field,
+        self.create(time=time,ra=ra,dec=dec,band=band,obs_field=obs_field,
                     fields=fields)
 
-    def create(self, mjd=None, ra=None, dec=None, band=None, obs_field=None,
+    def create(self, time=None, ra=None, dec=None, band=None, obs_field=None,
                width=7., height=7., fields=None):
         """
         """
@@ -281,7 +307,7 @@ class SurveyPlan( BaseObject ):
         self._properties["height"] = float(height)
         self.set_fields(**fields)
 
-        self.add_observation(mjd,band,ra=ra,dec=dec,field=obs_field)
+        self.add_observation(time,band,ra=ra,dec=dec,field=obs_field)
 
     # =========================== #
     # = Main Methods            = #
@@ -306,7 +332,7 @@ class SurveyPlan( BaseObject ):
             warnings.warning("cadence was already set, field pointing will be updated")
             self._update_field_radec()
 
-    def add_observation(self, mjd, band, ra=None, dec=None, field=None):
+    def add_observation(self, time, band, skynoise, ra=None, dec=None, field=None):
         """
         """
         if ra is None and dec is None and field is None:
@@ -320,11 +346,12 @@ class SurveyPlan( BaseObject ):
         elif field is None:
             field = np.array([np.nan for r in ra])
 
-        new_obs = Table({"MJD": mjd,
-                         "Band": band,
+        new_obs = Table({"time": time,
+                         "band": band,
+                         "skynoise": skynoise,
                          "RA": ra,
                          "Dec": dec,
-                         "Field": field})
+                         "field": field})
 
         if self._properties["cadence"] is None:
             self._properties["cadence"] = new_obs
@@ -335,6 +362,14 @@ class SurveyPlan( BaseObject ):
     # ================================== #
     # = Observation time determination = #
     # ================================== #
+    def observe(self, ra, dec, mjd_range=None):
+        """
+        """
+        self._derived_properties["observed"] = self.observed_on(ra, dec,
+                                                                mjd_range)
+
+        return self._derived_properties["observed"]
+
     def observed_on(self, ra, dec, mjd_range=None):
         """
         mjd_range must be (2,N)-array 
@@ -346,7 +381,7 @@ class SurveyPlan( BaseObject ):
         # field number use this to determine whether ra and dec were arrays or
         # floats (since this is done in SurveyField.coord_in_field there is no
         # need to redo this)
-        for k, obs in enumerate(self.cadence[np.isnan(self.cadence["Field"])]):
+        for k, obs in enumerate(self.cadence[np.isnan(self.cadence["field"])]):
             tmp_f = SurveyField(obs["RA"], obs["Dec"], 
                                 self.width, self.height)
             b = tmp_f.coord_in_field(ra, dec)
@@ -356,66 +391,72 @@ class SurveyPlan( BaseObject ):
             if k == 0:
                 if type(b) is np.bool_:
                     single_coord = True
-                    out = {'MJD': [], 'Band': []}
+                    out = {'time': [], 'band': [], 'skynoise': []}
                 else:
                     single_coord = False
-                    out = [{'MJD': [], 'Band': []} for r in ra]
+                    out = [{'time': [], 'band': [], 'skynoise': []} for r in ra]
 
             if single_coord:
                 if b:
-                    out['MJD'].extend(obs['MJD'].quantity.values)
-                    out['Band'].extend(obs['Band'].quantity.values)
+                    out['time'].extend(obs['time'].quantity.values)
+                    out['band'].extend(obs['band'])
+                    out['skynoise'].extend(obs['skynoise'].quantity.values)
             else:
                 for l in np.where(b)[0]:
-                    out[l]['MJD'].extend(obs['MJD'].quantity.values)
-                    out[l]['Band'].extend(obs['Band'].quantity.values)
+                    out[l]['time'].extend(obs['time'].quantity.values)
+                    out[l]['band'].extend(obs['band'])
+                    out[l]['skynoise'].extend(obs['skynoise'].quantity.values)
 
         # Now get the other observations (those with a field number)
         if (self.fields is not None and 
-            not np.all(np.isnan(self.cadence["Field"]))):
+            not np.all(np.isnan(self.cadence["field"]))):
             b = self.fields.coord2field(ra, dec)
             
             # if all pointings were in fields create new dicts, otherwise append
             if single_coord is None:
                 if type(b) is not list:
                     single_coord = True
-                    out = {'MJD': [], 'Band': []}
+                    out = {'time': [], 'band': [], 'skynoise': []}
                 else:
                     single_coord = False
-                    out = [{'MJD': [], 'Band': []} for r in ra]
+                    out = [{'time': [], 'band': [], 'skynoise': []} for r in ra]
             
             if single_coord:
                 for l in b:
                     mask = (self.cadence['Field'] == l)
-                    out['MJD'].extend(self.cadence['MJD'][mask].quantity.value)
-                    out['Band'].extend(self.cadence['Band'][mask])
+                    out['time'].extend(self.cadence['time'][mask].quantity.value)
+                    out['band'].extend(self.cadence['band'][mask])
+                    out['skynoise'].extend(self.cadence['skynoise']
+                                           [mask].quantity.values)
             else:
                 for k, idx in enumerate(b):
                     for l in idx:
                         mask = (self.cadence['Field'] == l)
-                        out[k]['MJD'].extend(self.cadence['MJD'][mask].quantity.value)
-                        out[k]['Band'].extend(self.cadence['Band'][mask])
+                        out[k]['time'].extend(self.cadence['time'][mask].quantity.value)
+                        out[k]['band'].extend(self.cadence['band'][mask])
+                        out[k]['skynoise'].extend(self.cadence['skynoise']
+                                                  [mask].quantity.values)
 
-        # Make Tables and sort by MJD
+        # Make Tables and sort by time
         if single_coord:
             table = Table(out, meta={'RA': ra, 'Dec': dec})
-            idx = np.argsort(table['MJD'])
+            idx = np.argsort(table['time'])
             if mjd_range is None:
                 return table[idx]
             else:
                 t = table[idx]
-                return t[(t['MJD'] >= mjd_range[0]) &
-                         (t['MJD'] <= mjd_range[1])]
+                return t[(t['time'] >= mjd_range[0]) &
+                         (t['time'] <= mjd_range[1])]
         else:
             tables = [Table(a, meta={'RA': r, 'Dec': d}) for a, r, d 
                       in zip(out, ra, dec)]
-            idx = [np.argsort(t['MJD']) for t in tables]
+            idx = [np.argsort(t['time']) for t in tables]
             if mjd_range is None:
                 return [t[i] for t, i in zip(tables, idx)]
             else:
                 ts = [t[i] for t, i in zip(tables, idx)]
-                return [t[(t['MJD'] >= mjd_range[0][k]) &
-                          (t['MJD'] <= mjd_range[1][k])] 
+                return [t[(t['time'] >= mjd_range[0][k]) &
+                          (t['time'] <= mjd_range[1][k])] 
                         for k, t in enumerate(ts)]
 
     # =========================== #
@@ -436,7 +477,16 @@ class SurveyPlan( BaseObject ):
         """field height"""
         return self._properties["height"]
 
+    # ------------------
+    # - Side properties                    
     @property
     def fields(self):
         """Observation fields"""
         return self._side_properties["fields"]
+
+    # ------------------
+    # - Derived values
+    @property
+    def observed(self):
+        """Saved observation times per object"""
+        return self._derived_properties["observed"]
