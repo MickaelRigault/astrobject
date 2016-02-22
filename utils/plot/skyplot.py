@@ -10,6 +10,7 @@ longitude direction to get a celestial plot.
 import numpy as np
 import matplotlib.pyplot as mpl
 import warnings
+from copy import deepcopy
 
 _d2r = np.pi / 180 
 
@@ -75,7 +76,7 @@ def convert_radec_azel(ra, dec, edge=0):
     edge -- can be used to set move points at exactly ra = -180 or 180
             slightly off that
     
-    [This could be extended to also convert between cooridinate systems.]
+    [This could be extended to also convert between coordinate systems.]
     """
     #Make sure RA is between -180 and 180, then invert axis
     if edge > 0:
@@ -96,3 +97,100 @@ def convert_radec_azel(ra, dec, edge=0):
 
     return az, el
 
+def cart2sph(vec, cov=None):
+    """
+    Convert vector in Cartesian coordinates to spherical coordinates 
+    (angles in degrees). Convariance matrix can be converted as well
+    if it is stated.
+    """
+    x = vec[0]
+    y = vec[1] 
+    z = vec[2] 
+
+    v = np.sqrt(x**2 + y**2 + z**2)
+    v_sph = np.array([v, (np.arctan2(y,x) / _d2r + 180) % 360 - 180, 
+                          np.arcsin(z/v) / _d2r])
+    
+    if cov is None:
+        return v_sph
+    else:
+        jacobian = np.zeros((3,3))
+        jacobian[0,0] = x / v
+        jacobian[1,0] = - y / (x**2 + y**2)
+        jacobian[2,0] = - x * z / (v**2 * np.sqrt(x**2 + y**2))
+        jacobian[0,1] = y / v
+        jacobian[1,1] = x / (x**2 + y**2)
+        jacobian[2,1] = - y * z / (v**2 * np.sqrt(x**2 + y**2))
+        jacobian[0,2] = z / v
+        jacobian[1,2] = 0
+        jacobian[2,2] = np.sqrt(x**2 + y**2) / (v**2)
+
+        cov_sph = (jacobian.dot(cov)).dot(jacobian.T)
+        cov_sph[1,1] /= _d2r**2
+        cov_sph[2,2] /= _d2r**2
+        cov_sph[2,1] /= _d2r**2
+        cov_sph[1,2] /= _d2r**2
+    
+        cov_sph[0,1] /= _d2r
+        cov_sph[0,2] /= _d2r
+        cov_sph[1,0] /= _d2r
+        cov_sph[2,0] /= _d2r    
+
+        return v_sph, cov_sph
+
+def sph2cart(vec, cov=None):
+    """
+    Convert vector in spherical coordinates (angles in degrees)
+    to Cartesian coordinates. Convariance matrix can be converted as well
+    if it is stated.
+    """
+    v = vec[0]
+    l = vec[1]*_d2r
+    b = vec[2]*_d2r
+
+    v_cart = np.array([v*np.cos(b)*np.cos(l), v*np.cos(b)*np.sin(l), 
+                       v*np.sin(b)])    
+
+    if cov is None:
+        return v_cart
+    else:
+        cov_out = deepcopy(cov)
+        cov_out[1,1] *= _d2r**2
+        cov_out[2,2] *= _d2r**2
+        cov_out[2,1] *= _d2r**2
+        cov_out[1,2] *= _d2r**2
+        cov_out[0,1] *= _d2r
+        cov_out[0,2] *= _d2r
+        cov_out[1,0] *= _d2r
+        cov_out[2,0] *= _d2r
+
+        jacobian = np.zeros((3,3))
+        jacobian[0,0] = np.cos(b) * np.cos(l)
+        jacobian[1,0] = np.cos(b) * np.sin(l)
+        jacobian[2,0] = np.sin(b)
+        jacobian[0,1] = - v * np.cos(b) * np.sin(l)
+        jacobian[1,1] = v * np.cos(b) * np.cos(l)
+        jacobian[2,1] = 0
+        jacobian[0,2] = - v * np.sin(b) * np.cos(l)
+        jacobian[1,2] = - v * np.sin(b) * np.sin(l)
+        jacobian[2,2] = v * np.cos(b)
+
+        cov_cart = (jacobian.dot(cov_out)).dot(jacobian.T)
+
+        return v_cart, cov_cart
+
+def rot_xz(v, theta):
+    """
+    Rotate Cartesian vector v by angle theta around axis (0,1,0)
+    """
+    return np.array([v[0]*np.cos(theta*_d2r) - v[2]*np.sin(theta*_d2r),
+                     v[1],
+                     v[2]*np.cos(theta*_d2r) + v[0]*np.sin(theta*_d2r)])
+
+def rot_xz_sph(l, b, theta):
+    """
+    Rotate Spherical coordinate (l,b) by angle theta around axis (0,1,0)
+    """
+    v_cart = sph2cart([1,l,b])
+    v_rot = rot_xz(v_cart, theta)
+    return cart2sph(v_rot)[1:]

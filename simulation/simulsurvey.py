@@ -6,14 +6,15 @@ import warnings
 import numpy as np
 
 import sncosmo
-from astropy.table import Table
+from astropy.table import Table, vstack
 
 from ..astrobject.baseobject import BaseObject
 from ..utils.tools import kwargs_update
+from ..utils.plot.skybins import SurveyField, SurveyFieldBins 
 from .simultarget import sn_generator,transient_generator
 
 
-__all__ = ["SimulSurvey"] # to be changed
+__all__ = ["SimulSurvey", "SurveyPlan"] # to be changed
 
 #######################################
 #                                     #
@@ -54,7 +55,7 @@ class SimulSurvey( BaseObject ):
         """
         """
         if not self.is_set():
-            raise AttributeError("cadence, genetor or instrument not set")
+            raise AttributeError("cadence, generator or instrument not set")
         self.observations.sort("time")
         params = [{"z":self.generator.zcmb[i],
                     "c":self.generator.color[i],
@@ -238,3 +239,204 @@ class SimulSurvey( BaseObject ):
             
         return self._derived_properties["observations"]
     
+#######################################
+#                                     #
+# Survey: Plan object                 #
+#                                     #
+#######################################
+class SurveyPlan( BaseObject ):
+    """
+    Survey Plan
+    contains the list of observation times, bands and pointings and
+    can return that times and bands, which a transient is observed at/with.
+    A list of fields can be given to simplify adding observations and avoid 
+    lookups whether an object is in a certain field.
+    Currently assumes a single instrument, especially for FoV width and height.
+    [This may be useful for the cadence property of SimulSurvey]
+    """
+    _properties_keys         = ["cadence", "width", "height"]
+    _side_properties_keys    = ["fields"]
+    _derived_properties_keys = []
+    
+    def __init__(self, mjd=None, ra=None, dec=None, band=None, obs_field=None,
+                 width=7., height=7., fields=None, empty=False):
+        """
+        Parameters:
+        ----------
+        TBA
+        
+        """
+        self.__build__()
+        if empty:
+            return
+    
+        self.create(mjd=mjd,ra=ra,dec=dec,band=band,obs_field=obs_field,
+                    fields=fields)
+
+    def create(self, mjd=None, ra=None, dec=None, band=None, obs_field=None,
+               width=7., height=7., fields=None):
+        """
+        """
+        self._properties["width"] = float(width)
+        self._properties["height"] = float(height)
+        self.set_fields(**fields)
+
+        self.add_observation(mjd,band,ra=ra,dec=dec,field=obs_field)
+
+    # =========================== #
+    # = Main Methods            = #
+    # =========================== #
+
+    # ---------------------- #
+    # - Get Methods        - #
+    # ---------------------- #
+    
+    # ---------------------- #
+    # - Setter Methods     - #
+    # ---------------------- #
+    def set_fields(self, ra=None, dec=None, **kwargs):
+        """
+        """
+        kwargs["width"] = kwargs.get("width", self.width)
+        kwargs["height"] = kwargs.get("height", self.height)
+
+        self._side_properties["fields"] = SurveyFieldBins(ra, dec, **kwargs)
+
+        if self.cadence is not None and np.any(np.isnan(self.cadence['field'])):
+            warnings.warning("cadence was already set, field pointing will be updated")
+            self._update_field_radec()
+
+    def add_observation(self, mjd, band, ra=None, dec=None, field=None):
+        """
+        """
+        if ra is None and dec is None and field is None:
+            raise ValueError("Either field or ra and dec must to specified.")
+        elif ra is None and dec is None:
+            if self.fields is None:
+                raise ValueError("Survey fields not defined.")
+            else:
+                ra = self.fields.ra[field]
+                dec = self.fields.dec[field]
+        elif field is None:
+            field = np.array([np.nan for r in ra])
+
+        new_obs = Table({"MJD": mjd,
+                         "Band": band,
+                         "RA": ra,
+                         "Dec": dec,
+                         "Field": field})
+
+        if self._properties["cadence"] is None:
+            self._properties["cadence"] = new_obs
+        else:
+            self._properties["cadence"] = vstack((self._properties["cadence"], 
+                                                  new_obs))
+
+    # ================================== #
+    # = Observation time determination = #
+    # ================================== #
+    def observed_on(self, ra, dec, mjd_range=None):
+        """
+        mjd_range must be (2,N)-array 
+        where N is the length of ra and dec
+        """
+        single_coord = None
+
+        # first get the observation times and bands for pointings without a
+        # field number use this to determine whether ra and dec were arrays or
+        # floats (since this is done in SurveyField.coord_in_field there is no
+        # need to redo this)
+        for k, obs in enumerate(self.cadence[np.isnan(self.cadence["Field"])]):
+            tmp_f = SurveyField(obs["RA"], obs["Dec"], 
+                                self.width, self.height)
+            b = tmp_f.coord_in_field(ra, dec)
+            
+            # Setup output as dictionaries that can be converted to Tables and
+            # sorted later
+            if k == 0:
+                if type(b) is np.bool_:
+                    single_coord = True
+                    out = {'MJD': [], 'Band': []}
+                else:
+                    single_coord = False
+                    out = [{'MJD': [], 'Band': []} for r in ra]
+
+            if single_coord:
+                if b:
+                    out['MJD'].extend(obs['MJD'].quantity.values)
+                    out['Band'].extend(obs['Band'].quantity.values)
+            else:
+                for l in np.where(b)[0]:
+                    out[l]['MJD'].extend(obs['MJD'].quantity.values)
+                    out[l]['Band'].extend(obs['Band'].quantity.values)
+
+        # Now get the other observations (those with a field number)
+        if (self.fields is not None and 
+            not np.all(np.isnan(self.cadence["Field"]))):
+            b = self.fields.coord2field(ra, dec)
+            
+            # if all pointings were in fields create new dicts, otherwise append
+            if single_coord is None:
+                if type(b) is not list:
+                    single_coord = True
+                    out = {'MJD': [], 'Band': []}
+                else:
+                    single_coord = False
+                    out = [{'MJD': [], 'Band': []} for r in ra]
+            
+            if single_coord:
+                for l in b:
+                    mask = (self.cadence['Field'] == l)
+                    out['MJD'].extend(self.cadence['MJD'][mask].quantity.value)
+                    out['Band'].extend(self.cadence['Band'][mask])
+            else:
+                for k, idx in enumerate(b):
+                    for l in idx:
+                        mask = (self.cadence['Field'] == l)
+                        out[k]['MJD'].extend(self.cadence['MJD'][mask].quantity.value)
+                        out[k]['Band'].extend(self.cadence['Band'][mask])
+
+        # Make Tables and sort by MJD
+        if single_coord:
+            table = Table(out, meta={'RA': ra, 'Dec': dec})
+            idx = np.argsort(table['MJD'])
+            if mjd_range is None:
+                return table[idx]
+            else:
+                t = table[idx]
+                return t[(t['MJD'] >= mjd_range[0]) &
+                         (t['MJD'] <= mjd_range[1])]
+        else:
+            tables = [Table(a, meta={'RA': r, 'Dec': d}) for a, r, d 
+                      in zip(out, ra, dec)]
+            idx = [np.argsort(t['MJD']) for t in tables]
+            if mjd_range is None:
+                return [t[i] for t, i in zip(tables, idx)]
+            else:
+                ts = [t[i] for t, i in zip(tables, idx)]
+                return [t[(t['MJD'] >= mjd_range[0][k]) &
+                          (t['MJD'] <= mjd_range[1][k])] 
+                        for k, t in enumerate(ts)]
+
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def cadence(self):
+        """Table of observations"""
+        return self._properties["cadence"]
+
+    @property
+    def width(self):
+        """field width"""
+        return self._properties["width"]
+
+    @property
+    def height(self):
+        """field height"""
+        return self._properties["height"]
+
+    @property
+    def fields(self):
+        """Observation fields"""
+        return self._side_properties["fields"]
