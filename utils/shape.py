@@ -7,6 +7,11 @@
 import numpy as np
 import matplotlib.pyplot as mpl
 from matplotlib.patches import Polygon
+
+# -- Local module
+from .decorators import make_method
+
+# -- Shapely
 try:
     from shapely.geometry import MultiPoint,Point, polygon, multipolygon
     HAS_SHAPELY = True
@@ -79,16 +84,23 @@ def polygon_to_patch(polygon_,**kwargs):
     return Polygon(polygon_to_vertices(polygon_), **kwargs)
 
 
+@make_method(mpl.Axes)
 def draw_polygon(ax,polygon_,**kwargs):
     """
+    draw the polygon within the current axis
     """
     from .tools import kwargs_update
-
+    # ----------------
+    # - Styling
     defaultprop = dict(fc=mpl.cm.Blues(0.6,0.1),
                        ec=mpl.cm.binary(0.8,0.9),lw=2)
     
     prop = kwargs_update(defaultprop,**kwargs)
-    
+    if prop["ec"] is None:
+        prop["ec"] = prop["fc"]
+
+    # ----------------
+    # - Patching
     if type(polygon_) is polygon.Polygon:
         patch = polygon_to_patch(polygon_,**prop)
         ax.add_patch(patch)

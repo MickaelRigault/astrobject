@@ -17,13 +17,12 @@ __all__ = ["ImageCollection"]
 # Base Collection                     #
 #                                     #
 #######################################
-class Collection( BaseObject ):
+class BaseCollection(BaseObject):
     """
     """
     __nature__ = "Collection"
 
     _properties_keys = ["handler"]
-    _side_properties_keys = ["target"]
     
     def __init__(self):
         """
@@ -36,7 +35,7 @@ class Collection( BaseObject ):
     # ========================== #
     def remove(self,id):
         """This methods enable to remove the given data from the current instance"""
-        self._test_id_(id)
+        self._test_source_(id)
         to_rm = self._handler.pop(id)
         del to_rm
 
@@ -47,12 +46,76 @@ class Collection( BaseObject ):
         the 'newid' entry.
         """
         # -- Test if it is ok
-        self._test_id_(id)
+        self._test_source_(id)
         if newid in self.list_id and not force_it:
             raise ValueError("the newid '%s' already exists. Set force_it to true to overwrite it")
         
         # -- Do the switch
         self._handler[newid] = self._handler.pop(id)
+
+    # ----------------- #
+    # - Getter        - #
+    # ----------------- #
+
+    # ----------------- #
+    # - Setter        - #
+    # ----------------- #
+
+    # ========================== #
+    # = Internal Tools         = #
+    # ========================== #
+    def _test_source_(self,source):
+        """This methods tests if the given 'id' exists"""
+        if source not in self.list_sources:
+            raise ValueError("'%s' is not a known source "%source +"\n"\
+                             "These are: "+", ".join(self.list_sources))
+        return True
+    
+    # ========================== #
+    # = Properties             = #
+    # ========================== #
+    # ---------------------
+    # - Data Handlers
+    @property
+    def _handler(self):
+        """
+        This is where the data are recorded. Any data.
+        """
+        # - Handler are dictionnaries
+        if self._properties["handler"] is None:
+            self._properties["handler"] = {}
+            
+        return self._properties["handler"]
+
+    @property
+    def nsources(self):
+        return len(self._handler.keys())
+        
+    def has_sources(self):
+        return len(self._handler.keys()) > 0
+    
+    @property
+    def list_sources(self):
+        """This is the list of the known data id"""
+        if not self.has_sources():
+            raise AttributeError("no data loaded")
+        
+        return np.sort(self._handler.keys()).tolist()
+    
+
+# =============================== #
+#                                 #
+#  Astro-oriented BaseCollection  #
+#                                 #
+# =============================== #
+class Collection( BaseCollection ):
+    """
+    """
+    def __build__(self,*args,**kwargs):
+        """
+        """
+        self._side_properties_keys.append("target")
+        super(Collection,self).__build__(*args,**kwargs)
         
     # ----------------- #
     # - Setter        - #
@@ -76,47 +139,25 @@ class Collection( BaseObject ):
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
 
-    # ========================== #
-    # = Internal Tools         = #
-    # ========================== #
-    
-    def _test_id_(self,id):
-        """This methods tests if the given 'id' exists"""
-        if id not in self.list_id:
-            raise ValueError("%s is not a known image ID"%id +"\n"\
-                             "These are: "+", ".join(self.list_id))
-        return True
-    
+
+    def _test_id_(self,id_):
+        """
+        """
+        return self._test_source_(id_)
     # ========================== #
     # = Properties             = #
     # ========================== #
-    # ---------------------
-    # - Data Handlers
-    @property
-    def _handler(self):
-        """
-        This is where the data are recorded. Any data.
-        """
-        # - Handler are dictionnaries
-        if self._properties["handler"] is None:
-            self._properties["handler"] = {}
-            
-        return self._properties["handler"]
-
     @property
     def ndata(self):
-        return len(self._handler.keys())
+        return self.nsources
         
     def has_data(self):
-        return len(self._handler.keys()) > 0
+        return self.has_sources()
     
     @property
     def list_id(self):
-        """This is the list of the known data id"""
-        if not self.has_data():
-            raise AttributeError("no data loaded")
-        
-        return np.sort(self._handler.keys()).tolist()
+        """This is the list of the known data id (equivalent to list_sources)"""
+        return self.list_sources
     # ---------------------
     # - Target
     @property
@@ -214,30 +255,123 @@ class ImageCollection( Collection ):
     # ========================== #
     # = Get                    = #
     # ========================== #
-    def get_target_collection(self,target=None):
+    def get_target_ids(self,target=None):
         """
-        return a collection of images associated to the target.
-        if no target is given and a target has been set (set_target) the current
-        target will be used. If you give here a target, it will use it *without*
-        changing the current target. This method raise a ValueError is no target
-        accessible.
+        This methods enable to access the list of 'data' ids that contains the given target.
+
+        Parameters:
+        ----------
+        - options -
+        target: [None/ AstroTarget]   If no target is given and a target has been set
+                                      (set_target) the current target will be used.
+                                      If you give here a target, it will use it *without*
+                                      changing the current target.
+                                      -> Error
+                                      This method raise a ValueError is no target accessible.
+
+        Return:
+        -------
+        list (ids)
         """
+        # -----------------
+        # - Target
         if target is None:
             if not self.has_target():
                 raise ValueError("no target set to the instance and no input target")
             target = self.target
         elif "__nature__" not in dir(target) or target.__nature__ != "AstroTarget":
             raise TypeError("The given 'target' must be an astrobject AstroTarget")
-        
-        good_images = [self.images[id_]["file"] for id_ in self.list_id
-                       if self.images[id_]["wcs"].coordsAreInImage(target.ra,target.dec)]
+        # -----------------
+        # - ID information
+        return [id_ for id_ in self.list_id
+            if self.images[id_]["wcs"].coordsAreInImage(target.ra,target.dec)]
             
-        im = ImageCollection(good_images)
-        
+    def get_target_collection(self,target=None):
+        """
+        This modules enables to get a new ImageCollection containing only
+        the images corresponding to the given target (target in the image FoV).
+
+        Parameters:
+        -----------
+
+        - options -
+
+        target: [None/ AstroTarget]   If no target is given and a target has been set
+                                      (set_target) the current target will be used.
+                                      If you give here a target, it will use it *without*
+                                      changing the current target.
+                                      -> Error
+                                      This method raise a ValueError is no target accessible.
+                                      (see self.get_target_ids)
+
+        Return:
+        -------
+        ImageCollection
+        """
+        im = ImageCollection([self.images[id_]["file"]
+                              for id_ in self.get_target_ids(target)])
         im.set_target(target)
         return im
+
+    def get_target_photopoints(self,radius_kpc,target=None,
+                               onflight=False,**kwargs):
+        """
+        This modules enables to get a new ImageCollection containing only
+        the images corresponding to the given target (target in the image FoV).
+
+        Parameters:
+        -----------
+
+        radius_kpc: [float]           The aperture photometry radius in kpc.
+                                      (kpc will be converted in pixels for every images)
+                                      
+                                      
+        - options -
+
+        target: [None/ AstroTarget]   If no target is given and a target has been set
+                                      (set_target) the current target will be used.
+                                      If you give here a target, it will use it *without*
+                                      changing the current target.
+                                      -> Error
+                                      This method raise a ValueError is no target accessible.
+                                      (see self.get_target_ids)
+
+        onflight: [bool]              Use this to avoid to load the images in the current instance
+                                      If True, this will instead load a copy of the current instance
+                                      using 'get_target_collection' which will then be delaited.
+                                      -> Use this to save cach-memory once the method is finished.
+        
+        -- other options --
+        
+        kwargs goes to get_target_photopoints (-> get_aperture), including notably:
+               aptype, subpix, ellipse_args, annular_args
+
+           
+        Return:
+        -------
+        PhotoPointCollection
+        """
+        if not onflight:
+            ids = self.get_target_ids(target=target)
+            images = [self.get_image(_id,load_catalogue=False)
+                      for _id in ids]
+        else:
+            target_imcoll = self.get_target_collection(target=target)
+            images = [target_imcoll(_id,load_catalogue=False)
+                      for _id in target_imcoll.list_id]
+
+        
+        photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius_kpc/image_.target.arcsec_per_kpc/image_.pixel_size_arcsec.value,
+                                            **kwargs) for image_ in images])
+        
+        
+        if onflight:
+            del images
+            del target_imcoll
             
-    def get_image(self,id):
+        return photopoints
+    
+    def get_image(self,id,load_catalogue=True):
         """
         """
         self._test_id_(id)
@@ -255,7 +389,7 @@ class ImageCollection( Collection ):
             im.set_target(self.target)
         # ---------------
         # Catalogue
-        if not im.has_catalogue() and self.has_catalogue():
+        if load_catalogue and self.has_catalogue() and not im.has_catalogue():
             # --- Check if the current catalogue is big enough
             im.set_catalogue(self.catalogue.copy())
 
@@ -324,13 +458,14 @@ class ImageCollection( Collection ):
 
         # ----------------------
         # -  loop over the images
-        pl = [ax.wcsplot(self.images[id_]["wcs"],fc=fc,ec=ec,**kwargs)
+        _prop = kwargs_update({"zorder":5},**kwargs)
+        pl = [ax.wcsplot(self.images[id_]["wcs"],fc=fc,ec=ec,**_prop)
               for id_ in self.list_id if self.images[id_]["wcs"] is not None]
 
         # ----------------------
         # - Catalogue
         if self.has_catalogue() and show_catalogue:
-            self.catalogue.display(ax)
+            self.catalogue.display(ax,zorder=3)
         # ----------------------
         # - Target
         if self.has_target() and show_target:
@@ -372,11 +507,9 @@ class ImageCollection( Collection ):
             raise TypeError("the given new_image file is not an image of a known instrument")
 
         ID = imagefile.split("/")[-1]
-        print ID
         self.images[ID] = {
             "file":imagefile,
             "image":None
-
             }
         try:
             self.images[ID]["wcs"] = inst.get_instrument_wcs(imagefile)
@@ -404,8 +537,6 @@ class ImageCollection( Collection ):
         """
         self.images[id]["image"] = inst.instrument(self.images[id]["file"])
         
-        
-    
     # ========================== #
     # = Properties             = #
     # ========================== #    
@@ -447,14 +578,187 @@ class ImageCollection( Collection ):
 # Image Collection -> SED SOURCE      #
 #                                     #
 #######################################
-class PhotoCollection( Collection ):
+class PhotoPointCollection( Collection ):
     """
     """
     
-    def __init__(self, photopoints=None,empty=True):
+    def __init__(self, photopoints=None,empty=False):
         """
         """
         self.__build__()
+        if empty:
+            return
+        if photopoints is not None:
+            self.create(photopoints)
+    # =============================== #
+    # = Main Methods                = #
+    # =============================== #
+
+    # ------------------- #
+    # - I/O PhotoPoint  - #
+    # ------------------- #
+    def create(self,photopoints):
+        """
+        """
+        if "__iter__" not in dir(photopoints):
+            photopoints = [photopoints]
+        [self.add_photopoint(p_) for p_ in photopoints]
         
+    def add_photopoint(self,photopoint):
+        """
+        This method enables to register the given photpoint in the self.photopoints
+        container (dict).
         
+        Parameters
+        ----------
+        new_image: [string or astrobject's Image (or children)]
+
+        - option -
+
+        load_catalogue: [bool]     run the 'download_catalogue' method to
+                                   download the corresponding catalogue if
+                                   it does not exist yet.
+        Return
+        ------
+        Void
+        """
+        # --------------
+        # - Define ID
+        ID = photopoint.bandname
+        if self.has_data():
+            if ID in self.list_id:
+                i = 1
+                while ID+"-%d"%i in self.list_id:
+                    i+=1
+                ID = ID+"-%d"%i
+        # -------------------
+        # - Record the point        
+        self.photopoints[ID] = photopoint
+
+    # ------------------- #
+    # - Getter          - #
+    # ------------------- #
+
+
+        
+    # ------------------- #
+    # - Plot Stuff      - #
+    # ------------------- #
+    def show_sed(self,savefile=None,toshow="flux",ax=None,
+                cmap="jet",show=True,**kwargs):
+        """
+        """
+        kwargs["function_of_time"] = False
+        return self._show_(savefile=savefile,toshow=toshow,ax=ax,
+                    cmap=cmap,show=show,**kwargs)
+
+    def show_lightcurve(self,savefile=None,toshow="flux",ax=None,
+                        cmap="jet",show=True,**kwargs):
+        """
+        """
+        kwargs["function_of_time"] = True
+        return self._show_(savefile=savefile,toshow=toshow,ax=ax,
+                    cmap=cmap,show=show,**kwargs)
+
+        
+    # ========================== #
+    # = Internal Stufff        = #
+    # ========================== #
+    def _show_(self,savefile=None,toshow="flux",ax=None,
+                cmap="jet",show=True,**kwargs):
+        """
+        """
+        import matplotlib.pyplot as mpl
+        from ..utils.mpladdon import figout
+        self._plot = {}
+        # --------------------
+        # --- INPUTS
+        # - axes
+        if ax is None:
+            fig = mpl.figure(figsize=[8,8])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "imshow" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+            
+        # - Colors
+        if type(cmap) is str:
+            cmap = eval("mpl.cm.%s"%cmap)
+        colors = kwargs.pop("color",[cmap((i-np.min(self.lbdas))/(np.max(self.lbdas)-np.min(self.lbdas))) for i in self.lbdas])
+        prop = kwargs_update({"ms":10},**kwargs)
+        # -------------
+        # - Da Plot
+        pl = [self.photopoints[id_].display(ax,toshow=toshow,color=c_,**prop)["plot"]
+              for id_,c_ in zip(self.list_id,colors)]
+        # -------------
+        # - Out
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['plot'] = pl
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
+
+        
+    def _get_list_prop_(self,param):
+        """
+        """
+        return [eval("self.photopoints[id_].%s"%param)
+                for id_ in self.list_id]
     
+    # ========================== #
+    # = Properties             = #
+    # ========================== #    
+    @property
+    def photopoints(self):
+        """
+        """
+        return self._handler
+    
+    # ------------------ #
+    # - On flight prop - #
+    # ------------------ #
+    # -- Bands
+    @property
+    def bandnames(self):
+        """This returns an array of the recorded images' bandname"""
+        # -- This might be included in the add/remove image tools
+        return self._get_list_prop_("bandname")
+
+    @property
+    def nbands(self):
+        """The amount of diffenrent recorded bands"""
+        return np.unique(self.bandnames)
+
+    # -- Flux Variances etc.
+    @property
+    def lbdas(self):
+        """The wavelength of every photopoints"""
+        return self._get_list_prop_("lbda")
+
+    @property
+    def fluxes(self):
+        """The fluxes of every photopoints"""
+        return self._get_list_prop_("flux")
+    
+    @property
+    def fluxvars(self):
+        """The flux variances of every photopoints"""
+        return self._get_list_prop_("var")
+    
+    @property
+    def mags(self):
+        """The (AB) mag of every photopoints"""
+        return self._get_list_prop_("mag")
+
+    @property
+    def magvars(self):
+        """The (AB) mag variances of every photopoints"""
+        return self._get_list_prop_("magvar")
+    
+    # -- Times
+    @property
+    def mjds(self):
+        """The modified Julian Dates of every photopoints"""
+        return self._get_list_prop_("mjd")

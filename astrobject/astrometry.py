@@ -139,11 +139,17 @@ class WCS(pyWCS):
                 
                 ra,dec = np.asarray([self.pix2wcs(i,j)
                                 for i,j in np.concatenate([v1,v2,v3,v4],axis=0)]).T
-                
                 self._contour = shape.get_contour_polygon(ra,dec)
             
         return self._contour
 
+    @property
+    def contours_pxl(self,**kwargs):
+        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        x,y = np.asarray([self.wcs2pix(ra_,dec_) for ra_,dec_ in
+                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)
+    
     def has_contours(self):
         """Test if this have contours defined"""
         return self.contours is not None

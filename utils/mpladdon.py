@@ -14,6 +14,19 @@ __all__ = ["specplot","skyplot","figout"]
 # ========================== #
 # =  Axes Add-on           = #
 # ========================== #
+# --------------------- #
+# - Spectrum          - #
+# --------------------- #
+@make_method(mpl.Axes)
+def errorscatter(ax,x,y,dx=None,dy=None,**kwargs):
+    """
+    In Dev
+    """
+    if dx is None and dy is None:
+        return
+    prop = kwargs_update({"ls":"None","marker":None,"zorder":2,
+                          "ecolor":"0.7"},**kwargs)
+    return ax.errorbar(x,y,xerr=dx,yerr=dy,**prop)
 
 # --------------------- #
 # - Spectrum          - #

@@ -304,8 +304,6 @@ class Catalogue( BaseObject ):
         else:
             self._writeto_fits_(savefile,force_it=force_it)
 
-
-    
     # --------------------- #
     # Set Methods           #
     # --------------------- #
@@ -495,7 +493,7 @@ class Catalogue( BaseObject ):
                 axout.append(ax.plot(x_,y_,**prop_))
 
         if self.contours is not None and wcs_coords and draw_contours:
-            shape.draw_polygon(ax,self.contours)
+            shape.draw_polygon(ax,self.contours,ec=None)
             
         if draw:
             ax.figure.canvas.draw()

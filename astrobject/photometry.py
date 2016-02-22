@@ -248,7 +248,7 @@ class Image( BaseObject ):
     # -------------------- #
     _properties_keys         = ["filename","rawdata","header",
                                 "var","background"]
-    _side_properties_keys    = ["wcs",
+    _side_properties_keys    = ["wcs","datamask",
                                 "target","catalogue",
                                 "exptime"] # maybe Exptime should just be on flight
         
@@ -371,7 +371,7 @@ class Image( BaseObject ):
         # -- closing the fits file
         fits.close()
         
-    def create(self,rawdata,variance,wcs,
+    def create(self,rawdata,variance,wcs,mask=None,
                background=None,header=None,exptime=None,
                filename=None,fits=None,force_it=False):
         """
@@ -399,18 +399,23 @@ class Image( BaseObject ):
         self._properties["filename"]     = filename
         self._derived_properties["fits"] = fits
         # basics data and wcs
+        self._side_properties["datamask"] = mask
         self._properties["rawdata"]      = np.asarray(rawdata,dtype="float")
+        if self.has_datamask():
+            self._properties["rawdata"][self.datamask] = np.NaN
         self._properties["header"]       = pf.Header() if header is None else header
         self._properties["var"]          = variance
+        if self.has_datamask() and self.has_var():
+            self._properties["var"][self.datamask] = np.NaN
+            
         self.set_background(background)
         # -- Side, exposure time
         self._side_properties["exptime"] = exptime
-
         # -------------------
         # - WCS solution
         self._side_properties["wcs"]     = astrometry.get_wcs(wcs,verbose=True)
-        self.wwcs =wcs
-        self._update_()
+        
+        self._update_(update_background=False)
 
 
     # ------------------- #
@@ -479,15 +484,19 @@ class Image( BaseObject ):
             raise AttributeError("'background' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        background  = self._get_default_background_() if background is None \
-           else background
+        if background is None:
+            background  = self._get_default_background_()
+            self._uses_default_background = True
+        else:
+            self._uses_default_background = False
+            
         
         # Shape test
         if self.rawdata is not None and np.shape(background) != self.shape:
             raise ValueError("The given background must have rawdata's shape")
         # -- Looks good
         self._properties['background'] = np.asarray(background)
-        self._update_data_()
+        self._update_data_(update_background=False)
 
 
     def set_catalogue(self,catalogue,force_it=False):
@@ -955,6 +964,15 @@ class Image( BaseObject ):
     # ------------------- #
     # - WCS Tools       - #
     # ------------------- #
+    def get_contours(self,pixel=True):
+        """Contours (Shapely) of the image. This refere's to the wcs solution"""
+        if not self.has_wcs():
+            raise NotImplementedError("Only WCS contours implemented and this has no wcs solution")
+        
+        if pixel:
+            return self.wcs.contours_pxl
+        return self.wcs.contours
+    
     def pixel_to_coords(self,pixel_x,pixel_y):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
         if self.has_wcs() is False:
@@ -972,19 +990,16 @@ class Image( BaseObject ):
     # ------------------- #
     # - SEP Tools       - #
     # ------------------- #
-    def get_sep_background(self):
+    def get_sep_background(self,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor: sep.
         
         """
         if "_sepbackground" not in dir(self):
-            if self.rawdata is None:
-                raise ValueError("no 'rawdata' loaded. Cannot get a background")
-            from sep import Background
-            self._sepbackground = Background(self.rawdata)
+            self._measure_sep_background_(**kwargs)
 
         return self._sepbackground.back()
-        
+            
     def sep_extract(self,thresh=None,returnobjects=False,
                     set_catalogue=True,match_catalogue=True,**kwargs):
         """
@@ -1158,6 +1173,73 @@ class Image( BaseObject ):
         
         return self._plot
 
+
+    def show_hist(self,toshow="data",savefile=None,logscale=True,
+                ax=None,show=True,proptarget={},
+                **kwargs):
+        """
+        This methods enable to show histogram distribution of the concatenate data.
+        
+        """
+         # - Input test
+        if toshow not in dir(self):
+            raise ValueError("'%s' is not a known image parameter"%toshow)
+        valuetoshow = eval("self.%s"%toshow)
+        if valuetoshow is None:
+            raise AttributeError("no '%s' to show (=None)"%toshow)
+        
+        # -- Setting -- #
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if ax is None:
+            fig = mpl.figure(figsize=[8,8])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+        # ----------- #
+        # -  What
+        _x = np.log10(valuetoshow) if logscale else valuetoshow
+        x = np.concatenate(_x)
+        x = x[x==x]
+        # ----------- #
+        # - How
+        default_prop = {
+            "histtype":"step",
+            "fill":"True",
+            "lw":2,"ec":mpl.cm.Blues(0.8,0.8),
+            "fc":mpl.cm.Blues(0.6,0.3),
+            "bins":100,
+            "range":np.percentile(x,[1,99])
+            }
+            
+        prop = kwargs_update(default_prop,**kwargs)
+
+        # ----------- #
+        # - Do It     #
+        pl = ax.hist(x,**prop)
+
+         # ----------- #
+        # - Recordit
+        # -- Save the data -- #
+        self._plot["figure"] = fig
+        self._plot["ax"]     = ax
+        self._plot["pl"] = pl
+        #self._plot["target_plot"] = pl_tgt
+        self._plot["prop"]   = prop
+        
+        fig.figout(savefile=savefile,show=show)
+        
+        return self._plot
+        
+        
+    # ---------------------- #
+    # - Plot-Displays      - #
+    # ---------------------- #
     def display_target(self,ax,wcs_coords=True,draw=True,**kwargs):
         """If a target is loaded, use this to display the target on the
         given ax"""
@@ -1410,11 +1492,20 @@ class Image( BaseObject ):
     @property
     def width(self):
         return self.shape[1]
+    
     @property
     def height(self):
         return self.shape[0]
 
+    @property
+    def datamask(self):
+        return self._side_properties["datamask"]
     
+    def has_datamask(self):
+        """ Test you if defined a datamask key. This mask is True
+        for data you wish to remove"""
+        return self.datamask is not None
+        
     @property
     def var(self):
         if self._properties["var"] is None:
@@ -1525,6 +1616,7 @@ class Image( BaseObject ):
         """
         """
         return self.fwhm.to("arcsec") / self.pixel_size_arcsec
+    
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
@@ -1537,21 +1629,40 @@ class Image( BaseObject ):
         
     def _get_default_background_(self,*args,**kwargs):
         return self.get_sep_background(*args,**kwargs)
+
+    def _measure_sep_background_(self,**kwargs):
+        """
+        """
+        if self.rawdata is None:
+                raise ValueError("no 'rawdata' loaded. Cannot get a background")
+        from sep import Background
+        self._sepbackground_prop = kwargs_update({"mask":self.datamask if self.has_datamask() \
+                                                  else None},
+                                                 **kwargs)
+        self._sepbackground = Background(self.rawdata,**self._sepbackground_prop)
         
-    def _update_(self):
+    def _update_(self,update_background=True):
         """The module derives the 'derived_properties' based on the
         fundamental once
         """
         # -- Make sure the fundamental update (if any) are made
         super(Image,self)._update_()
         # - Data
-        self._update_data_()
+        self._update_data_(update_background=update_background)
 
-    def _update_data_(self):
+    def _update_data_(self,update_background=True):
         """
         """
+        if update_background:
+            if "_sepbackground" in dir(self):
+                self._measure_sep_background_(**self._sepbackground_prop)
+                if self._uses_default_background:
+                    self.set_background(self._get_default_background_())
+                
         self._derived_properties["data"] = self.rawdata - self.background
         
+            
+            
 #######################################
 #                                     #
 # Base Object Classes: PhotoPoint     #
@@ -1644,7 +1755,7 @@ class PhotoPoint( BaseObject ):
         
         self._update_()
 
-    def display(self,ax,toshow="flux",**kwargs):
+    def display(self,ax,toshow="flux",function_of_time=False,**kwargs):
         """This method enable to display the current point
         in the given matplotlib axes"""
         # - Test if there is data
@@ -1667,10 +1778,11 @@ class PhotoPoint( BaseObject ):
         prop = kwargs_update(default_prop,**kwargs)
         # -----------
         # - Input
-        pl = ax.errorbar(self.lbda,y,yerr=dy,**prop)
+        x_ = self.lbda if not function_of_time else self.mjd
+        pl = ax.errorbar(x_,y,yerr=dy,**prop)
         self._plot = {}
         self._plot["ax"] = ax
-        self._plot["marker"] = pl
+        self._plot["plot"] = pl
         self._plot["prop"] = prop
         return self._plot
 

@@ -31,7 +31,7 @@ HST_INFO = {
     }
 
 DATAINDEX = 1
-
+_NAN_OUTSIDE_DATA = True
 # -------------------- #
 # - Instrument Info  - #
 # -------------------- #  
@@ -115,10 +115,28 @@ class HST( Instrument ):
                 error_index = DATAINDEX,
                 header_exptime = "EXPTIME"
                 )
+
+    # ------------------------ #
+    # - Speciality           - #
+    # ------------------------ #
+    def get_contours(self,pixel=True):
+        """ """
+        # To Be Fasten
+        from ...utils import shape
+        if pixel:
+            x = [2060,9,-1,self.width,2060,19,9,2060]
+            y = [1154,1027,-1,114,self.height,2056,1038,1166]
+            #x,y= [-1,19,self.width,2060],[-1,2056,114,self.height]
+            return shape.polygon.Polygon(zip(x,y))
+        
+        x,y = np.asarray([self.pixel_to_coords(x_,y_) for x_,y_ in
+                          np.asarray(self.get_contours(pixel=True).exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)
+
         
     # =========================== #
     # = Properties and Settings = #
-    # =========================== #
+    # =========================== #    
     # --------------
     # - Image Data
     @property
@@ -182,6 +200,28 @@ class HST( Instrument ):
             raise ValueError("the amplifier must be A,B,C, or D")
         
         self._properties["used_amplifier"] = value.upper()
+
+    @property
+    def _flagdata(self):
+        """Based on PIL ; this is the mask following the pixel contours.
+        Most likely, this is by far the fastest technique to do so
+        """
+        from PIL import Image, ImageDraw
+        back = Image.new('RGBA', (self.width, self.height), (100,0,0,0))
+        mask = Image.new('RGBA', (self.width, self.height))
+        # PIL *needs* (!!) [(),()] format [[],[]] won
+        tuplemask = [(x_[0],x_[1]) for x_ in np.asarray(self.get_contours(pixel=True).exterior.xy).T]
+        ImageDraw.Draw(mask).polygon( tuplemask,fill=(255,255,255,127),outline=(255,255,255,255))
+        back.paste(mask,mask=mask)
+        invalue = 494 # because of the color chosen above
+        return (np.sum(np.array(back),axis=2)==invalue)
+    
+    @property
+    def datamask(self):
+        """ """
+        if self._side_properties["datamask"] is None and _NAN_OUTSIDE_DATA:
+            self._side_properties["datamask"] = ~self._flagdata
+        return self._side_properties["datamask"]
     # ------------------------
     # - Image Data Reduction
     @property
@@ -197,3 +237,4 @@ class HST( Instrument ):
     @property
     def _biaslevel(self):
         return self.fits[0].header["BIASLEV%s"%self.used_amplifier]
+
