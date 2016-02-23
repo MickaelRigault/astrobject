@@ -69,8 +69,10 @@ class SimulSurvey( BaseObject ):
         """
         """
         if not self.is_set():
-            raise AttributeError("cadence, generator or instrument not set")
-        self.observations.sort("time")
+            raise AttributeError("plan, generator or instrument not set")
+
+        model = sncosmo.Model(source=self.generator.lightcurve_model)
+
         params = [{"z":self.generator.zcmb[i],
                     "c":self.generator.color[i],
                     "x1":self.generator.x1[i],
@@ -78,9 +80,15 @@ class SimulSurvey( BaseObject ):
                     "t0":self.generator.mjd[i]}
                     for i in range(self.generator.ntransient)
                     ]
-        return sncosmo.realize_lcs(self.observations,
-                        sncosmo.Model(source=self.generator.lightcurve_model),
-                        params)
+        
+        # for k, (p, obs) in enumerate(zip(params, self.observations)):
+        #     print k, p
+        #     print obs
+        #     print (sncosmo.realize_lcs(obs, model,[p])[0] if obs is not None else None)
+
+        return [(sncosmo.realize_lcs(obs, model,[p])[0] 
+                 if obs is not None else None)
+                for p, obs in zip(params, self.observations)]
         
     # ---------------------- #
     # - Setter Methods     - #
@@ -197,7 +205,7 @@ class SimulSurvey( BaseObject ):
         
         # -----------------------
         # - Check if instruments exists
-        all_instruments = np.unique(self.cadence["Band"])
+        all_instruments = np.unique(self.cadence["band"])
         if not np.all([i in self.instruments.keys() for i in all_instruments]):
             raise ValueError("Some of the instrument in cadence have not been defined."+"\n"+
                              "given instruments :"+", ".join(all_instruments.tolist())+"\n"+
@@ -284,8 +292,8 @@ class SurveyPlan( BaseObject ):
     _side_properties_keys    = ["fields"]
     _derived_properties_keys = ["observed"]
     
-    def __init__(self, time=None, ra=None, dec=None, band=None, obs_field=None,
-                 width=7., height=7., fields=None, empty=False):
+    def __init__(self, time=None, ra=None, dec=None, band=None, skynoise=None, 
+                 obs_field=None, width=7., height=7., fields=None, empty=False):
         """
         Parameters:
         ----------
@@ -296,18 +304,18 @@ class SurveyPlan( BaseObject ):
         if empty:
             return
     
-        self.create(time=time,ra=ra,dec=dec,band=band,obs_field=obs_field,
-                    fields=fields)
+        self.create(time=time,ra=ra,dec=dec,band=band,skynoise=skynoise,
+                    obs_field=obs_field,fields=fields)
 
-    def create(self, time=None, ra=None, dec=None, band=None, obs_field=None,
-               width=7., height=7., fields=None):
+    def create(self, time=None, ra=None, dec=None, band=None, skynoise=None, 
+               obs_field=None, width=7., height=7., fields=None):
         """
         """
         self._properties["width"] = float(width)
         self._properties["height"] = float(height)
         self.set_fields(**fields)
 
-        self.add_observation(time,band,ra=ra,dec=dec,field=obs_field)
+        self.add_observation(time,band,skynoise,ra=ra,dec=dec,field=obs_field)
 
     # =========================== #
     # = Main Methods            = #
@@ -398,14 +406,14 @@ class SurveyPlan( BaseObject ):
 
             if single_coord:
                 if b:
-                    out['time'].extend(obs['time'].quantity.values)
+                    out['time'].extend(obs['time'].quantity.value)
                     out['band'].extend(obs['band'])
-                    out['skynoise'].extend(obs['skynoise'].quantity.values)
+                    out['skynoise'].extend(obs['skynoise'].quantity.value)
             else:
                 for l in np.where(b)[0]:
-                    out[l]['time'].extend(obs['time'].quantity.values)
+                    out[l]['time'].extend(obs['time'].quantity.value)
                     out[l]['band'].extend(obs['band'])
-                    out[l]['skynoise'].extend(obs['skynoise'].quantity.values)
+                    out[l]['skynoise'].extend(obs['skynoise'].quantity.value)
 
         # Now get the other observations (those with a field number)
         if (self.fields is not None and 
@@ -423,19 +431,19 @@ class SurveyPlan( BaseObject ):
             
             if single_coord:
                 for l in b:
-                    mask = (self.cadence['Field'] == l)
+                    mask = (self.cadence['field'] == l)
                     out['time'].extend(self.cadence['time'][mask].quantity.value)
                     out['band'].extend(self.cadence['band'][mask])
                     out['skynoise'].extend(self.cadence['skynoise']
-                                           [mask].quantity.values)
+                                           [mask].quantity.value)
             else:
                 for k, idx in enumerate(b):
                     for l in idx:
-                        mask = (self.cadence['Field'] == l)
+                        mask = (self.cadence['field'] == l)
                         out[k]['time'].extend(self.cadence['time'][mask].quantity.value)
                         out[k]['band'].extend(self.cadence['band'][mask])
                         out[k]['skynoise'].extend(self.cadence['skynoise']
-                                                  [mask].quantity.values)
+                                                  [mask].quantity.value)
 
         # Make Tables and sort by time
         if single_coord:
