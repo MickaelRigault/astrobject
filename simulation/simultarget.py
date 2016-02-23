@@ -579,7 +579,7 @@ class SNIaGenerator( TransientGenerator ):
     # - Hacked Methods   - #
     # -------------------- #
     def set_transient_parameters(self,ratekind="basic",
-                                 lcsimulation="random",
+                                 lcsimulation="basic",
                                  lcmodel="salt2",type_=None,
                                  update=True,lcsimul_prop={}):
         """

@@ -212,8 +212,17 @@ class SimulSurvey( BaseObject ):
                              "known instruments :"+", ".join(self.instruments.keys()))
             
         # -----------------------
+        # - Based on the model get a reasonable time scale for each transient
+        mjd = self.generator.mjd
+        model = sncosmo.Model(source=self.generator.lightcurve_model)
+        z = np.array(self.generator.zcmb)
+        mjd_range = np.array([mjd + model.mintime() * (1 + z), 
+                              mjd + model.maxtime() * (1 + z)])
+        
+        # -----------------------
         # - Lets build the tables
-        self.plan.observe(self.generator.ra, self.generator.dec)
+        self.plan.observe(self.generator.ra, self.generator.dec,
+                          mjd_range=mjd_range)
 
         self._derived_properties["observations"] = [(Table(
             {"time": obs["time"],
