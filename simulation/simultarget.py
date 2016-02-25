@@ -239,7 +239,7 @@ class TransientGenerator( BaseObject ):
         # ------------------
         # - Mask 
         if mask is None:
-            mask = np.ones(self.nstransient, dtype=bool)
+            mask = np.ones(self.ntransient, dtype=bool)
 
         # ------------------
         # - Axis definition

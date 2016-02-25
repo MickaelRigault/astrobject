@@ -28,7 +28,7 @@ class SimulSurvey( BaseObject ):
     """
     _properties_keys         = ["generator","instruments","plan"]
     _side_properties_keys    = ["cadence"]
-    _derived_properties_keys = ["observations"]
+    _derived_properties_keys = ["observations", "model", "lightcurve_parameters"]
     
     def __init__(self,generator=None, plan=None,
                  instprop=None,
@@ -71,25 +71,25 @@ class SimulSurvey( BaseObject ):
         if not self.is_set():
             raise AttributeError("plan, generator or instrument not set")
 
-        model = sncosmo.Model(source=self.generator.lightcurve_model)
-
-        params = [{"z":self.generator.zcmb[i],
-                    "c":self.generator.color[i],
-                    "x1":self.generator.x1[i],
-                    "x0":self.generator.lightcurve["x0"][i],
-                    "t0":self.generator.mjd[i]}
-                    for i in range(self.generator.ntransient)
-                    ]
-        
-        # for k, (p, obs) in enumerate(zip(params, self.observations)):
-        #     print k, p
-        #     print obs
-        #     print (sncosmo.realize_lcs(obs, model,[p])[0] if obs is not None else None)
-
-        return [(sncosmo.realize_lcs(obs, model,[p])[0] 
+        return [(sncosmo.realize_lcs(obs, self.model, [p])[0] 
                  if obs is not None else None)
-                for p, obs in zip(params, self.observations)]
+                for p, obs in zip(self.lightcurve_parameters, self.observations)]
         
+    def get_bandmag(self, band='bessellb', magsys='vega', t=0):
+        """
+        Returns the magnitudes of transient according to lightcurve parameters
+        """
+        # Save old params, so you can restore them 
+        param0 = {name: value for name, value in zip(self.model.param_names,
+                                                     self.model.parameters)}
+        out = []
+        for param in self.lightcurve_parameters:
+            self.model.set(**param)
+            out.append(self.model.bandmag(band, magsys, param['t0'] + t))
+        self.model.set(**param0)
+
+        return np.array(out)
+
     # ---------------------- #
     # - Setter Methods     - #
     # ---------------------- #
@@ -273,13 +273,38 @@ class SimulSurvey( BaseObject ):
     @property
     def observations(self):
         """Observations derived from cadence and instrument properties.
-        Remark that the first time this is called, observations will be recorded"""
+        Note that the first time this is called, observations will be recorded"""
         
         if self._derived_properties["observations"] is None:
             self._load_observations_()
             
         return self._derived_properties["observations"]
+
+    @property
+    def model(self):
+        """Transient lightcurve model"""
+        if self._derived_properties["model"] is None:
+            # We will have to check whether we want the source or the whole model
+            # in the generator
+            model = sncosmo.Model(source=self.generator.lightcurve_model)
+            model.add_effect(sncosmo.CCM89Dust(), 'mw', 'obs')
+            
+            self._derived_properties["model"] = model
+
+        return self._derived_properties["model"]
     
+    @property
+    def lightcurve_parameters(self):
+        """Transient lightcurve parameters"""
+        # This is still SALT2-specific, should be replaced by reading 
+        return [{"z":self.generator.zcmb[i],
+                 "c":self.generator.color[i],
+                 "x1":self.generator.x1[i],
+                 "x0":self.generator.lightcurve["x0"][i],
+                 "t0":self.generator.mjd[i],
+                 "mwebv": self.generator.mwebmv[i]}
+                for i in range(self.generator.ntransient)]
+
 #######################################
 #                                     #
 # Survey: Plan object                 #
