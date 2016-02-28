@@ -14,7 +14,7 @@ from ...utils.decorators import _autogen_docstring_inheritance
 # BASIC SDSS: Catalogue         #
 #                               #
 #################################
-def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"13..22"}):
+def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"gmag":"12..20"}):
     """
     """
     from .sdss import SDSS_INFO

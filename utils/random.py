@@ -3,6 +3,7 @@
 """This module contains functions for drawing random redshifts and sky coordinates"""
 
 import numpy as np
+import random
 
 _d2r = np.pi / 180 
 

@@ -78,7 +78,8 @@ class Instrument( Image ):
                           zp=self.mab0,bandname=self.bandpass.name,
                           instrument_name=self.instrument_name)
     
-    @_autogen_docstring_inheritance(Image.get_target_aperture,"Image.get_target_aperture")
+    @_autogen_docstring_inheritance(Image.get_target_aperture,
+                                    "Image.get_target_aperture")
     def get_target_photopoint(self,r_pixels=None,
                               aptype="circle",**kwargs):
         #
@@ -88,14 +89,19 @@ class Instrument( Image ):
             return AttributeError("No 'target' loaded")
         
         xpix,ypix = self.coords_to_pixel(self.target.ra,self.target.dec)
-        return self.get_photopoint(xpix,ypix,r_pixels=r_pixels,
+        pp = self.get_photopoint(xpix,ypix,r_pixels=r_pixels,
                                    aptype="circle",**kwargs)
-    
+        pp.set_target(self.target)
+        return pp
     # =========================== #
     # = Main Methods            = #
     # =========================== #
     def count_to_flux(self,counts):
         return counts* 10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2)
+
+    # =========================== #
+    # = Internal Catalogue      = #
+    # =========================== #
     
     # =========================== #
     # = Properties and Settings = #
@@ -406,10 +412,10 @@ class Catalogue( BaseObject ):
         ra = [self.ra[i] for i in idx_only]
         dec = [self.dec[i] for i in idx_only]
         """
-        fluxes = flux_fluxerr[0][idx_only]
-        variances = flux_fluxerr[1][idx_only]**2
-        ra = self.ra[idx_only]
-        dec = self.dec[idx_only]
+        fluxes = flux_fluxerr[0][mask]
+        variances = flux_fluxerr[1][mask]**2
+        ra = self.ra[mask]
+        dec = self.dec[mask]
 
         
         pmap = photomap(fluxes=fluxes,variances=variances,

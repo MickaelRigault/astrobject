@@ -211,6 +211,37 @@ class SDSS( Instrument ):
     # =========================== #
     # -----------------
     # - Sky Background
+    def _get_brightsource_mask_(self,stellar_uppermag=15,gal_uppermag=15,**kwargs):
+        """
+        """
+        if not self.has_catalogue():
+            self.download_catalogue(column_filters=\
+                                    {"%smag"%self.sdss.bandname[-1]:"12..20"},
+                                    )
+        brightstars_coords = [self.catalogue.ra[(self.catalogue.mag>stellar_uppermag)\
+                                                & self.catalogue.starmask],
+                             self.catalogue.dec[(self.catalogue.mag>stellar_uppermag)\
+                                                 & self.catalogue.starmask],
+                             self.catalogue.mag[(self.catalogue.mag>stellar_uppermag)\
+                                                 & self.catalogue.starmask],
+                                                 ]
+        brightgal_coords  = [self.catalogue.ra[(self.catalogue.mag>gal_uppermag)\
+                                                & ~self.catalogue.starmask],
+                              self.catalogue.dec[(self.catalogue.mag>gal_uppermag)\
+                                                 & ~self.catalogue.starmask],
+                            self.catalogue.mag[(self.catalogue.mag>gal_uppermag)\
+                                                 & ~self.catalogue.starmask],
+                                                 ]
+        def _mag_to_pixel_mask_(self,mag):
+            """
+            based on the 15mag->32pixels 12->1600 pixel from
+            http://adsabs.harvard.edu/cgi-bin/bib_query?arXiv:1105.1960
+            """
+            return 0 if mag>15 else  int(1600 - (mag - 12)*522)
+            
+        return [[ra,dec,self._mag_to_pixel_mask_(mag)]
+                for ra,dec,mag in np.asarray(brightstars_coords).T if mag<15]
+    
     def _define_sky_(self,force_it=False):
         """This methods convert the sky background registered in the fits file
         such that it maps the data values"""

@@ -418,6 +418,7 @@ class AstroTarget( BaseObject ):
         if self.cosmo is None or self.zcmb is None:
             raise AttributeError("'cosmo' and 'redshift' required.")
         return self.cosmo.luminosity_distance(self.zcmb).value
+
     
     @property
     def arcsec_per_kpc(self):

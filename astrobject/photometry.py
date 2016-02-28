@@ -252,7 +252,7 @@ class Image( BaseObject ):
                                 "target","catalogue",
                                 "exptime"] # maybe Exptime should just be on flight
         
-    _derived_properties_keys = ["fits","data","sepobjects",
+    _derived_properties_keys = ["fits","data","sepobjects","sep_datamask",
                                 "apertures_photos","fwhm"]
     
     # Where in the fitsfile the data are
@@ -990,16 +990,17 @@ class Image( BaseObject ):
     # ------------------- #
     # - SEP Tools       - #
     # ------------------- #
-    def get_sep_background(self,**kwargs):
+    def get_sep_background(self,update_background=True,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor: sep.
         
         """
-        if "_sepbackground" not in dir(self):
+        if "_sepbackground" not in dir(self) or update_background:
             self._measure_sep_background_(**kwargs)
-
+        
         return self._sepbackground.back()
-            
+
+    
     def sep_extract(self,thresh=None,returnobjects=False,
                     set_catalogue=True,match_catalogue=True,**kwargs):
         """
@@ -1056,6 +1057,33 @@ class Image( BaseObject ):
         if returnobjects:
             return self.sepobjects
 
+    def measure_sep_detectedmask(self,apply_catmask=True,stars_only=False,
+                            catmag_range=[12,22],scaleup=15):
+        """
+        """
+        if not self.has_sepobjects():
+            raise AttributeError("No sep_object loaded. Run sep_extract")
+        
+        ells= self.sepobjects.get_detected_ellipses(scaleup=scaleup,
+                apply_catmask=apply_catmask,
+                stars_only=stars_only, isolated_only=False,
+                catmag_range=[None,None])
+        
+        
+        from PIL import Image, ImageDraw
+        empty_value = 100
+        back = Image.new('RGBA', (self.width, self.height), (empty_value,0,0,0))
+        mask = Image.new('RGBA', (self.width, self.height))
+        # PIL *needs* (!!) [(),()] format [[],[]] won 
+        [ImageDraw.Draw(mask).polygon(
+            [(x_[0],x_[1]) for x_ in
+                     np.asarray(e.get_verts())],
+            fill=(255,255,255,127),outline=(255,255,255,255)) for e in ells]
+        
+        back.paste(mask,mask=mask)
+        #invalue = 494 # because of the color chosen above
+        return (np.sum(np.array(back),axis=2)>empty_value)
+    
     def _get_sep_extract_threshold_(self):
         """this will be used as a default threshold for sep_extract"""
         if "_sepbackground" not in dir(self):
@@ -1135,7 +1163,7 @@ class Image( BaseObject ):
                                    **proptarget)
 
         if show_sepobjects and self.has_sepobjects():
-            self.sepobjects.display(ax,world_coords=wcs_coords,
+            self.sepobjects.display(ax,
                                     **propsep)
         if show_catalogue and self.has_catalogue():
             self.display_catalogue(ax,wcs_coords=wcs_coords)
@@ -1562,7 +1590,17 @@ class Image( BaseObject ):
     def has_sepobjects(self):
         return True if self.sepobjects is not None and self.sepobjects.has_data() \
           else False
-    
+
+    @property
+    def sep_datamask(self):
+        if not self.has_sepobjects():
+            raise AttributeError("No sepobjects loaded. Run sep_extract")
+        # -- Let's measure it
+        if self._derived_properties['sep_datamask'] is None:
+            self._derived_properties['sep_datamask'] = \
+              self.measure_sep_detectedmask(apply_catmask=True,scaleup=10)
+        return self._derived_properties['sep_datamask']
+            
     # ----------------      
     # -- CATALOGUE
     @property
@@ -1628,18 +1666,34 @@ class Image( BaseObject ):
         return None
         
     def _get_default_background_(self,*args,**kwargs):
+        
         return self.get_sep_background(*args,**kwargs)
 
+    
     def _measure_sep_background_(self,**kwargs):
         """
         """
         if self.rawdata is None:
-                raise ValueError("no 'rawdata' loaded. Cannot get a background")
+            raise ValueError("no 'rawdata' loaded. Cannot get a background")
         from sep import Background
-        self._sepbackground_prop = kwargs_update({"mask":self.datamask if self.has_datamask() \
-                                                  else None},
+        # -- Mask issue
+        if self.has_datamask():
+            maskdata = self.datamask
+        else:
+            maskdata = None
+            
+        if self.has_sepobjects():
+            masksep = self.sep_datamask
+            mask = masksep+maskdata if maskdata is not None else\
+              masksep
+        else:
+            mask = maskdata
+        
+        self._sepbackground_prop = kwargs_update({"mask":mask,"bw":100,"bh":100},
                                                  **kwargs)
-        self._sepbackground = Background(self.rawdata,**self._sepbackground_prop)
+        
+        self._sepbackground = Background(self.rawdata,
+                                         **self._sepbackground_prop)
         
     def _update_(self,update_background=True):
         """The module derives the 'derived_properties' based on the
@@ -1917,8 +1971,15 @@ class PhotoPoint( BaseObject ):
     def magvar(self):
         return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2
 
+    # ------------
+    # - Derived 
+    @property
+    def magabs(self):
+        if not self.has_target():
+            raise AttributeError("No target defined, I can't get the distance")
+        return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
 
-
+    
 #######################################
 #                                     #
 # Base Object Classes: LightCurve     #
@@ -2647,7 +2708,7 @@ class SexObjects( BaseObject ):
 
         raise ValueError("Cannot parse '%s'."%key +\
                           help_text)
-
+    
     def get_stars_xy(self,isolated_only=True,catmag_range=[None,None]):
         """
         return the method x and y coordinate of the star following the given
@@ -2768,12 +2829,9 @@ class SexObjects( BaseObject ):
     # ------------------- #
     # - PLOT Methods    - #
     # ------------------- #
-    # - Display
-    def display(self,ax,world_coords=True,draw=True,
-                apply_catmask=True,
+    def get_detected_ellipses(self,scaleup=5,apply_catmask=True,
                 stars_only=False, isolated_only=False,
-                catmag_range=[None,None],
-                **kwargs):
+                catmag_range=[None,None]):
         """
         """
         if not self.has_data():
@@ -2795,19 +2853,26 @@ class SexObjects( BaseObject ):
             mask = np.ones(self.nobjects,dtype=bool)
             
         x,y = self.data["x"][mask],self.data["y"][mask]
+        
         # -------------
         # - Properties
-        default_prop = dict(ls="None",marker="o",mec="k",mfc="0.7",alpha=0.5,
-                            scalex=False,scaley=False,
-                            label="_no_legend_")
-        prop = kwargs_update(default_prop,**kwargs)
-
-        
-        
-        ells = [Ellipse([x,y],a*5,b*5,t*units.radian.in_units("degree"))
+        return [Ellipse([x,y],a*scaleup,b*scaleup,
+                        t*units.radian.in_units("degree"))
                 for x,y,a,b,t in zip(self.data["x"][mask],self.data["y"][mask],
                                      self.data["a"][mask],self.data["b"][mask],
                                      self.data["theta"][mask])]
+        
+    # - Display
+    def display(self,ax,draw=True,
+                apply_catmask=True,
+                stars_only=False, isolated_only=False,
+                catmag_range=[None,None]):
+        """
+        """
+        ells = self.get_detected_ellipses(scaleup=5,apply_catmask=apply_catmask,
+                                          stars_only=stars_only,
+                                          isolated_only=isolated_only,
+                                          catmag_range=catmag_range)
         
         #pl = ax.plot(x,y,**prop)
         for ell in ells:
