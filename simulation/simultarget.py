@@ -239,7 +239,7 @@ class TransientGenerator( BaseObject ):
         # ------------------
         # - Mask 
         if mask is None:
-            mask = np.ones(self.nstransient, dtype=bool)
+            mask = np.ones(self.ntransient, dtype=bool)
 
         # ------------------
         # - Axis definition
@@ -579,7 +579,7 @@ class SNIaGenerator( TransientGenerator ):
     # - Hacked Methods   - #
     # -------------------- #
     def set_transient_parameters(self,ratekind="basic",
-                                 lcsimulation="random",
+                                 lcsimulation="basic",
                                  lcmodel="salt2",type_=None,
                                  update=True,lcsimul_prop={}):
         """
