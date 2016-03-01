@@ -4,7 +4,7 @@ import numpy as np
 import pyfits as pf
 from astropy.table import Table
 from .baseinstrument import Instrument
-
+from ...utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["hst"]
 
@@ -119,6 +119,20 @@ class HST( Instrument ):
     # ------------------------ #
     # - Speciality           - #
     # ------------------------ #
+    @_autogen_docstring_inheritance(Instrument.set_catalogue,"Instrument.set_catalogue")
+    def set_catalogue(self,catalogue,force_it=True,**kwargs):
+        #
+        # - Add the bandname key_mag setting
+        #
+        if catalogue.source_name =="SDSS":
+            key_mag = "%smag"%"r"
+            key_magerr = "e_%smag"%"r"
+            if key_mag not in catalogue.data.keys():
+                print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
+            catalogue.set_mag_keys(key_mag,key_magerr)
+            
+        super(HST,self).set_catalogue(catalogue,force_it=force_it,**kwargs)
+        
     def get_contours(self,pixel=True):
         """ """
         # To Be Fasten

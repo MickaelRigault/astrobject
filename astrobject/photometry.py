@@ -408,13 +408,15 @@ class Image( BaseObject ):
         if self.has_datamask() and self.has_var():
             self._properties["var"][self.datamask] = np.NaN
             
-        self.set_background(background)
+            
+        
         # -- Side, exposure time
         self._side_properties["exptime"] = exptime
         # -------------------
         # - WCS solution
         self._side_properties["wcs"]     = astrometry.get_wcs(wcs,verbose=True)
-        
+
+        self.set_background(background)
         self._update_(update_background=False)
 
 
@@ -830,7 +832,6 @@ class Image( BaseObject ):
         # -------------------- #
         return idx, cat_idx, self.get_aperture(x,y,r_pixels=r_pixels,aptype=aptype,**kwargs)
     
-    
     def get_target_aperture(self,r_pixels,aptype="circle",subpix=5,**kwargs):
         """If a target is loaded, this will get the target coords and run
         'get_aperture'.
@@ -916,7 +917,7 @@ class Image( BaseObject ):
                              
         # -------------
         # - SEP Input 
-        gain = None if "_gain" not in dir(self) else self._gain
+        gain = None if "_dataunits_to_election" not in dir(self) else self._dataunits_to_election
         gain = kwargs.pop("gain",gain)
         # -----------------
         # - Variance Trick
@@ -924,11 +925,15 @@ class Image( BaseObject ):
 
         # ------------------------
         # - Do the Aperture Photo
-        
+        # ----------------------
+        # - GAIN MEANS Conversion factor between data array units and poisson counts,
+        # gain = ADU per Electron, data = ADU/s
         # - Circle
         if aptype == "circle":
             return sep.sum_circle(self.data,x,y,r_pixels,subpix=subpix,
                             var=var,gain=gain,**kwargs)
+
+        
         # - Annulus
         if aptype == "circann":
             if np.asarray([k is None for k in annular_args.values()]).any():
@@ -995,10 +1000,15 @@ class Image( BaseObject ):
         This module is based on K. Barbary's python module of Sextractor: sep.
         
         """
-        if "_sepbackground" not in dir(self) or update_background:
-            self._measure_sep_background_(**kwargs)
+        self._measure_sep_background_(**kwargs)
+        if self.has_sepobjects():
+            # -----------------
+            # - First loop get the first exposure
+            return self._sepbackground.back()
         
-        return self._sepbackground.back()
+        self.set_background(self._sepbackground.back())
+        self.sep_extract()
+        return self.get_sep_background(update_background=True)
 
     
     def sep_extract(self,thresh=None,returnobjects=False,
@@ -1056,39 +1066,13 @@ class Image( BaseObject ):
                     
         if returnobjects:
             return self.sepobjects
-
-    def measure_sep_detectedmask(self,apply_catmask=True,stars_only=False,
-                            catmag_range=[12,22],scaleup=15):
-        """
-        """
-        if not self.has_sepobjects():
-            raise AttributeError("No sep_object loaded. Run sep_extract")
         
-        ells= self.sepobjects.get_detected_ellipses(scaleup=scaleup,
-                apply_catmask=apply_catmask,
-                stars_only=stars_only, isolated_only=False,
-                catmag_range=[None,None])
-        
-        
-        from PIL import Image, ImageDraw
-        empty_value = 100
-        back = Image.new('RGBA', (self.width, self.height), (empty_value,0,0,0))
-        mask = Image.new('RGBA', (self.width, self.height))
-        # PIL *needs* (!!) [(),()] format [[],[]] won 
-        [ImageDraw.Draw(mask).polygon(
-            [(x_[0],x_[1]) for x_ in
-                     np.asarray(e.get_verts())],
-            fill=(255,255,255,127),outline=(255,255,255,255)) for e in ells]
-        
-        back.paste(mask,mask=mask)
-        #invalue = 494 # because of the color chosen above
-        return (np.sum(np.array(back),axis=2)>empty_value)
-    
     def _get_sep_extract_threshold_(self):
         """this will be used as a default threshold for sep_extract"""
         if "_sepbackground" not in dir(self):
                 _ = self.get_sep_background()
-        return self._sepbackground.globalrms*1.5 
+        return self._sepbackground.globalrms*1.5
+    
 
     # ------------------- #
     # - I/O Methods     - #
@@ -1590,16 +1574,12 @@ class Image( BaseObject ):
     def has_sepobjects(self):
         return True if self.sepobjects is not None and self.sepobjects.has_data() \
           else False
-
+          
     @property
-    def sep_datamask(self):
+    def sepmask(self,r=5):
         if not self.has_sepobjects():
             raise AttributeError("No sepobjects loaded. Run sep_extract")
-        # -- Let's measure it
-        if self._derived_properties['sep_datamask'] is None:
-            self._derived_properties['sep_datamask'] = \
-              self.measure_sep_detectedmask(apply_catmask=True,scaleup=10)
-        return self._derived_properties['sep_datamask']
+        return self.sepobjects.get_ellipse_mask(self.width,self.height,r=r)
             
     # ----------------      
     # -- CATALOGUE
@@ -1666,16 +1646,18 @@ class Image( BaseObject ):
         return None
         
     def _get_default_background_(self,*args,**kwargs):
-        
         return self.get_sep_background(*args,**kwargs)
 
     
     def _measure_sep_background_(self,**kwargs):
         """
         """
+        from sep import Background
+        
         if self.rawdata is None:
             raise ValueError("no 'rawdata' loaded. Cannot get a background")
-        from sep import Background
+        
+        # --------------
         # -- Mask issue
         if self.has_datamask():
             maskdata = self.datamask
@@ -1683,11 +1665,12 @@ class Image( BaseObject ):
             maskdata = None
             
         if self.has_sepobjects():
-            masksep = self.sep_datamask
+            masksep = self.sepmask
             mask = masksep+maskdata if maskdata is not None else\
               masksep
         else:
             mask = maskdata
+        # ---------------
         
         self._sepbackground_prop = kwargs_update({"mask":mask,"bw":100,"bh":100},
                                                  **kwargs)
@@ -1715,8 +1698,39 @@ class Image( BaseObject ):
                 
         self._derived_properties["data"] = self.rawdata - self.background
         
-            
-            
+
+class Background( BaseObject ):
+    """
+    """
+    __nature__ = "Background"
+    _properties_keys = ["rawdata"]
+
+    def __init__(self,rawdata=None,empty=False):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        
+    def create(self,rawdata):
+        """
+        """
+        self._properties["rawdata"] = rawdata
+
+    def sepbackground(self):
+        """
+        """
+        
+    # ===================== #
+    # = Properties        = #
+    # ===================== #
+    @property
+    def rawdata(self):
+        return self._properties["rawdata"]
+    
+    def has_data(self):
+        return self.rawdata is not None
+    
 #######################################
 #                                     #
 # Base Object Classes: PhotoPoint     #
@@ -2365,7 +2379,7 @@ class PhotoMap( BaseObject ):
 
         self._side_properties["sep_params"] = sep_params
         
-    def get(self,key):
+    def get(self,key,mask=None):
         """
         """
         if key is None:
@@ -2381,15 +2395,16 @@ class PhotoMap( BaseObject ):
             return
         
         if key in _sep_keys_:
-            return self.sep_params[key]
+            return self.sep_params[key] if mask is None else self.sep_params[key][mask]
         
         if key in _derived_keys_:
             if key == "flux_ratio":
-                return self.fluxes / self.refmap.fluxes
+                val_ = self.fluxes / self.refmap.fluxes
             if key == "scaled_flux_ratio":
                 ratio = self.get("flux_ratio")
-                return ratio - np.median(ratio)
-            
+                val_ =  ratio - np.median(ratio)
+            return val_ if mask is None else val_[mask]
+        
         raise NotImplementedError("'%s' access is not implemented"+help_text)
     
     # ========================== #
@@ -2532,8 +2547,6 @@ class PhotoMap( BaseObject ):
           else True
 
 
-
-
 #######################################
 #                                     #
 # Base Object Classes: SEPObjects     #
@@ -2589,6 +2602,38 @@ class SexObjects( BaseObject ):
         # ****************** #
         self._properties["data"] = sexdata
 
+    # ------------------ #
+    # - SET Methods    - #
+    # ------------------ #
+    def get_ellipse_mask(self,width,height, r=2, apply_catmask=False):
+        """This methods enable to return a boolean mask of the given image
+        corresponding to the detected ellipses.
+
+        Parameters:
+        -----------
+        r: [float]                 The scale of the ellipse (r=1 is a typical contours included the
+                                   object ; 2 enables to get the tail of most of the bright sources
+
+        apply_catmask: [bool]      Only mask the detected object associated with the current catalogue.
+                                   If no catalogue loaded, this will be set to False in any case.
+
+        Returns:
+        -------
+        2D-bool array (height x width)
+        """
+        from sep import mask_ellipse
+        ellipsemask = np.asarray(np.zeros((height,width)),dtype="bool")
+        mask = None if not apply_catmask else self.catmask
+        # -- Apply the mask to falsemask
+        mask_ellipse(ellipsemask,
+                                self.get('x',mask=mask),
+                                self.get('y',mask=mask),
+                                self.get('a',mask=mask),
+                                self.get('b',mask=mask),
+                                self.get('theta',mask=mask),
+                                r=r)
+        return ellipsemask
+    
     # ------------------ #
     # - SET Methods    - #
     # ------------------ #
@@ -2674,7 +2719,7 @@ class SexObjects( BaseObject ):
     # ------------------ #
     # - get Methods    - #
     # ------------------ #
-    def get(self,key):
+    def get(self,key,mask=None):
         """This function enable to get from the data the values of the given keys
         or derived values, like ellipticity. Set 'help' for help."""
         if not self.has_data():
@@ -2685,9 +2730,11 @@ class SexObjects( BaseObject ):
         _matching_keys_ = ["angsep"]
         _derived_keys_ = ["elongation","ellipticity"]
         help_text = " Known keys are: "+", ".join(_data_keys_+_matching_keys_+_derived_keys_)
+
         if key in ["help","keys","keylist"]:
             print help_text
             return
+        
         # -- These are from the data
         if key in _data_keys_:
             return self.data[key]
@@ -2696,16 +2743,17 @@ class SexObjects( BaseObject ):
         if key in _matching_keys_:
             if not self.has_catmatch():
                 raise AttributeError("no 'catmatch' defined. The matching has not been ran")
-            return self.catmatch[key]
+            return self.catmatch[key] if mask is None else self.catmatch[key][mask]
 
         # -- These are derived values
         if key in _derived_keys_:
             if key == "elongation":
-                return self.get("a") / self.get("b")
+                val_ = self.get("a") / self.get("b")
             
-            if key == "ellipticity":
-                return 1. - 1. / self.get("elongation")
-
+            elif key == "ellipticity":
+                val_ = 1. - 1. / self.get("elongation")
+            return val_ if mask is None else val_[mask]
+        
         raise ValueError("Cannot parse '%s'."%key +\
                           help_text)
     
@@ -2826,6 +2874,7 @@ class SexObjects( BaseObject ):
         """
         """
         print "to be done"
+        
     # ------------------- #
     # - PLOT Methods    - #
     # ------------------- #
