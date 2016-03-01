@@ -296,13 +296,13 @@ class SimulSurvey( BaseObject ):
     @property
     def lightcurve_parameters(self):
         """Transient lightcurve parameters"""
-        # This is still SALT2-specific, should be replaced by reading 
-        return [{"z":self.generator.zcmb[i],
-                 "c":self.generator.color[i],
-                 "x1":self.generator.x1[i],
-                 "x0":self.generator.lightcurve["x0"][i],
-                 "t0":self.generator.mjd[i],
-                 "mwebv": self.generator.mwebmv[i]}
+
+        return [dict(z=self.generator.zcmb[i],
+                     t0=self.generator.mjd[i],
+                     mwebv=self.generator.mwebmv[i],
+                     **{p: self.generator.lightcurve[p][i]
+                        for p in self.model.param_names
+                        if p not in ['z', 't0', 'mwebv', 'mwr_v']})
                 for i in range(self.generator.ntransient)]
 
 #######################################
