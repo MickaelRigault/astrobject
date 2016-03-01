@@ -66,7 +66,7 @@ class TransientGenerator( BaseObject ):
     _properties_keys = ["transient_coverage",
                         "event_coverage"]
     
-    _side_properties_keys = ["sfd98_dir", "ratefunc"]
+    _side_properties_keys = ["sfd98_dir", "ratefunc", "model"]
         
     _derived_properties_keys = ["simul_parameters", "mwebmv"]
 
@@ -523,6 +523,35 @@ class TransientGenerator( BaseObject ):
     def set_sfd98_dir(self, value):
         self._side_properties['sfd98_dir'] = value
         self._update_mwebmv_()
+
+    @property
+    def model(self):
+        """Light curve model (derived from source if not set)"""
+        if self._side_properties["model"] is None:
+            self.set_model(sncosmo.Model(source=self.lightcurve_source))
+        
+        return self._side_properties["model"]
+
+    def set_model(self, model):
+        """
+        Set the transient model.
+        If it does not have MW dust effect, the effect is added.
+        """
+        if model.__class__ is not sncosmo.models.Model:
+            raise TypeError("model must be sncosmo.model.Model")
+
+        if "mwebv" not in model.param_names:
+            model.add_effect(sncosmo.CCM89Dust(), 'mw', 'obs')
+
+        self._side_properties["model"] = model
+
+    def reset_model(self):
+        """
+        Resets model to None. 
+        Next time self.model is called it will be rederived from 
+        self.lightcurve_source
+        """
+        self._side_properties["model"] = None
 
     # -----------------------
     # - LightCuve Properties

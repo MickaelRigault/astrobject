@@ -28,7 +28,7 @@ class SimulSurvey( BaseObject ):
     """
     _properties_keys         = ["generator","instruments","plan"]
     _side_properties_keys    = ["cadence"]
-    _derived_properties_keys = ["observations", "model", "lightcurve_parameters"]
+    _derived_properties_keys = ["observations", "lightcurve_parameters"]
     
     def __init__(self,generator=None, plan=None,
                  instprop=None,
@@ -71,7 +71,7 @@ class SimulSurvey( BaseObject ):
         if not self.is_set():
             raise AttributeError("plan, generator or instrument not set")
 
-        return [(sncosmo.realize_lcs(obs, self.model, [p])[0] 
+        return [(sncosmo.realize_lcs(obs, self.generator.model, [p])[0] 
                  if obs is not None else None)
                 for p, obs in zip(self.lightcurve_parameters, self.observations)]
         
@@ -80,13 +80,15 @@ class SimulSurvey( BaseObject ):
         Returns the magnitudes of transient according to lightcurve parameters
         """
         # Save old params, so you can restore them 
-        param0 = {name: value for name, value in zip(self.model.param_names,
-                                                     self.model.parameters)}
+        param0 = {name: value for name, value 
+                  in zip(self.generator.model.param_names,
+                         self.generator.model.parameters)}
         out = []
         for param in self.lightcurve_parameters:
-            self.model.set(**param)
-            out.append(self.model.bandmag(band, magsys, param['t0'] + t))
-        self.model.set(**param0)
+            self.generator.model.set(**param)
+            out.append(self.generator.model.bandmag(band, magsys, 
+                                                    param['t0'] + t))
+        self.generator.model.set(**param0)
 
         return np.array(out)
 
@@ -214,10 +216,9 @@ class SimulSurvey( BaseObject ):
         # -----------------------
         # - Based on the model get a reasonable time scale for each transient
         mjd = self.generator.mjd
-        model = sncosmo.Model(source=self.generator.lightcurve_model)
         z = np.array(self.generator.zcmb)
-        mjd_range = np.array([mjd + model.mintime() * (1 + z), 
-                              mjd + model.maxtime() * (1 + z)])
+        mjd_range = np.array([mjd + self.generator.model.mintime() * (1 + z), 
+                              mjd + self.generator.model.maxtime() * (1 + z)])
         
         # -----------------------
         # - Lets build the tables
@@ -279,19 +280,6 @@ class SimulSurvey( BaseObject ):
             self._load_observations_()
             
         return self._derived_properties["observations"]
-
-    @property
-    def model(self):
-        """Transient lightcurve model"""
-        if self._derived_properties["model"] is None:
-            # We will have to check whether we want the source or the whole model
-            # in the generator
-            model = sncosmo.Model(source=self.generator.lightcurve_source)
-            model.add_effect(sncosmo.CCM89Dust(), 'mw', 'obs')
-            
-            self._derived_properties["model"] = model
-
-        return self._derived_properties["model"]
     
     @property
     def lightcurve_parameters(self):
@@ -301,7 +289,7 @@ class SimulSurvey( BaseObject ):
                      t0=self.generator.mjd[i],
                      mwebv=self.generator.mwebmv[i],
                      **{p: self.generator.lightcurve[p][i]
-                        for p in self.model.param_names
+                        for p in self.generator.model.param_names
                         if p not in ['z', 't0', 'mwebv', 'mwr_v']})
                 for i in range(self.generator.ntransient)]
 
