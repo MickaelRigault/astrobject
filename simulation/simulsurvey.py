@@ -286,7 +286,7 @@ class SimulSurvey( BaseObject ):
         if self._derived_properties["model"] is None:
             # We will have to check whether we want the source or the whole model
             # in the generator
-            model = sncosmo.Model(source=self.generator.lightcurve_model)
+            model = sncosmo.Model(source=self.generator.lightcurve_source)
             model.add_effect(sncosmo.CCM89Dust(), 'mw', 'obs')
             
             self._derived_properties["model"] = model

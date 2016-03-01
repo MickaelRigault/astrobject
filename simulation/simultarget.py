@@ -26,7 +26,7 @@ def sn_generator(zrange,ratekind="basic",**kwargs):
     return SNIaGenerator(ratekind=ratekind,zrange=zrange,
                          **kwargs)
 
-def transient_generator(zrange,ratekind="basic",
+def transient_generator(zrange,ratekind="basic",ratefunc=None,
                         ra_range=[-180,180], dec_range=[-90,90],
                         ntransients=None,
                         **kwargs):
@@ -66,13 +66,13 @@ class TransientGenerator( BaseObject ):
     _properties_keys = ["transient_coverage",
                         "event_coverage"]
     
-    _side_properties_keys = ["sfd98_dir"]
+    _side_properties_keys = ["sfd98_dir", "ratefunc"]
         
-    _derived_properties_keys = ["ratefunc","simul_parameters","mwebmv"]
+    _derived_properties_keys = ["simul_parameters", "mwebmv"]
 
     
 
-    def __init__(self,zrange=[0.0,0.2], ratekind="basic", # How deep
+    def __init__(self,zrange=[0.0,0.2], ratekind="basic", ratefunc=None,# How deep
                  mjd_range=[57754.0,58849.0],
                  ra_range=(-180,180),dec_range=(-90,90), # Where, see also kwargs
                  ntransients=None,empty=False,sfd98_dir=None,**kwargs):
@@ -83,12 +83,14 @@ class TransientGenerator( BaseObject ):
             return
         
         self.create(zrange,
-                    ratekind=ratekind, ntransients=ntransients,
+                    ratekind=ratekind, ratefunc=ratefunc, 
+                    ntransients=ntransients,
                     ra_range=ra_range, dec_range=dec_range,
                     mjd_range=mjd_range,sfd98_dir=sfd98_dir,
                     **kwargs)
 
-    def create(self,zrange,ratekind="basic",ntransients=None,type_=None,
+    def create(self,zrange,ratekind="basic",ratefunc=None,
+               ntransients=None,type_=None,
                mjd_range=[57754.0,58849.0],
                ra_range=(-180,180),dec_range=(-90,90),
                mw_exclusion=0,sfd98_dir=None,transientprop={}):
@@ -106,7 +108,8 @@ class TransientGenerator( BaseObject ):
                                    "zcmb_range":zrange,"mjd_range":mjd_range,
                                    "mw_exclusion":mw_exclusion})
         
-        self.set_transient_parameters(ratekind=ratekind,type_=type_,
+        self.set_transient_parameters(ratekind=ratekind,ratefunc=ratefunc,
+                                      type_=type_,
                                       update=False,**transientprop)
         
         self._update_()
@@ -138,7 +141,7 @@ class TransientGenerator( BaseObject ):
         if update:
             self._update_()
 
-    def set_transient_parameters(self,ratekind="basic",
+    def set_transient_parameters(self,ratekind="basic",ratefunc=None,
                                  update=True,type_=None):
         """
         This method will define the transient properties.
@@ -147,12 +150,13 @@ class TransientGenerator( BaseObject ):
             self._properties["transient_coverage"] = {}
             
         # -- if this works, you are good to go
-        f = RateGenerator().get_ratefunc(transient=type_,ratekind=ratekind)
+        f = RateGenerator().get_ratefunc(transient=type_,ratekind=ratekind,
+                                         ratefunc=ratefunc)
         
         # - you are good to fill it
         self._properties["transient_coverage"]["transienttype"] = type_
         self._properties["transient_coverage"]["ratekind"] = ratekind
-        self._derived_properties['ratefunction'] = f
+        self._side_properties['ratefunction'] = f
         
         if update:
             self._update_()
@@ -409,7 +413,7 @@ class TransientGenerator( BaseObject ):
     # - Rates
     @property
     def ratefunc(self):
-        return self._derived_properties["ratefunction"]
+        return self._side_properties["ratefunction"]
 
     # -------------------------------
     # - Derived Transient Properties
@@ -578,7 +582,7 @@ class SNIaGenerator( TransientGenerator ):
     # -------------------- #
     # - Hacked Methods   - #
     # -------------------- #
-    def set_transient_parameters(self,ratekind="basic",
+    def set_transient_parameters(self,ratekind="basic",ratefunc=None,
                                  lcsimulation="basic",
                                  lcsource="salt2",type_=None,
                                  update=True,lcsimul_prop={}):
@@ -592,6 +596,7 @@ class SNIaGenerator( TransientGenerator ):
         
         super(SNIaGenerator,self).set_transient_parameters(type_=type_,
                                                            ratekind=ratekind,
+                                                           ratefunc=ratefunc,
                                                            update=False)
         
         self._properties["transient_coverage"]["lightcurve_prop"] = \
@@ -676,7 +681,7 @@ class RateGenerator( _PropertyGenerator_ ):
     #       get_ratefunc(transient="TTT",ratekind="BLA")
     #
 
-    def get_ratefunc(self,transient="Ia",ratekind="basic"):
+    def get_ratefunc(self,transient="Ia",ratekind="basic",ratefunc=None):
         """
         Parameters
         ----------
@@ -692,19 +697,23 @@ class RateGenerator( _PropertyGenerator_ ):
             transient = None
         elif transient == "Ia":
             avialable_rates = self.known_Ia_rates
-        else:
+        elif ratekind != "custom":
             raise ValueError("'%s' is not a known transient"%transient)
     
         # ---------------
         # - Rate Kinds
-        if ratekind not in avialable_rates:
+        if ratekind == "custom":
+            if ratefunc is None:
+                raise ValueError("Ratekind 'custom' requires ratefunc")
+            return ratefunc
+        elif ratekind not in avialable_rates:
             raise ValueError("not '%s' rate kind for '%s'"%(ratekind,transient)+\
                              "These are: "+",".join(avialable_rates))
         # -- the output
         if transient is None:
             return eval("self.rate_%s"%(ratekind))
         return eval("self.rate_%s_%s"%(transient,ratekind))
-    
+
     # ========================== #
     # = Rates                  = #
     # ========================== #
