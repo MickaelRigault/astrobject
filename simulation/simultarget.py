@@ -539,10 +539,10 @@ class TransientGenerator( BaseObject ):
         return self.transient_coverage["lightcurve_prop"]
         
     @property
-    def lightcurve_model(self):
+    def lightcurve_source(self):
         if "lightcurve_prop" not in self.transient_coverage:
             raise AttributeError("no 'lightcurve_prop' defined")
-        return self.lightcurve_properties["model"]
+        return self.lightcurve_properties["source"]
 
     @property
     def lightcurve_param(self):
@@ -570,7 +570,7 @@ class SNIaGenerator( TransientGenerator ):
         #
         super(SNIaGenerator,self)._update_simulation_()
         lc = self.transient_coverage["lightcurve_prop"]
-        param = lc["param_func"](self.zcmb,model=lc["model"],
+        param = lc["param_func"](self.zcmb,source=lc["source"],
                                  **lc["param_func_kwargs"])
         self._derived_properties["simul_parameters"]["lightcurve"] = param
 
@@ -580,7 +580,7 @@ class SNIaGenerator( TransientGenerator ):
     # -------------------- #
     def set_transient_parameters(self,ratekind="basic",
                                  lcsimulation="basic",
-                                 lcmodel="salt2",type_=None,
+                                 lcsource="salt2",type_=None,
                                  update=True,lcsimul_prop={}):
         """
         Add to the TransientGenerator the SN Ia properties
@@ -596,7 +596,7 @@ class SNIaGenerator( TransientGenerator ):
         
         self._properties["transient_coverage"]["lightcurve_prop"] = \
           {"simulation":lcsimulation,
-              "model":lcmodel,
+              "source":lcsource,
               "param_func":f,
               "param_func_kwargs":lcsimul_prop
               }
@@ -807,13 +807,13 @@ class LightCurveGenerator( _PropertyGenerator_ ):
     def lightcurve_Ia_basic(self,redshifts,
                             color_mean=0,color_sigma=0.1,
                             stretch_mean=0,stretch_sigma=1,
-                            model="salt2",
+                            source="salt2",
                             ):
         """
         """
         # ----------------
         # - Models        
-        self.set_model(sncosmo.Model(source=model))
+        self.set_model(sncosmo.Model(source=source))
         x0 = []
         for z in redshifts:
             self.model.set(z=z)
@@ -831,7 +831,7 @@ class LightCurveGenerator( _PropertyGenerator_ ):
                             color_mean=0,color_sigma=0.1,
                             stretch_mean=0,stretch_sigma=1,
                             x0_mean=1e-5,x0_sigma=1.e-5,
-                            model="salt2",
+                            source="salt2",
                             ):
         """
         """
