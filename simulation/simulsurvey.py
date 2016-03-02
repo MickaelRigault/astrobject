@@ -28,7 +28,7 @@ class SimulSurvey( BaseObject ):
     """
     _properties_keys         = ["generator","instruments","plan"]
     _side_properties_keys    = ["cadence"]
-    _derived_properties_keys = ["observations", "lightcurve_parameters"]
+    _derived_properties_keys = ["observations"]
     
     def __init__(self,generator=None, plan=None,
                  instprop=None,
@@ -73,24 +73,8 @@ class SimulSurvey( BaseObject ):
 
         return [(sncosmo.realize_lcs(obs, self.generator.model, [p])[0] 
                  if obs is not None else None)
-                for p, obs in zip(self.lightcurve_parameters, self.observations)]
-        
-    def get_bandmag(self, band='bessellb', magsys='vega', t=0):
-        """
-        Returns the magnitudes of transient according to lightcurve parameters
-        """
-        # Save old params, so you can restore them 
-        param0 = {name: value for name, value 
-                  in zip(self.generator.model.param_names,
-                         self.generator.model.parameters)}
-        out = []
-        for param in self.lightcurve_parameters:
-            self.generator.model.set(**param)
-            out.append(self.generator.model.bandmag(band, magsys, 
-                                                    param['t0'] + t))
-        self.generator.model.set(**param0)
-
-        return np.array(out)
+                for p, obs in zip(self.generator.lightcurve_full_param, 
+                                  self.observations)]
 
     # ---------------------- #
     # - Setter Methods     - #
@@ -280,18 +264,7 @@ class SimulSurvey( BaseObject ):
             self._load_observations_()
             
         return self._derived_properties["observations"]
-    
-    @property
-    def lightcurve_parameters(self):
-        """Transient lightcurve parameters"""
-
-        return [dict(z=self.generator.zcmb[i],
-                     t0=self.generator.mjd[i],
-                     mwebv=self.generator.mwebmv[i],
-                     **{p: self.generator.lightcurve[p][i]
-                        for p in self.generator.model.param_names
-                        if p not in ['z', 't0', 'mwebv', 'mwr_v']})
-                for i in range(self.generator.ntransient)]
+                                          
 
 #######################################
 #                                     #

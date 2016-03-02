@@ -68,7 +68,8 @@ class TransientGenerator( BaseObject ):
     
     _side_properties_keys = ["sfd98_dir", "ratefunc", "model"]
         
-    _derived_properties_keys = ["simul_parameters", "mwebmv"]
+    _derived_properties_keys = ["simul_parameters", "mwebmv", 
+                                "lightcurve_parameters"]
 
     
 
@@ -93,7 +94,7 @@ class TransientGenerator( BaseObject ):
                ntransients=None,type_=None,
                mjd_range=[57754.0,58849.0],
                ra_range=(-180,180),dec_range=(-90,90),
-               mw_exclusion=0,sfd98_dir=None,transientprop={},**kwargs):
+               mw_exclusion=0,sfd98_dir=None,transientprop={}):
         """
         """
         # == Add the Input Test == #
@@ -175,8 +176,7 @@ class TransientGenerator( BaseObject ):
         """
         accepted = [str, sncosmo.models.SALT2Source, 
                     sncosmo.models.TimeSeriesSource]
-        if (source.__class__ is not sncosmo.models.TimeSeriesSource 
-            and source.__class__ is not str):
+        if source.__class__ not in accepted:
             raise TypeError("source must be string, " + 
                             "sncosmo.models.TimeSeriesSource or" +
                             "sncosmo.models.SALT2Source")
@@ -215,6 +215,22 @@ class TransientGenerator( BaseObject ):
                      lightcurve=None, 
                      forced_mwebmv=(self.mwebmv[i] if pass_mwebmv else None))
                 for i in xrange(self.ntransient) if index is None or i in index]
+
+    def get_bandmag(self, band='bessellb', magsys='vega', t=0):
+        """
+        Returns the magnitudes of transient according to lightcurve parameters
+        """
+        # Save old params, so you can restore them 
+        param0 = {name: value for name, value 
+                  in zip(self.model.param_names,
+                         self.model.parameters)}
+        out = []
+        for param in self.lightcurve_full_param:
+            self.model.set(**param)
+            out.append(self.model.bandmag(band, magsys, param['t0'] + t))
+        self.model.set(**param0)
+
+        return np.array(out)
 
     # --------------------------- #
     # - Plots Methods           - #
@@ -596,6 +612,11 @@ class TransientGenerator( BaseObject ):
         return None if "lightcurve" not in self.simul_parameters.keys()\
           else self.simul_parameters['lightcurve']
           
+    @property
+    def lightcurve_param_names(self):
+        """ """
+        return self.lightcurve.keys()
+
     def has_lightcurves(self):
         return False if self.lightcurve is None \
           else True
@@ -613,9 +634,12 @@ class TransientGenerator( BaseObject ):
         return self.lightcurve_properties["source"]
 
     @property
-    def lightcurve_param(self):
-        """ """
-        return self.lightcurve.keys()
+    def lightcurve_full_param(self):
+        """Transient lightcurve parameters"""
+
+        return [dict(z=self.zcmb[i], t0=self.mjd[i], mwebv=self.mwebmv[i],
+                     **{p: v[i] for p, v in self.lightcurve.items()})
+                for i in range(self.ntransient)]
 
     
 #######################################
@@ -681,7 +705,7 @@ class SNIaGenerator( TransientGenerator ):
     def has_host_param(self):
         if not self.has_lightcurves():
             raise AttributeError("no 'lightcurve' defined")
-        return True if "host" in self.lightcurve_param \
+        return True if "host" in self.lightcurve_param_names \
           else False
     
 
