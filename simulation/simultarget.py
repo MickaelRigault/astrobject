@@ -254,6 +254,10 @@ class TransientGenerator( BaseObject ):
                                    enable to set vmin and vmax value, being the
                                    `cmargin`% and 100-`cmargin`% limits of the array
                                    (set 0 to effectively remove this option)
+
+        vmin/vmax: [float]         set vmin/vmax of the colorbar manually;
+                                   overrides results cmargin but if e.g. only
+                                   vmin is given vmax from cmargin is still used
         
         mask: [None/bool. array]   mask for the scatter plot
 
@@ -321,7 +325,12 @@ class TransientGenerator( BaseObject ):
             # - To avoid outliers
             from scipy import percentile
             vmin, vmax =  percentile(c[mask],[cmargin,100-cmargin])
-            # - Da plot
+            # - Override if stated explicitly
+            if "vmin" in kwargs.keys():
+                vmin = kwargs.pop("vmin")
+            if "vmax" in kwargs.keys():
+                vmax = kwargs.pop("vmax")
+            # - Da plo
             pl = ax.skyscatter(self.ra[mask], self.dec[mask], c=c[mask], 
                                vmin=vmin, vmax=vmax,**kwargs)
             cb = fig.colorbar(pl, orientation='horizontal', shrink=0.85, pad=0.08)
