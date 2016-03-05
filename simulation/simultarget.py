@@ -323,16 +323,11 @@ class TransientGenerator( BaseObject ):
         else:
             # --------------------
             # - To avoid outliers
-            from scipy import percentile
-            vmin, vmax =  percentile(c[mask],[cmargin,100-cmargin])
-            # - Override if stated explicitly
-            if "vmin" in kwargs.keys():
-                vmin = kwargs.pop("vmin")
-            if "vmax" in kwargs.keys():
-                vmax = kwargs.pop("vmax")
+            vmin = kwargs.pop("vmin", np.percentile(c[mask], cmargin))
+            vmax = kwargs.pop("vmax", np.percentile(c[mask], 100-cmargin))
             # - Da plo
             pl = ax.skyscatter(self.ra[mask], self.dec[mask], c=c[mask], 
-                               vmin=vmin, vmax=vmax,**kwargs)
+                               vmin=vmin, vmax=vmax, **kwargs)
             cb = fig.colorbar(pl, orientation='horizontal', shrink=0.85, pad=0.08)
             if cblabel is not None:
                 cb.set_label(cblabel, fontsize="x-large") 
