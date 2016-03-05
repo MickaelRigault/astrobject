@@ -426,10 +426,15 @@ class Image( BaseObject ):
     def set_target(self,newtarget,test_inclusion=True):
         """
         Change (or create) an object associated to the given image.
-        This function will test if the object is withing the image
-        boundaries (expect if *test_inclusion* is set to False).
-        Set newtarget to None to remove the association between this
-        object and a target
+
+        This function will test if the object (the target) is withing
+        the image boundaries (expect if 'test_inclusion' is set to False).
+        Set 'newtarget' to None to remove the association between this
+        object and a target.
+
+        Return
+        ------
+        Void
         """
         if newtarget is None:
             self._side_properties['target'] = None
@@ -455,11 +460,11 @@ class Image( BaseObject ):
     def set_background(self,background,
                        force_it=False,check=True):
         """
-        # Might not make sense in image #
         This is a method that might strongly depend on the instrument.
         As a default (background = None) this uses Sextractor background
-        estimation from 'get_sep_background'. Give background or overwrite
-        this method for your specific instrument.
+        estimation from 'get_sep_background'.
+
+        Give background or overwrite this method for your specific instrument.
 
         Parameters
         ----------
@@ -503,7 +508,19 @@ class Image( BaseObject ):
 
     def set_catalogue(self,catalogue,force_it=False):
         """
-        This Methods enables to load a Catalogue object
+        A Catalogue object will be loaded to this instance, you could then access it
+        as 'self.catalogue' ('self.has_catalogue()' will be True).
+
+        The wcs solution of this
+        instance will be passed to the 'calague' one, as well as the sepobject
+        if you have one. This way, the detected object will directly be match to the
+        'catalogue'
+
+        Catalogue: must be an astrobject Catalogue
+        
+        Return
+        ------
+        Void
         """
         if self.has_catalogue() and force_it is False:
             raise AttributeError("'catalogue' already defined"+\
@@ -615,11 +632,17 @@ class Image( BaseObject ):
                            set_it=True,force_it=False,
                            **kwargs):
         """
-        kwargs goes to instrument.catalogue
+        Downloads a catalogue of the given 'source'. This methods requires an
+        internet connection. This downloaded catalogue is then loaded in this
+        instance using the 'set_catalogue' method. If 'set_it' is set to False,
+        the catalogue is returned instead of being loaded.
         
-        example
-        -------
-        column_filters={"gmag":"13..22"}
+        kwargs goes to instrument.catalogue
+        example: column_filters={"gmag":"13..22"}
+
+        Return:
+        ------
+        Void (or the Catalogue if set_it is False)
         """
         from .instruments import instrument
         radec = "%s %s"%(self.wcs.central_coords[0],
@@ -1161,7 +1184,7 @@ class Image( BaseObject ):
             elif np.shape(zoomon) == (2,):
                 coords_zoom = zoomon
             else:
-                print "WARNING can not parse to zoom on input"
+                warnings.warn("(Image.show) can not parse to zoom on input")
                 coords_zoom = None
         else:
             coords_zoom = None
@@ -1528,7 +1551,6 @@ class Image( BaseObject ):
         return False if self.var is None \
           else True
 
-          
     # ------------      
     # -- wcs tools
     @property
@@ -1564,7 +1586,6 @@ class Image( BaseObject ):
         return False if self.target is None \
           else True
 
-          
     # ----------------      
     # -- SEP OUTPUT
     @property
@@ -1698,39 +1719,6 @@ class Image( BaseObject ):
                 
         self._derived_properties["data"] = self.rawdata - self.background
         
-
-class Background( BaseObject ):
-    """
-    """
-    __nature__ = "Background"
-    _properties_keys = ["rawdata"]
-
-    def __init__(self,rawdata=None,empty=False):
-        """
-        """
-        self.__build__()
-        if empty:
-            return
-        
-    def create(self,rawdata):
-        """
-        """
-        self._properties["rawdata"] = rawdata
-
-    def sepbackground(self):
-        """
-        """
-        
-    # ===================== #
-    # = Properties        = #
-    # ===================== #
-    @property
-    def rawdata(self):
-        return self._properties["rawdata"]
-    
-    def has_data(self):
-        return self.rawdata is not None
-    
 #######################################
 #                                     #
 # Base Object Classes: PhotoPoint     #
@@ -1801,7 +1789,39 @@ class PhotoPoint( BaseObject ):
                source=None,instrument_name=None,
                mjd=None,zp=None,bandname=None,zpsys="ab",
                force_it=False):
-        """This method create the object"""
+        """
+        This method creates the object by setting the fundamental parameters.
+
+        
+        Parameters:
+        -----------
+
+        lbda,flux,var: [floats]    'lbda' is the effective wavelength (in Angstrom) of the
+                                   bandpass through which the 'flux' and the 'var' (variance) have
+                                   been measured.
+
+        - options -
+
+        mjd: [float]               Modified Julian date of the observation.
+
+        zp: [float]                the zeropoint (in ABmag) of the instrument used to
+                                   derive the photopoint. This is convinient when several photopoints
+                                   are combined.
+                                   
+        source: [string]           is method used the measure this photometric point (e.g. image, spectrum...)
+        
+
+        instrument_name: [string]  set here the name of the instrument used to derive this photopoint
+                                   (e.g. sdss)
+
+        bandname: [string]         name of the band used to derive the flux. If you set this you can
+                                   access the 'sncosmo bandpass'.
+
+        Returns:
+        --------
+        Void
+        
+        """
         if self.flux is not None and not force_it:
             raise AttributeError("object is already defined."+\
                     " Set force_it to True if you really known what you are doing")
@@ -1920,7 +1940,7 @@ class PhotoPoint( BaseObject ):
         if value <0:
             raise ValueError("a zp cannot be negative")
         if value >35:
-            print "WARNING the given zp is above 35..."
+            warnings.warn("(PhotoPoint instance) the given zp is above 35...")
         
         self._properties["zp"] = value
         
@@ -2594,7 +2614,7 @@ class SexObjects( BaseObject ):
                     
         sexdata = self._read_sexoutput_input_(sexoutput)
         if sexdata is None:
-            print "WARNING empty imput data. Empty object loaded"
+            warning.warn("(SexObjects.create) empty input data. *Empty SexObjects loaded*")
             return
         
         # ****************** #
@@ -2796,32 +2816,20 @@ class SexObjects( BaseObject ):
         return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
         [psf_t,np.std(t_clipped)/m]
         
-        
-    def get_pairing(self, stars_only=True, isolated_only=False,
-                    catmag_range=[None,None]):
-        """
-        """
-        pair = {}
-        
-        for i,d in self.pairdict.items():
-            if stars_only and not d['is_star']:
-                continue
-            if isolated_only and not d['is_isolated']:
-                continue
-            if catmag_range[0] is not None and d["cat_mag"]<catmag_range[0]:
-                continue
-            if catmag_range[1] is not None and d["cat_mag"]>catmag_range[1]:
-                continue
-            
-            pair[i] = d
-            
-        return pair
 
     def idx_to_mask(self,idx):
+        """
+        Change the list of index to a True/False mask: index in the list
+        are the True values
+
+        Return:
+        -------
+        mask (boolean array)
+        """
         mask = np.zeros(self.nobjects,dtype=bool)
         for i in idx:
             mask[i] = True
-        return mask
+        return np.asaray(mask,dtype=bool)
 
     # ---------------- #
     # - get Mask     - #
