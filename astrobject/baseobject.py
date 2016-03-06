@@ -21,8 +21,7 @@ __all__     = ["astrotarget"]
 
 
 def astrotarget(name=None,zcmb=None, ra=None, dec=None,
-               type_=None,mwebmv=None,
-               datasource={},**kwargs):
+               type_=None,mwebmv=None,**kwargs):
     """
     = Initialize the AstroTarget Function =
 
@@ -86,24 +85,20 @@ def astrotarget(name=None,zcmb=None, ra=None, dec=None,
     -------
     AstroTarget
     """
-    if "name" in datasource.keys() and "object" not in datasource.keys():
-        datasource["object"] = datasource["name"]
+    if name is None and "object" in kwargs.keys():
+        name = kwargs.pop("object")
         
     forced_mwebmv = kwargs.pop("forced_mwebmv",kwargs.pop("MWebmv",kwargs.pop("MWebv",None)))
     
     name = kwargs.pop("object",None)
-    dec = kwargs.pop("Dec",None)
-    ra = kwargs.pop("Ra",None)
-    type_ = kwargs.pop("type",None)
-    type_ = kwargs.pop("type",None)
+    dec = kwargs.pop("Dec",dec)
+    ra = kwargs.pop("Ra",ra)
+    type_ = kwargs.pop("type",type)
     empty = kwargs.pop("empty",False)
     
-    return AstroTarget(name=datasource.pop("object",name),
-                       zcmb=datasource.pop("zcmb",zcmb),
-                       ra=datasource.pop("ra",ra),
-                       dec=datasource.pop("dec",dec),
-                       type_=datasource.pop("type",type_),
-                       forced_mwebmv=datasource.pop("mwebmv",forced_mwebmv),
+    return AstroTarget(name=name,zcmb=zcmb,ra=ra,dec=dec,
+                       type_=type_,
+                       forced_mwebmv=forced_mwebmv,
                        empty=empty).copy() # dont forget the copy
 
 #######################################

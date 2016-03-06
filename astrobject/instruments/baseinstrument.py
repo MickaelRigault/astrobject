@@ -130,7 +130,7 @@ class Instrument( Image ):
         raise NotImplementedError("'_gain' must be implemented (even for None)")
 
     @property
-    def _dataunits_to_election(self):
+    def _dataunits_to_electron(self):
         """The gain converts ADU->electron. The Data are in ADU/s"""
         return self._gain * self.exposuretime
     

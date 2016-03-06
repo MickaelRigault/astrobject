@@ -59,7 +59,7 @@ def point_in_contours(x,y,contours):
     # ----------------------
     # - Shapely Polygon
     if "__iter__" not in dir(x):
-        return contours.contains(Point([x,y]))
+        return contours.contains(Point(x,y))
     return contours.contains(MultiPoint(np.asarray([x,y]).T))
 
 def polygon_to_vertices(polygon_):

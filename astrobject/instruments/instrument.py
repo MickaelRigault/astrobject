@@ -10,7 +10,7 @@ import hst
 import stella
 import ptf
 
-__all__ = ["instrument","KNOWN_INSTRUMENTS"]
+__all__ = ["instrument","catalogue"]
 
 KNOWN_INSTRUMENTS = ["sdss","hst","stella","ptf"]
 

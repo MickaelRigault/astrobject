@@ -9,13 +9,13 @@ import pyfits as pf
 from scipy.stats import sigmaclip
 
 from astropy     import units,coordinates
-
+from astropy.table import Table
 from . import astrometry
 from .baseobject   import BaseObject 
 from ..utils.tools import kwargs_update,flux_to_mag
 
 
-__all__ = ["image","photopoint","lightcurve","photomap","sexobjects"]
+__all__ = ["image","photopoint","photomap"]
 
 
 def image(filename=None,astrotarget=None,**kwargs):
@@ -613,21 +613,6 @@ class Image( BaseObject ):
     # ------------------- #
     # - download Methods- #
     # ------------------- #
-    def correct_aperture(self,radius_pixel):
-        """
-        
-        """
-        if not self.has_apertures_photos():
-            raise AttributeError("set 'apertures_photos' prior to use this function")
-        
-        maxapidx = self.get_max_aperture_index()
-        if self.apertures_curve[0][maxapidx] <= radius_pixel:
-            return 1
-        count_max = self.apertures_curve[1][maxapidx]
-        count_radius = self._aperture_func(radius_pixel)
-        ratio =count_max/count_radius
-        return ratio if ratio>1 else 1
-    
     def download_catalogue(self,source="sdss",
                            set_it=True,force_it=False,
                            **kwargs):
@@ -720,6 +705,21 @@ class Image( BaseObject ):
     # ----------- #
     #  Aperture   #
     # ----------- #
+    def correct_aperture(self,radius_pixel):
+        """
+        
+        """
+        if not self.has_apertures_photos():
+            raise AttributeError("set 'apertures_photos' prior to use this function")
+        
+        maxapidx = self.get_max_aperture_index()
+        if self.apertures_curve[0][maxapidx] <= radius_pixel:
+            return 1
+        count_max = self.apertures_curve[1][maxapidx]
+        count_radius = self._aperture_func(radius_pixel)
+        ratio =count_max/count_radius
+        return ratio if ratio>1 else 1
+    
     def get_max_aperture_index(self,percent_gain=0.2):
         """
         This methods enable to fetch the maximum raduis to get the entire
@@ -940,7 +940,7 @@ class Image( BaseObject ):
                              
         # -------------
         # - SEP Input 
-        gain = None if "_dataunits_to_election" not in dir(self) else self._dataunits_to_election
+        gain = None if "_dataunits_to_electron" not in dir(self) else self._dataunits_to_electron
         gain = kwargs.pop("gain",gain)
         # -----------------
         # - Variance Trick
@@ -1018,7 +1018,7 @@ class Image( BaseObject ):
     # ------------------- #
     # - SEP Tools       - #
     # ------------------- #
-    def get_sep_background(self,update_background=True,**kwargs):
+    def get_sep_background(self,update_background=True,cleaning_sep=True,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor: sep.
         
@@ -1027,10 +1027,16 @@ class Image( BaseObject ):
         if self.has_sepobjects():
             # -----------------
             # - First loop get the first exposure
+            if "_rmsep" in dir(self) and self._rmsep:
+                self._derived_properties["sepobjects"] = None
+            # -- No need to conserve that
+            del self._rmsep
+            
             return self._sepbackground.back()
         
         self.set_background(self._sepbackground.back())
         self.sep_extract()
+        self._rmsep=cleaning_sep
         return self.get_sep_background(update_background=True)
 
     
@@ -1110,13 +1116,78 @@ class Image( BaseObject ):
     # - Plot Methods    - #
     # ------------------- #        
     def show(self,toshow="data",savefile=None,logscale=True,
-             ax=None,show=True,wcs_coords=False,
-             zoomon=None,zoompxl=200,
-             show_sepobjects=True,propsep={},
-             show_catalogue=True,
-             proptarget={},
+             ax=None,show=True,zoomon=None,zoompxl=200,
+             show_sepobjects=False,propsep={},
+             show_catalogue=False,proptarget={},
              **kwargs):
         """
+        Display the 2D-image. The displayed information can be "data", "background",
+        "rawdata", "variance" or anything known by self.`toshow` that is a 2D image.
+
+        Parameters
+        -----------
+
+        - options -
+
+        // Data/display options
+        
+        toshow: [string]           key of the element you want to show. Could be
+                                   data, rawdata, background, variance.
+
+        logscale: [bool]           The values of the 2D array is scaled in log10
+                                   before being displayed.
+                                   
+        // Additional Information
+
+        show_sepobjects: [bool]   Add in the plot the contours about the detected
+                                  sources. extract_sep() must have been ran. If a
+                                  catalogue is loaded, only the catalogue matched
+                                  sources will be displayed.
+                                  
+        propsep: [dict]           If the sepobjects are display, this set the properties
+                                  of the ellipse (mpl.Patches)
+
+        show_catalogue: [bool]   Add in the location of the stars (full markers) and
+                                 galaxies (open marker) of the catalogue objects.
+                                 If no catalogue set to the instance this is set
+                                 to False.
+
+        proptarget: [dict]       Change the properties of the marker showing the target
+                                 location. If no target set to the instance, this won't
+                                 affect anything.
+                                 
+        // Zoom
+        
+        zoomon: [string/2D/None]   Zoom on the image centered in the given 'zoomin'
+                                   [x,y] pixel coordinates. You can also set 'target'
+                                   and if a target is loaded, this will parse 'target'
+                                   to the target's [x,y] coordinates.
+                                   Set None not to zoom.
+
+        zoompxl: [float]           If you zoomin (zoonin!=None) this set the pixel box
+                                   of the zoom (width and height of 2*zoompxl)
+                                   
+        // Data/display options
+        
+        savefile: [None/string]    Give the name of the file where the plot should be
+                                   saved (no extention, .pdf and .png will be made)
+                                   If None, nothing will be saved, the plot will be
+                                   shown instead (but see *show*)
+
+        show: [bool]               If the image is not recorded (savefile=None) the plot
+                                   will be shown except if this is set to False
+                                   
+        ax: [None/mpl.Axes]        Where the imshow will be displayed. If None, this
+                                   will create a figure and a unique axis to set 'ax'
+
+        -- Additional options --
+        
+        **kwargs goes to matplotib's imshow (vmin, vmax ...)
+
+        Return
+        ------
+        dictionnary {'figure','ax','plot','prop'}
+
         """
         # ----------------
         # - Input test
@@ -1149,15 +1220,8 @@ class Image( BaseObject ):
             "interpolation":"nearest",
             "origin":"lower"
             }
-        if self.has_wcs() and wcs_coords:
-            default_prop["extent"] = self.worldcoords_boundaries
-            ax.set_xlabel(r"$\mathrm{Ra\ [deg]}$",fontsize = "x-large")
-            ax.set_ylabel(r"$\mathrm{Dec\ [deg]}$",fontsize = "x-large")
-        else:
-            wcs_coords = False
-            #default_prop["extent"] = [0,self.width,0,self.height]
-            ax.set_xlabel("x",fontsize = "x-large")
-            ax.set_ylabel("y",fontsize = "x-large")
+        ax.set_xlabel("x",fontsize = "x-large")
+        ax.set_ylabel("y",fontsize = "x-large")
             
         prop = kwargs_update(default_prop,**kwargs)
 
@@ -1166,21 +1230,20 @@ class Image( BaseObject ):
         im = ax.imshow(x,**prop)
         # - add target
         pl_tgt = None if self.has_target() is False \
-          else self.display_target(ax,wcs_coords=wcs_coords,
+          else self.display_target(ax,wcs_coords=False,
                                    **proptarget)
 
         if show_sepobjects and self.has_sepobjects():
             self.sepobjects.display(ax,
                                     **propsep)
         if show_catalogue and self.has_catalogue():
-            self.display_catalogue(ax,wcs_coords=wcs_coords)
+            self.display_catalogue(ax,wcs_coords=False)
         # ----------- #
         # - Zoom      #
         if zoomon is not None:
             # -- Zoom on target
             if type(zoomon) is str and zoomon=="target" and self.has_target():
-                    coords_zoom = self.coords_to_pixel(*self.target.radec) if not wcs_coords \
-                    else self.target.radec
+                    coords_zoom = self.coords_to_pixel(*self.target.radec) 
             elif np.shape(zoomon) == (2,):
                 coords_zoom = zoomon
             else:
@@ -1190,7 +1253,7 @@ class Image( BaseObject ):
             coords_zoom = None
 
         if coords_zoom is not None:
-            width = zoompxl if not wcs_coords else zoompxl*self.pixel_size_deg
+            width = zoompxl 
             ax.set_xlim(coords_zoom[0]-width,coords_zoom[0]+width)
             ax.set_ylim(coords_zoom[1]-width,coords_zoom[1]+width)
             
@@ -1199,10 +1262,10 @@ class Image( BaseObject ):
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
-        self._plot["imshow"] = im
-        self._plot["target_plot"] = pl_tgt
+        self._plot["plot"]   = im
         self._plot["prop"]   = prop
-        self._plot["wcs_coords"] = wcs_coords
+        self._plot["target_plot"] = pl_tgt
+        #self._plot["wcs_coords"] = wcs_coords
         
         fig.figout(savefile=savefile,show=show)
         
@@ -1263,7 +1326,7 @@ class Image( BaseObject ):
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
-        self._plot["pl"] = pl
+        self._plot["plot"] = pl
         #self._plot["target_plot"] = pl_tgt
         self._plot["prop"]   = prop
         
@@ -1667,6 +1730,7 @@ class Image( BaseObject ):
         return None
         
     def _get_default_background_(self,*args,**kwargs):
+        
         return self.get_sep_background(*args,**kwargs)
 
     
@@ -2746,7 +2810,7 @@ class SexObjects( BaseObject ):
             raise AttributeError("no 'data' defined")
 
         # -- These are the default key values
-        _data_keys_ = self.data.dtype.fields.keys()
+        _data_keys_ = self.data.keys()
         _matching_keys_ = ["angsep"]
         _derived_keys_ = ["elongation","ellipticity"]
         help_text = " Known keys are: "+", ".join(_data_keys_+_matching_keys_+_derived_keys_)
@@ -3099,7 +3163,7 @@ class SexObjects( BaseObject ):
             except :
                 raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+"\n"+\
                                 " It most likely is not a sextrator/sep output ")
-            return sexoutput
+            return Table(sexoutput)
         
         # ---------------
         # -- file input
