@@ -279,7 +279,7 @@ class ImageCollection( Collection ):
 
         return im
 
-    def get_catalogue(self,kind="all", isolated_only=False, stars_only=False):
+    def get_subcatalogue(self, kind="all", isolated_only=False, stars_only=False):
         """
         Get a copy of a catalogue. If could be the entire catalogue (kind=None or kind="all")
         or the shared fov catalogue (kind="shared" or "union") or the combined fov catalogue
@@ -287,7 +287,8 @@ class ImageCollection( Collection ):
         """
         if not self.has_catalogue():
             raise AttributeError("No Catalogue loaded")
-        
+        # ---------------
+        # - Which mask
         if kind is None or kind.lower() in ["all"]:
             contours = None
         elif kind.lower() in ["shared","union"]:
@@ -296,11 +297,23 @@ class ImageCollection( Collection ):
             contours = self.contours_combined
         else:
             raise ValueError("I could not parse the given kind %s (must be 'all', 'shared' or 'combined')"%kind)
+        # ---------------
+        # - get the new catalogue
+        return self.catalogue.get_subcatalogue(contours=contours,
+                                               isolated_only=isolated_only,
+                                               stars_only=stars_only)
+    # --------------------- #
+    # - Get Extraction     - #
+    # --------------------- #
+    def get_photopoints(self,x,y,radius, runits="arcsec",
+                        ids=None):
+        """
+        """
+        idused = self.list_id if ids is None else\
+          [ids] if "__iter__" not in dir(ids) else ids
+
         
-        return self.catalogue.get_subcatalogue(contours=contours,isolated_only=isolated_only, stars_only=stars_only)
-        
-        
-    
+            
     # --------------------- #
     # - Get Target        - #
     # --------------------- #
@@ -362,7 +375,7 @@ class ImageCollection( Collection ):
         im.set_target(target)
         return im
 
-    def get_target_photopoints(self,radius_kpc,target=None,
+    def get_target_photopoints(self,radius,runits="kpc",target=None,
                                onflight=False,**kwargs):
         """
         This modules enables to get a new ImageCollection containing only
@@ -410,7 +423,7 @@ class ImageCollection( Collection ):
                       for _id in target_imcoll.list_id]
 
         
-        photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius_kpc/image_.target.arcsec_per_kpc/image_.pixel_size_arcsec.value,
+        photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius=radius,runits=runits,
                                             **kwargs) for image_ in images])
         
         # ------------------------------

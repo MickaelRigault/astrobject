@@ -7,6 +7,7 @@ from .baseobject  import BaseObject
 from .instruments import instrument
 from ..utils.decorators import _autogen_docstring_inheritance
 
+print "MULTIBAND IS DECREPETED. See Collections"
 __all__ = ["multibands","multimages"]
 
 def multimages(target,images,**kwargs):

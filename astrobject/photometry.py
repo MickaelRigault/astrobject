@@ -551,7 +551,7 @@ class Image( BaseObject ):
         # - set it
         self._side_properties["catalogue"] = catalogue
         
-    def set_apertures_photos(self,rpixel_range=[0.5,25],bins=30,
+    def set_apertures_photos(self,radius_range=[0.5,25],runits="pixles",bins=30,
                             catmag_range=None,isolated_only=True,
                             curveclipping=4, 
                             **kwargs):
@@ -561,7 +561,8 @@ class Image( BaseObject ):
             catmag_range = [None,None]
         # --------------------
         # - Get the Apertures
-        ap = self.get_aperture_photometries(rpixel_range=rpixel_range,bins=bins,
+        ap = self.get_aperture_photometries(radius_range=radius_range,runits=runits,
+                                            bins=bins,
                                             catmag_range=catmag_range,
                                             isolated_only=isolated_only,
                                             **kwargs)
@@ -764,7 +765,7 @@ class Image( BaseObject ):
         self._aperture_ok = True
         return idx
     
-    def get_aperture_photometries(self,rpixel_range=[0.5,20],bins=18,
+    def get_aperture_photometries(self,radius_range=[0.5,20],units="pixels",bins=18,
                                   catmag_range=None,isolated_only=True,
                                   **kwargs
                                   ):
@@ -780,7 +781,7 @@ class Image( BaseObject ):
         
         # ----------------
         # - Aperture Info
-        radius = np.linspace(rpixel_range[0],rpixel_range[1],bins)
+        radiuses = np.linspace(radius_range[0],radius_range[1],bins)
         
         kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
                           catmag_range=catmag_range)
@@ -799,12 +800,13 @@ class Image( BaseObject ):
         # ---------------
         # - SHOUD BE FASTER
         ap = {}
-        for r_pixels in radius:
-            counts,err,flag = self.get_aperture(x,y,r_pixels=r_pixels,**kwargs)
-            ap[r_pixels] = {"counts":counts,
-                            "errors":err,
-                            "flag":flag}
-        return {"radius":radius,
+        for radius in radiuses:
+            counts,err,flag = self.get_aperture(x,y,radius=radius,runits=runits,**kwargs)
+            ap[radius] = {"counts":counts,
+                          "errors":err,
+                          "flag":flag}
+        return {"radius":radiuses,
+                "runits":runits,
                 "counts":np.asarray([ap[d]["counts"] for d in radius]),
                 "errors":np.asarray([ap[d]["errors"] for d in radius]),
                 "idx_catalogue":catidx,
@@ -813,8 +815,8 @@ class Image( BaseObject ):
                                         isolated_only=isolated_only),
                                         **kwargs)
                 }
-    
-    def get_stars_aperture(self, r_pixels,aptype="circle",
+
+    def get_stars_aperture(self, radius,runits="pixels",aptype="circle",
                            isolated_only=True, catmag_range=[None,None],
                            **kwargs):
         """
@@ -853,9 +855,9 @@ class Image( BaseObject ):
         # -------------------- #
         # - Get it           - #
         # -------------------- #
-        return idx, cat_idx, self.get_aperture(x,y,r_pixels=r_pixels,aptype=aptype,**kwargs)
+        return idx, cat_idx, self.get_aperture(x,y,radius=radius,runits=runits,aptype=aptype,**kwargs)
     
-    def get_target_aperture(self,r_pixels,aptype="circle",subpix=5,**kwargs):
+    def get_target_aperture(self,radius,runits="pixels",aptype="circle",subpix=5,**kwargs):
         """If a target is loaded, this will get the target coords and run
         'get_aperture'.
         """
@@ -863,11 +865,13 @@ class Image( BaseObject ):
             raise AttributeError("No 'target' loaded")
         xpix,ypix = self.coords_to_pixel(self.target.ra,self.target.dec)
         return self.get_aperture(xpix,ypix,
-                                 r_pixels=r_pixels,aptype=aptype,
+                                 radius=radius,runits=runits,
+                                 aptype=aptype,
                                  subpix=subpix,**kwargs)
 
     
-    def get_aperture(self,x,y,r_pixels=None,aptype="circle",subpix=5,
+    def get_aperture(self,x,y,radius=None,runits="pixels",
+                     aptype="circle",subpix=5,
                      ellipse_args={"a":None,"b":None,"theta":None},
                      annular_args={"rin":None,"rout":None},
                      **kwargs):
@@ -892,7 +896,7 @@ class Image( BaseObject ):
         - options - 
 
         aptype: [string]           Type of Aperture photometry used.
-                                   -circle  => set r_pixels
+                                   -circle  => set radius
                                    -ellipse => set all ellipse_args entries
                                    -circan  => set all annulus_args entries
                                    -ellipan => set all ellipse_args entries
@@ -900,8 +904,10 @@ class Image( BaseObject ):
                                     (no other type allowed)
                                                
         
-        r_pixels: [float]          Size of the circle radius. In pixels.
+        radius: [float]          Size of the circle radius. In pixels.
                                    (This is used only if aptype is circle)
+                                   
+        runits: [str/astropy.units] The unit of the radius
 
         subpix: [int]              Division of the real pixel to perform the
                                    circle to square overlap.
@@ -937,7 +943,8 @@ class Image( BaseObject ):
         if aptype not in ["circle","circann","ellipse","ellipan"]:
             raise ValueError("the given aptype (%s) is not a "+\
                              "known/implemeted sep aperture"%aptype)
-                             
+
+        r_pixels = radius*self.units_to_pixels(runits)
         # -------------
         # - SEP Input 
         gain = None if "_dataunits_to_electron" not in dir(self) else self._dataunits_to_electron
@@ -956,9 +963,9 @@ class Image( BaseObject ):
             return sep.sum_circle(self.data,x,y,r_pixels,subpix=subpix,
                             var=var,gain=gain,**kwargs)
 
-        
         # - Annulus
         if aptype == "circann":
+            
             if np.asarray([k is None for k in annular_args.values()]).any():
                 raise ValueError("You must set the annular arguments 'annular_arg'")
             
@@ -1000,7 +1007,37 @@ class Image( BaseObject ):
         if pixel:
             return self.wcs.contours_pxl
         return self.wcs.contours
-    
+
+
+    # - Conversion tools
+    def units_to_pixels(self,units_):
+        """units should be a parsable string or a astropy units"""
+        
+        if type(units_) == str:
+            # - astropy units
+            
+            if units_.lower() in ["pixel","pixels","pxl","pix","pxls","pixs"]:
+                return units.Quantity(1.)
+            elif units_.lower() in ["fwhm","psf"]:
+                units_ = self.fwhm
+            elif units_.lower() in ["kpc"]:
+                if not self.has_target():
+                    raise AttributeError("You need a target to convert kpc->arcsec")
+                units_ = self.target.arcsec_per_kpc * units.arcsec
+            elif units_ in dir(units):
+                units_ = 1*units.Unit(units_)
+            else:
+                TypeError("unparsable units %s: astropy.units or pixels/pxl or kpc could be provided."%units_)
+        # ----------------
+        # - astropy Units
+        if type(units_) is units.core.Unit:
+            units_ = 1*units_
+
+        if type(units_) is units.quantity.Quantity:
+            return units_.to("arcsec") / self.pixel_size_arcsec
+        
+        raise TypeError("unparsable units: astropy.units or pixels/pxl or kpc could be provided.")
+            
     def pixel_to_coords(self,pixel_x,pixel_y):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
         if self.has_wcs() is False:

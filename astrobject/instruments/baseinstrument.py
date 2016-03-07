@@ -29,13 +29,13 @@ class Instrument( Image ):
     #  PhotoPoint #
     # ----------- #
     @_autogen_docstring_inheritance(Image.get_stars_aperture,"Image.get_stars_aperture")
-    def get_stars_photomap(self, r_pixels,aptype="circle",
+    def get_stars_photomap(self, radius, runits="pixels",aptype="circle",
                             isolated_only=True,
                             **kwargs):
         #
         # Get the photopoints instead of aperture
         #
-        idx, cat_idx, [counts,errs,flags] = self.get_stars_aperture(r_pixels=r_pixels,aptype=aptype,
+        idx, cat_idx, [counts,errs,flags] = self.get_stars_aperture(radius,runits=runits,aptype=aptype,
                                                             isolated_only=isolated_only,**kwargs)
         idx,cat_idx = idx.tolist(),cat_idx.tolist()
         
@@ -63,13 +63,14 @@ class Instrument( Image ):
         
         
     @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
-    def get_photopoint(self,x,y,r_pixels=None,
+    def get_photopoint(self,x,y,radius=None,runits="pixels",
                        aptype="circle",
                        **kwargs):
         #
         # Be returns a PhotoPoint
         #
-        count,err,flag  = self.get_aperture(x,y,r_pixels=r_pixels,aptype=aptype,
+        count,err,flag  = self.get_aperture(x,y,radius=radius,runits=runits,
+                                            aptype=aptype,
                                            **kwargs)
         flux = self.count_to_flux(count)
         var  = self.count_to_flux(err)**2
@@ -80,7 +81,7 @@ class Instrument( Image ):
     
     @_autogen_docstring_inheritance(Image.get_target_aperture,
                                     "Image.get_target_aperture")
-    def get_target_photopoint(self,r_pixels=None,
+    def get_target_photopoint(self,radius=None,runits="pixels",
                               aptype="circle",**kwargs):
         #
         # Be returns a PhotoPoint
@@ -89,7 +90,7 @@ class Instrument( Image ):
             return AttributeError("No 'target' loaded")
         
         xpix,ypix = self.coords_to_pixel(self.target.ra,self.target.dec)
-        pp = self.get_photopoint(xpix,ypix,r_pixels=r_pixels,
+        pp = self.get_photopoint(xpix,ypix,radius=radius,runits=runits,
                                    aptype="circle",**kwargs)
         pp.set_target(self.target)
         return pp
