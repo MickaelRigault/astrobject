@@ -377,13 +377,17 @@ class Catalogue( BaseObject ):
             self._fovmask_ranges = [ra_range,dec_range]
             
     def set_matchedmask(self,matchedmask):
-        """This methods enable to set to matchedmask, this mask is an addon
-        mask that indicate which point from the catalogue (after the fov cut)
-        has been matched by for instance a sextractor/sep extraction
         """
-        if matchedmask is None or len(matchedmask) == 0:
+        This methods enable to set to matchedmask, this mask is an addon
+        mask that indicate which point from the catalogue (after the fov cut)
+        has been matched by for instance a sextractor/sep extraction.
+        
+        Set None to remove the matching association
+        """
+        if matchedmask is None:
+            self._side_properties["matchedmask"] = None
             return
-
+        
         if type(matchedmask[0]) is bool:
             # - it already is a mask, good
             self._side_properties["matchedmask"] = np.asarray(matchedmask,dtype=bool)

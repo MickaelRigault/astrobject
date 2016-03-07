@@ -784,11 +784,11 @@ class Image( BaseObject ):
         
         kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
                           catmag_range=catmag_range)
-        mask = self.sepobjects.get_indexes(**kwardsmask)
+        mask = self.sepobjects.get_mask(**kwardsmask)
         catidx = self.sepobjects.get_indexes(cat_indexes=True,**kwardsmask)
         # ---------------------
         # - get the coordinate
-        x,y = self.sepobjects.data["x"][mask],self.sepobjects.data["y"][mask]
+        x,y = self.sepobjects.get("x",mask=mask),self.sepobjects.get("y",mask=mask)
         # ---------------------
         # - Edge Issues
         edge_issue = (x<rpixel_range[-1]) + (y<rpixel_range[-1]) + \
@@ -1035,7 +1035,7 @@ class Image( BaseObject ):
             return self._sepbackground.back()
         
         self.set_background(self._sepbackground.back())
-        self.sep_extract()
+        self.sep_extract(match_catalogue=~cleaning_sep)
         self._rmsep=cleaning_sep
         return self.get_sep_background(update_background=True)
 
@@ -1262,7 +1262,7 @@ class Image( BaseObject ):
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
-        self._plot["plot"]   = im
+        self._plot["imshow"] = im
         self._plot["prop"]   = prop
         self._plot["target_plot"] = pl_tgt
         #self._plot["wcs_coords"] = wcs_coords
@@ -1326,7 +1326,7 @@ class Image( BaseObject ):
         # -- Save the data -- #
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
-        self._plot["plot"] = pl
+        self._plot["hist"] = pl
         #self._plot["target_plot"] = pl_tgt
         self._plot["prop"]   = prop
         
@@ -2666,8 +2666,10 @@ class SexObjects( BaseObject ):
         self.create(sexoutput)
         if wcs is not None:
             self.set_wcs(wcs)
+
+            
     # ====================== #
-    # Main Methods           #
+    # = Main Methods       = #
     # ====================== #
     def create(self,sexoutput,force_it=False):
         """
@@ -2686,92 +2688,10 @@ class SexObjects( BaseObject ):
         # ****************** #
         self._properties["data"] = sexdata
 
-    # ------------------ #
-    # - SET Methods    - #
-    # ------------------ #
-    def get_ellipse_mask(self,width,height, r=2, apply_catmask=False):
-        """This methods enable to return a boolean mask of the given image
-        corresponding to the detected ellipses.
-
-        Parameters:
-        -----------
-        r: [float]                 The scale of the ellipse (r=1 is a typical contours included the
-                                   object ; 2 enables to get the tail of most of the bright sources
-
-        apply_catmask: [bool]      Only mask the detected object associated with the current catalogue.
-                                   If no catalogue loaded, this will be set to False in any case.
-
-        Returns:
-        -------
-        2D-bool array (height x width)
-        """
-        from sep import mask_ellipse
-        ellipsemask = np.asarray(np.zeros((height,width)),dtype="bool")
-        mask = None if not apply_catmask else self.catmask
-        # -- Apply the mask to falsemask
-        mask_ellipse(ellipsemask,
-                                self.get('x',mask=mask),
-                                self.get('y',mask=mask),
-                                self.get('a',mask=mask),
-                                self.get('b',mask=mask),
-                                self.get('theta',mask=mask),
-                                r=r)
-        return ellipsemask
-    
-    # ------------------ #
-    # - SET Methods    - #
-    # ------------------ #
-    def set_wcs(self,wcs,force_it=False):
-        """
-        """
-        if self.has_wcs() and force_it is False:
-            raise AttributeError("'wcs' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
         
-
-    def set_catalogue(self,catalogue,force_it=True,
-                      default_isolation_def = 10*units.arcsec):
-        """
-        Parameters
-        ---------
-
-        default_isolation_def: [ang dist]
-                                   If 'define_around' has not be ran yet,
-                                   this scale will be used.
-                                   This is important to know which object is
-                                   isolated.
-                                   
-                                   
-        Return
-        ------
-        
-        """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-
-        # -------------------------
-        # - Add the world_2_pixel
-        if not catalogue.has_wcs():
-            warnings.warn("WARNING the given 'catalogue' has no pixel coordinates. Cannot load it")
-            return
-        if catalogue.nobjects_in_fov < 1:
-            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
-            return
-
-
-        if not catalogue._is_around_defined():
-            catalogue.define_around(default_isolation_def)
-
-        self._side_properties["catalogue"] = catalogue
-
     def match_catalogue(self,catalogue=None,force_it=False,arcsec_size=2):
-        """This methods enable to attached a given sexobject entry
+        """
+        This methods enable to attached a given sexobject entry
         to a catalog value.
         You can set a catalogue.
         """
@@ -2799,13 +2719,80 @@ class SexObjects( BaseObject ):
         self.catalogue.set_matchedmask(idxcatalogue)
         self._derived_properties["starmask"] = np.asarray([i in self.catmask[self.catstarmask]
                                                 for i in range(len(self.data["x"]))],dtype=bool)
+
+    def idx_to_mask(self,idx):
+        """
+        Change the list of index to a True/False mask: index in the list
+        are the True values
+
+        Return:
+        -------
+        mask (boolean array)
+        """
+        mask = np.zeros(self.nobjects,dtype=bool)
+        for i in idx:
+            mask[i] = True
+        return np.asaray(mask,dtype=bool)
         
     # ------------------ #
-    # - get Methods    - #
+    # - SETTER         - #
+    # ------------------ #
+    def set_wcs(self,wcs,force_it=False):
+        """
+        """
+        if self.has_wcs() and force_it is False:
+            raise AttributeError("'wcs' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
+        
+
+    def set_catalogue(self,catalogue,force_it=True,
+                      default_isolation_def = 10*units.arcsec):
+        """
+        Parameters
+        ---------
+
+        default_isolation_def: [ang dist]
+                                   If 'define_around' has not be ran yet,
+                                   this scale will be used.
+                                   This is important to know which object is
+                                   isolated.                                   
+                                   
+        Return
+        ------
+        Voids
+        """
+        if self.has_catalogue() and force_it is False:
+            raise AttributeError("'catalogue' already defined"+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
+            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+
+        # -------------------------
+        # - Add the world_2_pixel
+        if not catalogue.has_wcs():
+            warnings.warn("WARNING the given 'catalogue' has no pixel coordinates. Cannot load it")
+            return
+        
+        if catalogue.nobjects_in_fov < 1:
+            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
+            return
+
+        if not catalogue._is_around_defined():
+            catalogue.define_around(default_isolation_def)
+
+        self._side_properties["catalogue"] = catalogue
+                
+    # ------------------ #
+    # - GETTER         - #
     # ------------------ #
     def get(self,key,mask=None):
-        """This function enable to get from the data the values of the given keys
-        or derived values, like ellipticity. Set 'help' for help."""
+        """
+        This function enable to get from the data the values of the given keys
+        or derived values, like ellipticity. Set 'help' for help.
+        """
         if not self.has_data():
             raise AttributeError("no 'data' defined")
 
@@ -2821,135 +2808,57 @@ class SexObjects( BaseObject ):
         
         # -- These are from the data
         if key in _data_keys_:
-            return self.data[key]
-        
+            val_ = self.data[key]
         # -- These are the catalogue values
-        if key in _matching_keys_:
+        elif key in _matching_keys_:
             if not self.has_catmatch():
                 raise AttributeError("no 'catmatch' defined. The matching has not been ran")
-            return self.catmatch[key] if mask is None else self.catmatch[key][mask]
-
+            val_ = self.catmatch[key]
         # -- These are derived values
-        if key in _derived_keys_:
+        elif key in _derived_keys_:
             if key == "elongation":
                 val_ = self.get("a") / self.get("b")
-            
             elif key == "ellipticity":
                 val_ = 1. - 1. / self.get("elongation")
-            return val_ if mask is None else val_[mask]
-        
-        raise ValueError("Cannot parse '%s'."%key +\
-                          help_text)
-    
-    def get_stars_xy(self,isolated_only=True,catmag_range=[None,None]):
-        """
-        return the method x and y coordinate of the star following the given
-        conditions.
-        """
-        # -- apply the masking 
-        kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
-                          catmag_range=catmag_range)
-        mask = self.get_indexes(**kwardsmask)
-        # ---------------------
-        # - get the coordinate
-        return self.data["x"][mask],self.data["y"][mask],mask
-    
-        
-    def get_median_ellipse(self,apply_catmask=True,
-                            stars_only=True, isolated_only=True,
-                            catmag_range=[None,None],clipping=[3,3]):
-        
-        """This methods look for the stars and return the mean ellipse parameters"""
-        if not self.has_catalogue():
-            apply_catmask = False
-        
-        if apply_catmask:
-            idx = self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                                    catmag_range=catmag_range)
         else:
-            idx = np.ones(self.nobjects, dtype=bool)
-        # -- add input test
-         # -- apply the masking
-        a_clipped,_alow,_ahigh = sigmaclip(self.get("a")[idx],*clipping)
-        b_clipped,_blow,_bhigh = sigmaclip(self.get("b")[idx],*clipping)
-        t_clipped,_tlow,_thigh = sigmaclip(self.get("theta")[idx],*clipping)
-        # - so        
-        psf_a,psf_b,psf_t = a_clipped.mean(),b_clipped.mean(),t_clipped.mean()
-        m = np.sqrt(len(a_clipped)-1)
-        
-        return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
-        [psf_t,np.std(t_clipped)/m]
-        
-
-    def idx_to_mask(self,idx):
+            raise ValueError("Cannot parse '%s'."%key +\
+                          help_text)
+                          
+        return val_ if mask is None else val_[mask]
+            
+    # -----------------
+    # - get ellipse    
+    def get_ellipse_mask(self,width,height, r=2, apply_catmask=False):
         """
-        Change the list of index to a True/False mask: index in the list
-        are the True values
+        This method returns a boolean mask of the detected ellipses
+        on the given width x height pixels image
 
-        Return:
+        (this method is based on the sep mask_ellipse function)
+        
+        Parameters:
+        -----------
+        r: [float]                 The scale of the ellipse (r=1 is a typical contours included the
+                                   object ; 2 enables to get the tail of most of the bright sources
+
+        apply_catmask: [bool]      Only mask the detected object associated with the current catalogue.
+                                   If no catalogue loaded, this will be set to False in any case.
+
+        Returns:
         -------
-        mask (boolean array)
+        2D-bool array (height x width)
         """
-        mask = np.zeros(self.nobjects,dtype=bool)
-        for i in idx:
-            mask[i] = True
-        return np.asaray(mask,dtype=bool)
-
-    # ---------------- #
-    # - get Mask     - #
-    # ---------------- #
-    def get_mask(self,isolated_only,stars_only,
-                 catmag_range=[None,None]):
-        """
-        """
-        mask = np.asarray(self.get_catmag_mask(*catmag_range))
-        if isolated_only:
-            mask = mask & self.catisolatedmask
-        if stars_only:
-            mask = mask & self.catstarmask
+        from sep import mask_ellipse
+        ellipsemask = np.asarray(np.zeros((height,width)),dtype="bool")
+        mask = None if not apply_catmask else self.catmask
+        # -- Apply the mask to falsemask
+        mask_ellipse(ellipsemask,
+                     self.get('x',mask=mask),self.get('y',mask=mask),
+                     self.get('a',mask=mask),self.get('b',mask=mask),
+                     self.get('theta',mask=mask),
+                     r=r)
         
-        return mask
+        return ellipsemask
 
-    def get_indexes(self,isolated_only=False,stars_only=False,
-                    catmag_range=[None,None], cat_indexes=False):
-        """
-        """
-        id = "idx_catalogue" if cat_indexes else "idx"
-        return self.catmatch[id][self.get_mask(isolated_only=isolated_only,
-                                                  stars_only=stars_only,
-                                                  catmag_range=catmag_range
-                                                  )]
-    
-                 
-    def get_catmag_mask(self,magmin,magmax):
-        """
-        return the boolen mask of which matched point
-        belong to the given magnitude range.
-        Set None for no limit
-        Return
-        ------
-        bool mak array
-        """
-        if not self.has_catalogue():
-            raise AttributeError("no 'catalogue' loaded")
-        if not self.has_catmatch():
-            raise AttributeError("catalogue has not been matched to the data")
-    
-        mags = self.catalogue.mag[self.catmatch["idx_catalogue"]]
-        magmin = np.min(mags) if magmin is None else magmin
-        magmax = np.max(mags) if magmax is None else magmax
-        return (mags>=magmin) & (mags<=magmax)
-        
-
-    def get_photomap(self, matched_only=True,
-                     stars_only=False, isolated_only=False):
-        """
-        """
-        print "to be done"
-        
-    # ------------------- #
-    # - PLOT Methods    - #
-    # ------------------- #
     def get_detected_ellipses(self,scaleup=5,apply_catmask=True,
                 stars_only=False, isolated_only=False,
                 catmag_range=[None,None]):
@@ -2965,24 +2874,105 @@ class SexObjects( BaseObject ):
         if not self.has_catalogue():
             apply_catmask = False
             
-        if apply_catmask and self.has_catalogue():
-            kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
-                              catmag_range=catmag_range)
-            mask = self.get_indexes(**kwargsmask)
-        else:
-            kwargsmask = {}
-            mask = np.ones(self.nobjects,dtype=bool)
+        mask = None if not apply_catmask else\
+          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                        catmag_range=catmag_range)
             
-        x,y = self.data["x"][mask],self.data["y"][mask]
-        
         # -------------
         # - Properties
         return [Ellipse([x,y],a*scaleup,b*scaleup,
                         t*units.radian.in_units("degree"))
-                for x,y,a,b,t in zip(self.data["x"][mask],self.data["y"][mask],
-                                     self.data["a"][mask],self.data["b"][mask],
-                                     self.data["theta"][mask])]
+                for x,y,a,b,t in zip(self.get("x",mask=mask),self.get("y",mask=mask),
+                                     self.get("a",mask=mask),self.get("b",mask=mask),
+                                     self.get("theta",mask=mask) )]
+    
+    def get_median_ellipse(self,mask=None,clipping=[3,3]):
         
+        """This methods look for the stars and return the mean ellipse parameters"""
+        if not self.has_catalogue():
+            apply_catmask = False
+          
+        # -- apply the masking
+        a_clipped,_alow,_ahigh = sigmaclip(self.get("a",mask=mask),*clipping)
+        b_clipped,_blow,_bhigh = sigmaclip(self.get("b",mask=mask),*clipping)
+        t_clipped,_tlow,_thigh = sigmaclip(self.get("theta",mask=mask),*clipping)
+        # - so        
+        psf_a,psf_b,psf_t = a_clipped.mean(),b_clipped.mean(),t_clipped.mean()
+        m = np.sqrt(len(a_clipped)-1)
+        
+        return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
+        [psf_t,np.std(t_clipped)/m]
+
+        
+    # ---------------- #
+    # - get Mask     - #
+    # ---------------- #
+    def get_mask(self,isolated_only,stars_only,
+                 catmag_range=[None,None]):
+        """
+        This main masking method builds a boolean array following
+        the requested cuts. Remark that this implies doing a catalogue cuts
+        since stars and magnitude information arises from the catalogue.
+
+        Returns
+        -------
+        array (dtype=bool)
+        """
+        mask = np.asarray(self.get_catmag_mask(*catmag_range))
+        if isolated_only:
+            mask = mask & self.catisolatedmask
+        if stars_only:
+            mask = mask & self.catstarmask
+        
+        return mask
+
+    def get_catmag_mask(self,magmin,magmax):
+        """
+        return the boolen mask of which matched point
+        belong to the given magnitude range.
+        Set None for no limit
+
+        (see also get_mask)
+        
+        Returns
+        -------
+        array (dtype=bool)
+        """
+        if not self.has_catalogue():
+            raise AttributeError("no 'catalogue' loaded")
+        if not self.has_catmatch():
+            raise AttributeError("catalogue has not been matched to the data")
+    
+        mags = self.catalogue.mag[self.catmatch["idx_catalogue"]]
+        magmin = np.min(mags) if magmin is None else magmin
+        magmax = np.max(mags) if magmax is None else magmax
+        return (mags>=magmin) & (mags<=magmax)
+
+    def get_indexes(self,isolated_only=False,stars_only=False,
+                    catmag_range=[None,None], cat_indexes=False):
+        """
+        Converts mask into index. Particularly useful to access the catalogue
+        values (set cat_indexes to True)
+        
+        Returns
+        -------
+        array of indexes
+        """
+        id = "idx_catalogue" if cat_indexes else "idx"
+        return np.unique(self.catmatch[id][self.get_mask(isolated_only=isolated_only,
+                                                  stars_only=stars_only,
+                                                  catmag_range=catmag_range
+                                                  )])
+
+    def get_photomap(self, matched_only=True,
+                     stars_only=False, isolated_only=False):
+        """
+        """
+        print "to be done"
+
+    # ------------------- #
+    # - PLOT Methods    - #
+    # ------------------- #    
     # - Display
     def display(self,ax,draw=True,
                 apply_catmask=True,
@@ -3018,13 +3008,9 @@ class SexObjects( BaseObject ):
         if not self.has_catalogue():
             apply_catmask = False
             
-        if apply_catmask:
-            kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
-                              catmag_range=catmag_range)
-            mask = self.get_indexes(**kwargsmask)
-        else:
-            kwargsmask = {}
-            mask = np.ones(self.nobjects,dtype=bool)
+        mask = None if not apply_catmask else\
+          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                        catmag_range=catmag_range)
         
         v = self.get(toshow)[mask]
 
@@ -3058,9 +3044,8 @@ class SexObjects( BaseObject ):
     # - Ellipse
     def show_ellipses(self,ax=None,
                       savefile=None,show=True,
-                      apply_catmask=True,
-                      stars_only=False, isolated_only=False,
-                      catmag_range=[None,None],
+                      apply_catmask=True,stars_only=False,
+                      isolated_only=False,catmag_range=[None,None],
                       **kwargs):
         """
         """
@@ -3089,23 +3074,17 @@ class SexObjects( BaseObject ):
         # ------------------- #
         if not self.has_catalogue():
             apply_catmask = False
-        if apply_catmask:
-            kwargsmask = dict(isolated_only=isolated_only,stars_only=stars_only,
-                              catmag_range=catmag_range)
-            mask = self.get_indexes(**kwargsmask)
-        else:
-            kwargsmask = {}
-            mask = np.ones(self.nobjects,dtype=bool)
+            
+        mask = None if not apply_catmask else\
+          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                        catmag_range=catmag_range)
         # -------------
         # - Properties
-        
-        
         ells = [Ellipse([0,0],2.,2*b/a,t*units.radian.in_units("degree"))
-                for a,b,t in zip(self.data["a"][mask],self.data["b"][mask],
-                                 self.data["theta"][mask])]
+                for a,b,t in zip(self.get("a",mask=mask),self.get("b",mask=mask),
+                                 self.get("theta",mask))]
         # -- Show the typical angle
-        psf_a,psf_b,psf_theta = self.get_median_ellipse(apply_catmask=apply_catmask,
-                                                       **kwargsmask)
+        psf_a,psf_b,psf_theta = self.get_median_ellipse(mask=mask)
         ellipticity = 1- psf_b[0]/psf_a[0]
         # - cos/ sin what angle in radian
         
@@ -3225,7 +3204,6 @@ class SexObjects( BaseObject ):
         if not self.has_data():
             return None
         return len(self.data)
-
     
     # ----------------
     # - WCS
@@ -3244,7 +3222,7 @@ class SexObjects( BaseObject ):
 
     @property
     def xy(self):
-        return np.asarray([self.data["x"],self.data["y"]])
+        return np.asarray([self.get("x"),self.get("y")])
 
     @property
     def sky_radec(self):
