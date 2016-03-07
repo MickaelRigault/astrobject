@@ -131,11 +131,13 @@ class BaseObject( object ):
             self._derived_properties[k] = None
             
     
-    def copy(self):
+    def copy(self, empty=False):
         """returns an independent copy of the current object"""
         
         # Create an empty object
         newobject = self.__class__(empty=True)
+        if empty:
+            return
         # And fill it !
         for prop in ["_properties","_side_properties",
                      "_derived_properties","_build_properties"

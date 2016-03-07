@@ -8,7 +8,7 @@ import numpy as np
 from .baseobject import BaseObject
 from .instruments import instrument as inst
 from ..utils.tools import kwargs_update
-
+from ..utils.shape import draw_polygon
 
 __all__ = ["ImageCollection"]
 
@@ -234,15 +234,15 @@ class ImageCollection( Collection ):
         # What should be loaded  - #
         # ------------------------ #
         if type(new_image) == str:
-            self._add_image_file_(new_image)
+            idloaded = self._add_image_file_(new_image)
         
         elif "__nature__" in dir(new_image) and new_image.__nature__ != "Image":
-            self._add_astroimage_(new_image)
+            idloaded = self._add_astroimage_(new_image)
         else:
             # -- Issue
             raise TypeError("the given new_image must be a image-file or an astrobject imnage")
         if load_catalogue:
-            self.download_catalogue()
+            self.download_catalogue(id_=idloaded)
             
 
     def load_images(self,verbose=True):
@@ -255,6 +255,55 @@ class ImageCollection( Collection ):
     # ========================== #
     # = Get                    = #
     # ========================== #
+    def get_image(self,id,load_catalogue=True):
+        """
+        """
+        self._test_id_(id)
+        # --------------------
+        # - image already exist
+        if self.images[id]["image"] is None:
+            self._load_image_(id)
+            return self.get_image(id)
+        
+        im = self.images[id]["image"]
+        
+        # ---------------
+        # Target
+        if not im.has_target() and self.has_target():
+            im.set_target(self.target)
+        # ---------------
+        # Catalogue
+        if load_catalogue and self.has_catalogue() and not im.has_catalogue():
+            # --- Check if the current catalogue is big enough
+            im.set_catalogue(self.catalogue.copy())
+
+        return im
+
+    def get_catalogue(self,kind="all", isolated_only=False, stars_only=False):
+        """
+        Get a copy of a catalogue. If could be the entire catalogue (kind=None or kind="all")
+        or the shared fov catalogue (kind="shared" or "union") or the combined fov catalogue
+        (kind="combined" or "intersection")
+        """
+        if not self.has_catalogue():
+            raise AttributeError("No Catalogue loaded")
+        
+        if kind is None or kind.lower() in ["all"]:
+            contours = None
+        elif kind.lower() in ["shared","union"]:
+            contours = self.contours_shared
+        elif kind.lower() in ["combined","intersection"]:
+            contours = self.contours_combined
+        else:
+            raise ValueError("I could not parse the given kind %s (must be 'all', 'shared' or 'combined')"%kind)
+        
+        return self.catalogue.get_subcatalogue(contours=contours,isolated_only=isolated_only, stars_only=stars_only)
+        
+        
+    
+    # --------------------- #
+    # - Get Target        - #
+    # --------------------- #
     def get_target_ids(self,target=None):
         """
         This methods enable to access the list of 'data' ids that contains the given target.
@@ -364,37 +413,13 @@ class ImageCollection( Collection ):
         photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius_kpc/image_.target.arcsec_per_kpc/image_.pixel_size_arcsec.value,
                                             **kwargs) for image_ in images])
         
-        
+        # ------------------------------
+        # - Shall we delete the files ?
         if onflight:
             del images
             del target_imcoll
             
         return photopoints
-    
-    def get_image(self,id,load_catalogue=True):
-        """
-        """
-        self._test_id_(id)
-        # --------------------
-        # - image already exist
-        if self.images[id]["image"] is None:
-            self._load_image_(id)
-            return self.get_image(id)
-        
-        im = self.images[id]["image"]
-        
-        # ---------------
-        # Target
-        if not im.has_target() and self.has_target():
-            im.set_target(self.target)
-        # ---------------
-        # Catalogue
-        if load_catalogue and self.has_catalogue() and not im.has_catalogue():
-            # --- Check if the current catalogue is big enough
-            im.set_catalogue(self.catalogue.copy())
-
-        return im
-
     # ========================== #
     # = Set                    = #
     # ========================== #
@@ -417,11 +442,13 @@ class ImageCollection( Collection ):
         self._side_properties["catalogue"] = catalogue
 
 
-    def download_catalogue(self,source="sdss",
+    def download_catalogue(self,id_=None,
+                           source="sdss",
                            **kwargs):
         """
         """
-        for id_ in self.list_id:
+        loop_id = self.list_id if id_ is None else [id_] if "__iter__" not in dir(id_) else id_
+        for id_ in loop_id:
             # -- Loop over the images, check what is needed
             if not self.has_catalogue() or \
               not self.catalogue.contours.contains(self.images[id_]["wcs"].contours):
@@ -430,7 +457,8 @@ class ImageCollection( Collection ):
                     self.set_catalogue(new_cat)
                 else:
                     self.catalogue.merge(new_cat)
-                
+
+    
     # ========================== #
     # = Show                   = #
     # ========================== #
@@ -466,6 +494,8 @@ class ImageCollection( Collection ):
         # - Catalogue
         if self.has_catalogue() and show_catalogue:
             self.catalogue.display(ax,zorder=3)
+            draw_polygon(ax,self.contours_shared,zorder=4,fc=mpl.cm.Greens(0.4,0.3))
+            
         # ----------------------
         # - Target
         if self.has_target() and show_target:
@@ -516,7 +546,9 @@ class ImageCollection( Collection ):
         except:
             print "WARNING Failure to load the wcs solution"
             self.images[ID]["wcs"] = None
-        
+            
+        return ID
+    
     def _add_astroimage_(self,astroimage):
         """
         """
@@ -531,6 +563,7 @@ class ImageCollection( Collection ):
             "image":new_image,
             "wcs":new_image.wcs if new_image.has_wcs() else None
             }
+        return ID
         
     def _load_image_(self,id):
         """
@@ -551,7 +584,6 @@ class ImageCollection( Collection ):
         print "_imageids to be changed to self.list_id"
         return self.list_id
     
-    
     # -- Catalogue
     @property
     def catalogue(self):
@@ -571,7 +603,24 @@ class ImageCollection( Collection ):
                   if self.images[id_]["image"] is not None \
                   else inst.which_band_is_file(self.images[id_]["file"])
                 for id_ in self.list_id]
+
+    # ------------------
+    # - Shapely Based
+    @property
+    def contours_shared(self):
+        """ returns the contour (shapely polygon) of the shared covered sky area"""
+        for i,d in enumerate(self.images.values()):
+            fov = d["wcs"].contours if i == 0 else\
+              fov.intersection(d["wcs"].contours)
+        return fov
     
+    @property
+    def contours_combined(self):
+        """ returns the contour (shapely polygon) of the combined covered sky area"""
+        for i,d in enumerate(self.images.values()):
+            fov = d["wcs"].contours if i == 0 else\
+              fov.union(d["wcs"].contours)
+        return fov
     
 #######################################
 #                                     #

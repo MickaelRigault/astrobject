@@ -251,5 +251,12 @@ class _WCSbackup(astWCS.WCS):
             
         return self._contour
 
+    @property
+    def contours_pxl(self,**kwargs):
+        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        x,y = np.asarray([self.wcs2pix(ra_,dec_) for ra_,dec_ in
+                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)
+    
     def has_contours(self):
         return self.contours is not None

@@ -6,9 +6,9 @@ import spectroscopy
 import transient 
 import photometry   
 #import multiband
-#import collection
+import collection
 import survey
-#import instruments
+import instruments
 import astrometry
 
 from instruments.instrument import *

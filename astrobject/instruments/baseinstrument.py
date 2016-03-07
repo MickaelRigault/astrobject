@@ -151,7 +151,7 @@ class Catalogue( BaseObject ):
     source_name = "_not_defined_"
     
     _properties_keys = ["filename","data","header"]
-    _side_properties_keys = ["wcs","fovmask","matchedmask","lbda"]
+    _side_properties_keys = ["wcs","fovcontours","fovmask","matchedmask","lbda"]
     _derived_properties_keys = ["fits","naround","contours"]
 
     
@@ -346,9 +346,7 @@ class Catalogue( BaseObject ):
                 print "None wcs"
                 self._load_default_fovmask_()
 
-            
-    def set_fovmask(self, wcs=None,
-                    ra_range=None, dec_range=None,
+    def set_fovmask(self, wcs=None, fovcontours=None,
                     update=True):
         """
         This methods enable to define the mask of catalgue objects within the
@@ -356,7 +354,11 @@ class Catalogue( BaseObject ):
         
         Parameters
         ----------
+
+        fovcontours: [shapely polygon]
+        
         - options -
+        
         update: [bool]             True to have a consistent object. Set False
                                    only if you know what you are doing
         Return
@@ -364,18 +366,13 @@ class Catalogue( BaseObject ):
         Void
         """
         if wcs is not None:
-            if "coordsAreInImage" not in dir(wcs):
-                raise TypeError("'wcs' solution not recognized")
-            
-            self.fovmask = np.asarray([wcs.coordsAreInImage(ra,dec)
-                                       for ra,dec in zip(self._ra,self._dec)])
-        elif ra_range is None or dec_range is None:
-            raise AttributeError("please provide either 'wcs' and ra_range *and* dec_range")
-        else:
-            self.fovmask = (self.ra>ra_range[0]) & (self.ra<ra_range[1]) \
-              (self.dec>dec_range[0]) & (self.dec<dec_range[1])
-            self._fovmask_ranges = [ra_range,dec_range]
-            
+            fovcontours = wcs.contours
+        elif fovcontours is None:
+            raise ValueError("Either wcs or fovcontours must be provided")
+        
+        self.fovmask = self.get_contour_mask(fovcontours)
+        self._side_properties["fovcontours"] = fovcontours
+        
     def set_matchedmask(self,matchedmask):
         """
         This methods enable to set to matchedmask, this mask is an addon
@@ -404,6 +401,29 @@ class Catalogue( BaseObject ):
     # --------------------- #
     # Get Methods           #
     # --------------------- #
+    def get_subcatalogue(self, contours=None, stars_only=False, isolated_only=False):
+        """ Returns a value of a sub fov of the catalogue. Only objects within the contours' fov
+        will be contained in the returned catalogue """
+
+        mask = np.ones(self.nobjects,dtype="bool")
+        if stars_only:
+            mask *= self.starmask
+        if isolated_only:
+            mask *= self.isolatedmask
+        if contours is not None:
+            mask *= self.get_contour_mask(contours)
+        
+        subcat = self.__class__(empty=True)
+        subcat.create(self.data[mask], None, force_it=True,**self._build_properties)
+        return subcat
+    
+    def get_contour_mask(self, contours):
+        """  returns a boolean array for the given contours """
+        if type(contours) != shape.polygon.Polygon and type(contours) != shape.multipolygon.MultiPolygon:
+            raise TypeError("contours must be a shapely Polygon or MultiPolygon")
+        return np.asarray([shape.point_in_contours(ra,dec, contours)
+                           for ra,dec in zip(self._ra,self._dec)])
+    
     def get_photomap(self,idx_only=None,lbda=None):
         """
         """
@@ -536,9 +556,6 @@ class Catalogue( BaseObject ):
         """
         if self.has_wcs():
             self.set_fovmask(wcs=self.wcs)
-        elif "_fovmask_ranges" in dir(self):
-            self.set_fovmask(ra_range=self._fovmask_ranges[0],
-                             dec_range=self._fovmask_ranges[1])
         return
     
     def _update_contours_(self):
@@ -826,3 +843,7 @@ class Catalogue( BaseObject ):
     @property
     def contours(self):
         return self._derived_properties["contours"]
+    
+    @property
+    def fovcontours(self):
+        return self._side_properties["fovcontours"]

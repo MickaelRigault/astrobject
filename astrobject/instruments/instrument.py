@@ -115,7 +115,7 @@ def get_instrument_wcs(filename):
     elif stella.is_stella_file(filename):
         index = stella.DATAINDEX
     # - PTF
-    elif ptf.is_stella_file(filename):
+    elif ptf.is_ptf_file(filename):
         index = ptf.DATAINDEX
         
     else:
