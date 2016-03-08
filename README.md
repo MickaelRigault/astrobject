@@ -13,7 +13,9 @@ Python
 - pyfits
 - pickle
 - matplotlib
-- astropy  (pip install astropy)
+- astropy (pip install astropy)
+- astroquery (pip install astroquery)
+- astLib (pip install astlib)
 - sep  (pip install sep)
 - sncosmo (pip install sncosmo)
 - shapely (pip install shapely)
