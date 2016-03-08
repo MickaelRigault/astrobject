@@ -6,6 +6,7 @@ from sncosmo import get_bandpass
 
 from .baseinstrument import Catalogue
 # -- here load all the object that could be parsed
+from ...utils.tools import kwargs_update
 from ...utils.decorators import _autogen_docstring_inheritance
 
 
@@ -25,22 +26,25 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"gmag":"12
     
     # -----------
     # - DL info
-    columns = ["cl","objID",
+    columns = ["cl","objID",#"SDSS9",
                "RAJ2000","e_RAJ2000","DEJ2000","e_DEJ2000",
-               #"ObsDate","Q"#"mode","SDSS9",
+               #"ObsDate","Q"#"mode",,
                ]
     for band in SDSS_INFO["bands"]:
         columns.append("%smag"%band)
         columns.append("e_%smag"%band)
     
     columns = columns+extracolums
+    column_quality = {"mode":"1","q_mode":"+","Q":"2.3"}
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
-    c = vizier.Vizier(catalog="V/139", columns=columns, column_filters=column_filters)
+    c = vizier.Vizier(catalog="V/139", columns=columns,
+                      column_filters=kwargs_update(column_quality,**column_filters))
     c.ROW_LIMIT = 100000
-    try:
-        t = c.query_region(center,radius=radius).values()[0]
-    except:
-        raise IOError("Error while querying the given coords. You might not have an internet connection")
+    
+    #try:
+    t = c.query_region(center,radius=radius).values()[0]
+    #except :
+    #    raise IOError("Error while querying the given coords. You might not have an internet connection")
     
     cat = SDSSCatalogue(empty=True)
     cat.create(t.columns,None,

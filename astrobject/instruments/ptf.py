@@ -68,8 +68,8 @@ class PTF( Instrument ):
         # - Add the bandname key_mag setting
         #
         if catalogue.source_name =="SDSS":
-            key_mag = "%smag"%self.bandname[0]
-            key_magerr = "e_%smag"%self.bandname[0]
+            key_mag = "%smag"%self.bandname[0].lower()
+            key_magerr = "e_%smag"%self.bandname[0].lower()
             if key_mag not in catalogue.data.keys():
                 print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
             catalogue.set_mag_keys(key_mag,key_magerr)
