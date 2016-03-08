@@ -252,7 +252,7 @@ class Image( BaseObject ):
                                 "target","catalogue",
                                 "exptime"] # maybe Exptime should just be on flight
         
-    _derived_properties_keys = ["fits","data","sepobjects","sep_datamask",
+    _derived_properties_keys = ["fits","data","sepobjects","backgroundmask",
                                 "apertures_photos","fwhm"]
     
     # Where in the fitsfile the data are
@@ -1168,7 +1168,7 @@ class Image( BaseObject ):
 
         // Data/display options
         
-        toshow: [string]           key of the element you want to show. Could be
+        toshow: [string/array]     key of the element you want to show. Could be
                                    data, rawdata, background, variance.
 
         logscale: [bool]           The values of the 2D array is scaled in log10
@@ -1219,7 +1219,9 @@ class Image( BaseObject ):
 
         -- Additional options --
         
-        **kwargs goes to matplotib's imshow (vmin, vmax ...)
+        **kwargs goes to matplotib's imshow (vmin, vmax ...).
+          *Important* use string values for 'vmin' and 'vmax' to considered them are
+          percentile of the data values.
 
         Return
         ------
@@ -1228,9 +1230,16 @@ class Image( BaseObject ):
         """
         # ----------------
         # - Input test
-        if toshow not in dir(self):
+        if type(toshow) is np.ndarray:
+            if np.shape(toshow) != (self.height, self.width):
+                raise ValueError("the given ndarray 'toshow' must have the size of the image (%d,%d)"%(self.height, self.width))
+            valuetoshow = toshow
+        elif type(toshow) is not str:
+            raise TypeError("'toshow' must be a string (self.'toshow') or a np.ndarray)"%toshow)
+        elif toshow not in dir(self):
             raise ValueError("'%s' is not a known image parameter"%toshow)
-        valuetoshow = eval("self.%s"%toshow)
+        else:
+            valuetoshow = eval("self.%s"%toshow)
         if valuetoshow is None:
             raise AttributeError("no '%s' to show (=None)"%toshow)
         
@@ -1242,6 +1251,8 @@ class Image( BaseObject ):
         if ax is None:
             fig = mpl.figure(figsize=[8,8])
             ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            ax.set_xlabel("x",fontsize = "x-large")
+            ax.set_ylabel("y",fontsize = "x-large")
         elif "imshow" not in dir(ax):
             raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
                              "No imshow available")
@@ -1257,14 +1268,18 @@ class Image( BaseObject ):
             "interpolation":"nearest",
             "origin":"lower"
             }
-        ax.set_xlabel("x",fontsize = "x-large")
-        ax.set_ylabel("y",fontsize = "x-large")
             
         prop = kwargs_update(default_prop,**kwargs)
 
         # ----------- #
         # - Do It     #
+        
+        if "vmin" in prop.keys() and type(prop["vmin"]) is str:
+            prop["vmin"] = np.percentile(x[x==x],float(prop["vmin"]))
+        if "vmax" in prop.keys() and type(prop["vmax"]) is str:
+            prop["vmax"] = np.percentile(x[x==x],float(prop["vmax"]))
         im = ax.imshow(x,**prop)
+        
         # - add target
         pl_tgt = None if self.has_target() is False \
           else self.display_target(ax,wcs_coords=False,
@@ -1308,7 +1323,7 @@ class Image( BaseObject ):
         
         return self._plot
 
-
+    
     def show_hist(self,toshow="data",savefile=None,logscale=True,
                 ax=None,show=True,proptarget={},
                 **kwargs):
@@ -1370,8 +1385,62 @@ class Image( BaseObject ):
         fig.figout(savefile=savefile,show=show)
         
         return self._plot
+
+
+    def show_background(self,savefile=None,show=True,
+                        **kwargs):
+        """
+        """
+        # -- Setting -- #
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
         
+        # ----------- #
+        # - Where     #
+        fig  = mpl.figure(figsize=[16,8])
+        axB  = fig.add_axes([0.1, 0.1,0.4,0.8])
+        axM  = fig.add_axes([0.52,0.1,0.4,0.8])
         
+        # ----------- #
+        # - What      #
+        backgroudsource = self.rawdata.copy()
+        backgroudsource[self.backgroundmask] = np.NaN
+        # ----------- #
+        # - How
+        # -- labels
+        prop = kwargs_update({"vmin":"3","vmax":"97"},**kwargs)
+        axB.set_xlabel("x",fontsize = "x-large")
+        axM.set_xlabel("x",fontsize = "x-large")
+        axB.set_ylabel("y",fontsize = "x-large")
+        # -- titles
+        axB.set_title(r"$\mathrm{background}$",fontsize = "xx-large")
+        axM.set_title(r"$\mathrm{masked\ rawdata\ (log)\ used\ to\ create\ the\ background}$",fontsize = "xx-large")
+        
+        if "logscale" in kwargs.keys():
+            print "No logscale option available for show_background."
+            _ = kwargs.pop("logscale")
+        # ----------- #
+        # - Do It     #
+        _plotb  = self.show("background",ax=axB,logscale=False,
+                        show=False,savefile=None,**prop)
+        _plotbm = self.show(backgroudsource,ax=axM,logscale=True,
+                        show=False,savefile=None,**prop)
+        
+        # ----------- #
+        # - Done     #
+        del backgroudsource
+        # ----------- #
+        # - Recordit
+        # -- Save the data -- #
+        self._plot["figure"] = fig
+        self._plot["axes"]   = [axB,axM]
+        self._plot["imshows"] = [_plotb["imshow"],_plotbm["imshow"]]
+        
+        fig.figout(savefile=savefile,show=show)
+        
+        return self._plot
+    
     # ---------------------- #
     # - Plot-Displays      - #
     # ---------------------- #
@@ -1601,7 +1670,11 @@ class Image( BaseObject ):
         
         self._properties['background'] = np.asarray(value)
         self._update_data_()
-        
+
+    @property
+    def backgroundmask(self):
+        return self._derived_properties["backgroundmask"]
+    
     # -- Header stuff
     @property
     def header(self):
@@ -1749,12 +1822,6 @@ class Image( BaseObject ):
 
     def has_fwhm(self):               
         return not self._derived_properties["fwhm"] is None
-
-    @property
-    def fwhm_pxl(self):
-        """
-        """
-        return self.fwhm.to("arcsec") / self.pixel_size_arcsec
     
     # =========================== #
     # = Internal Methods        = #
@@ -1793,9 +1860,11 @@ class Image( BaseObject ):
         else:
             mask = maskdata
         # ---------------
-        
-        self._sepbackground_prop = kwargs_update({"mask":mask,"bw":100,"bh":100},
-                                                 **kwargs)
+        # - masking sign tested
+        self._derived_properties["backgroundmask"] = mask
+        self._sepbackground_prop = kwargs_update({"mask":self.backgroundmask ,
+                                                  "bw":100,"bh":100},
+                                                  **kwargs)
         
         self._sepbackground = Background(self.rawdata,
                                          **self._sepbackground_prop)
