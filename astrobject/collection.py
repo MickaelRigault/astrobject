@@ -4,7 +4,7 @@
 
 """This module contain the collection of astrobject"""
 import numpy as np
-
+import warnings
 from .baseobject import BaseObject
 from .instruments import instrument as inst
 from ..utils.tools import kwargs_update
@@ -139,7 +139,6 @@ class Collection( BaseCollection ):
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
 
-
     def _test_id_(self,id_):
         """
         """
@@ -203,6 +202,28 @@ class ImageCollection( Collection ):
 
         [self.add_image(i_,load_catalogue=catalogue) for i_ in images
          if i_ is not None]
+
+    def set_target(self,newtarget, set_to_images=True):
+        """
+        Change (or create) an object associated to the given image.
+        This function will test if the object is withing the image
+        boundaries (expect if *test_inclusion* is set to False).
+        Set newtarget to None to remove the association between this
+        object and a target
+
+        set_to_images [bool]       If any images is loaded and this is within the image FoV
+                                   shall we set the target to the image ?
+        """
+        super(ImageCollection,self).set_target(newtarget)
+        if set_to_images:
+            for id_ in self.list_id:
+                if self.images[id_]["image"] is not None:
+                    try:
+                        self.images[id_]["image"].set_target(self.target)
+                    except ValueError:
+                        warnings.wanr("the new target is not in %s's FoV "%id_)
+        
+                    
         
     # ========================= #
     # = Images IO             = #
