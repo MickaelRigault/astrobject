@@ -329,29 +329,33 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
             c = [c]*npoint
         else:
             c = np.asarray(c)
-            vmin = c.min() if vmin is None else vmin
+            if vmin is None:
+                vmin = np.nanmin(c)
+            else:
+                vmin = vmin if type(vmin) is not str else np.percentile(c[c==c],float(vmin))
+            if vmax is None:
+                vmax = np.nanmax(c)
+            else:
+                vmax = vmax if type(vmax) is not str else np.percentile(c[c==c],float(vmax))
+                
             vmax = c.max() if vmax is None else vmax
             color = cmap((c-vmin)/(vmax-vmin))
-        edgecolors = kwargs.pop("edgecolors","0.5")
+        edgecolors = kwargs.pop("edgecolors","k")
     else:
         color = "None"
         edgecolors = kwargs.pop("edgecolors","k")
-        
 
+    prop = kwargs_update({"alpha":0.5},**kwargs)
     collec = PolyCollection(xy_poly,facecolors=color,edgecolors=edgecolors,
-                            **kwargs)
+                            **prop)
     ax.add_collection(collec)
 
     # ----------------- #
     # - color bar     - #
     # ----------------- #
-    _display_colorbar_ = not (color is "None" or not cbar)
-    if _display_colorbar_:
+    if not (color is "None" or not cbar):
         # - this means it is not an ax
-        if "imshow" not in dir(cbar):
-            axcar = ax.insert_ax(space=.05,pad=0.03,location="right")
-        else:
-            axcar = cbar
+        axcar = ax.insert_ax(space=.05,pad=0.03,location="right") if "imshow" not in dir(cbar) else cbar
         calpha = cbarprop.pop('alpha',kwargs.pop("alpha",None))
         return collec, axcar.colorbar(cmap,vmin=vmin,vmax=vmax,label=cblabel,
                                       alpha=calpha,**cbarprop)
@@ -363,7 +367,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
 # --------------------------- #
 @make_method(mpl.Axes)
 def colorbar(ax,cmap,vmin=0,vmax=1,label="",
-             fontsize="large",npoint=256,
+             fontsize="x-large",npoint=256,
             **kwargs):
     """
     """

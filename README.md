@@ -11,7 +11,6 @@ Python
 - numpy
 - scipy
 - pyfits
-- pickle
 - matplotlib
 - astropy  (pip install astropy)
 - sep  (pip install sep)

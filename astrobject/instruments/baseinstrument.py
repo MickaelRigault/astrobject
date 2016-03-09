@@ -12,7 +12,7 @@ from ...utils.tools import kwargs_update,mag_to_flux,load_pkl,dump_pkl
 from ...utils import shape
 
 from .. import astrometry
-from ...astrobject.photometry import Image,photopoint,photomap
+from ...astrobject.photometry import Image,photopoint
 from ..baseobject import BaseObject,astrotarget
 __all__ = ["Instrument"]
 
@@ -25,59 +25,37 @@ class Instrument( Image ):
         """This is a slightly advanced Image object"""
         super(Instrument,self).__build__(data_index=data_index)
 
-    # ----------- #
-    #  PhotoPoint #
-    # ----------- #
-    @_autogen_docstring_inheritance(Image.get_stars_aperture,"Image.get_stars_aperture")
-    def get_stars_photomap(self, radius, runits="pixels",aptype="circle",
-                            isolated_only=True,
-                            **kwargs):
-        #
-        # Get the photopoints instead of aperture
-        #
-        idx, cat_idx, [counts,errs,flags] = self.get_stars_aperture(radius,runits=runits,aptype=aptype,
-                                                            isolated_only=isolated_only,**kwargs)
-        idx,cat_idx = idx.tolist(),cat_idx.tolist()
-        
-        # -- Data Map
-        fluxes = self.count_to_flux(counts)
-        vares  = self.count_to_flux(errs)**2
-        ra_all,dec_all = self.sepobjects.radec
-        ra     = ra_all[idx]
-        dec     = dec_all[idx]
-        pmap = photomap(fluxes,vares,ra,dec,lbda=self.lbda)
-        
-        # -- Catalogue Map
-        catmap = self.catalogue.get_photomap(idx_only=cat_idx)
-        # -- Setting
-        sepinfo = {
-            "a": self.sepobjects.data['a'][idx],
-            "b": self.sepobjects.data['b'][idx],
-            "theta": self.sepobjects.data['theta'][idx]
-            }
-        pmap.set_refmap(catmap)
-        pmap.set_wcs(self.wcs)
-        pmap.set_sep_params(sepinfo)
-        return pmap
-        
-        
-        
+    # ---------------- #
+    #  PhotoPoints     #
+    # ---------------- #        
     @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
     def get_photopoint(self,x,y,radius=None,runits="pixels",
-                       aptype="circle",
+                       aptype="circle",wcs_coords=False,
                        **kwargs):
         #
         # Be returns a PhotoPoint
         #
         count,err,flag  = self.get_aperture(x,y,radius=radius,runits=runits,
-                                            aptype=aptype,
+                                            aptype=aptype,wcs_coords=wcs_coords,
                                            **kwargs)
         flux = self.count_to_flux(count)
         var  = self.count_to_flux(err)**2
-        return photopoint(self.lbda,flux,var,
-                          source="image",mjd=self.mjd_obstime,
-                          zp=self.mab0,bandname=self.bandpass.name,
-                          instrument_name=self.instrument_name)
+        # ------------------
+        # - One Photopoint
+        if "__iter__" not in dir(flux):
+            return photopoint(self.lbda,flux,var,
+                            source="image",mjd=self.mjd_obstime,
+                            zp=self.mab0,bandname=self.bandpass.name,
+                            instrument_name=self.instrument_name)
+        # -----------------------
+        # - Several Photopoints
+        pps = [photopoint(self.lbda,flux_,var_,
+                            source="image",mjd=self.mjd_obstime,
+                            zp=self.mab0,bandname=self.bandpass.name,
+                            instrument_name=self.instrument_name)
+                            for flux_,var_ in zip(flux,var)]
+        from ..collection import PhotoMap
+        return PhotoMap(pps,np.asarray([x,y]).T,wcs=self.wcs,wcs_coords=wcs_coords)
     
     @_autogen_docstring_inheritance(Image.get_target_aperture,
                                     "Image.get_target_aperture")
@@ -428,29 +406,25 @@ class Catalogue( BaseObject ):
     def get_photomap(self,idx_only=None,lbda=None):
         """
         """
+        from ..collection import PhotoMap
+        # --------------
+        # - Masking
+        
         mask = self.idx_to_mask(idx_only) if idx_only is not None \
           else np.ones(self.nobjects,dtype=bool)
-        if lbda is not None:
-            self.lbda = lbda
-        elif self.lbda is None:
+        self.lbda = lbda if lbda is not None else self.lbda
+        if self.lbda is None:
             raise ValueError("No known 'lbda' and no 'lbda' given")
 
         flux_fluxerr = self._flux_fluxerr
-        """
-        fluxes = [flux_fluxerr[0][i] for i in idx_only]
-        variances = [flux_fluxerr[1][i]**2 for i in idx_only]
-        ra = [self.ra[i] for i in idx_only]
-        dec = [self.dec[i] for i in idx_only]
-        """
         fluxes = flux_fluxerr[0][mask]
         variances = flux_fluxerr[1][mask]**2
         ra = self.ra[mask]
         dec = self.dec[mask]
-
-        
-        pmap = photomap(fluxes=fluxes,variances=variances,
-                        ra=ra,dec=dec,lbda=self.lbda)
-        pmap.set_wcs(self.wcs)
+        #ppoints = 
+        pmap = PhotoMap(fluxes=fluxes,variances=variances,
+                        coords=zip(ra,dec),lbda=self.lbda,
+                        wcs =self.wcs)
         return pmap
     
     def idx_to_mask(self,idx):

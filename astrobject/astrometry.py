@@ -76,12 +76,14 @@ class WCS(pyWCS):
     def pix2wcs(self,x,y):
         if "__iter__" not in dir(x):
             return self.wcs_pix2world([[x,y]],1)[0]
-        return self.wcs_pix2world([x,y],1)
+        
+        return self.wcs_pix2world(np.asarray([x,y]).T.tolist(),1)
     
     def wcs2pix(self,ra,dec):
         if "__iter__" not in dir(ra):
             return self.wcs_world2pix([[ra,dec]],0)[0]
-        return self.wcs_world2pix([ra,dec],0)
+         
+        return self.wcs_world2pix(np.asarray([ra,dec]).T.tolist(),0)
 
     def coordsAreInImage(self,ra,dec):
         """

@@ -5,6 +5,8 @@
 """This module contain the collection of astrobject"""
 import numpy as np
 import warnings
+from astropy.table import Table
+        
 from .baseobject import BaseObject
 from .instruments import instrument as inst
 from ..utils.tools import kwargs_update
@@ -326,13 +328,14 @@ class ImageCollection( Collection ):
     # --------------------- #
     # - Get Extraction     - #
     # --------------------- #
-    def get_photopoints(self,x,y,radius, runits="arcsec",
+    def get_photopoints(self,ra,dec,radius, runits="arcsec",
                         ids=None):
         """
         """
         idused = self.list_id if ids is None else\
           [ids] if "__iter__" not in dir(ids) else ids
 
+        
         
             
     # --------------------- #
@@ -665,14 +668,18 @@ class PhotoPointCollection( Collection ):
     """
     """
     
-    def __init__(self, photopoints=None,empty=False):
+    def __init__(self, photopoints=None,filein=None,empty=False,**kwargs):
         """
         """
         self.__build__()
         if empty:
             return
+        
+        if filein is not None:
+            self.load(filein,**kwargs)
+            
         if photopoints is not None:
-            self.create(photopoints)
+            self.create(photopoints,**kwargs)
     # =============================== #
     # = Main Methods                = #
     # =============================== #
@@ -680,14 +687,20 @@ class PhotoPointCollection( Collection ):
     # ------------------- #
     # - I/O PhotoPoint  - #
     # ------------------- #
-    def create(self,photopoints):
+    def create(self,photopoints,ids=None):
         """
         """
         if "__iter__" not in dir(photopoints):
             photopoints = [photopoints]
-        [self.add_photopoint(p_) for p_ in photopoints]
+        if "__iter__" not in dir(ids):
+            ids = [ids]*len(photopoints)
+            
+        if len(ids) != len(photopoints):
+            raise ValueError("photopoints and ids must have the same size")
         
-    def add_photopoint(self,photopoint):
+        [self.add_photopoint(p_,id_) for p_,id_ in zip(photopoints,ids)]
+
+    def add_photopoint(self,photopoint,id_=None):
         """
         This method enables to register the given photpoint in the self.photopoints
         container (dict).
@@ -697,17 +710,16 @@ class PhotoPointCollection( Collection ):
         new_image: [string or astrobject's Image (or children)]
 
         - option -
-
-        load_catalogue: [bool]     run the 'download_catalogue' method to
-                                   download the corresponding catalogue if
-                                   it does not exist yet.
+        id_: [any]                 key used to access the photopoint from the _handler.
+                                   id_ is set the photopoint's bandname if None
+        
         Return
         ------
         Void
         """
         # --------------
         # - Define ID
-        ID = photopoint.bandname
+        ID = id_ if id_ is not None else photopoint.bandname
         if self.has_data():
             if ID in self.list_id:
                 i = 1
@@ -718,30 +730,89 @@ class PhotoPointCollection( Collection ):
         # - Record the point        
         self.photopoints[ID] = photopoint
 
+    def writeto(self,filename,format="ascii",**kwargs):
+        """
+        The 
+        """
+        self.data.write(filename,format=format,**kwargs)
+        
+    def load(self,filename,format="ascii",**kwargs):
+        """
+        """
+        from .photometry import photopoint
+        data = Table.read(filename,format=format)
+        ids,pps = [],[]
+        # - This way to be able to call create that might be more
+        # generic than add_photopoints
+        for pp in data:
+            d = {}
+            for i,k in enumerate(data.keys()):
+                d[k] = pp[i]
+            ids.append(d.pop("id"))
+            pps.append(photopoint(**d))
+            
+        self.create(pps,ids,**kwargs)
+        if "comments" in data.meta.keys():
+            self._read_table_comment_(data.meta["comments"])
+
+    def _read_table_comment_(self, comment):
+        """ """
+        warnings.warn("The following comments on the table are not saved:"+"\n".join(comment))
+        pass
+        
     # ------------------- #
     # - Getter          - #
     # ------------------- #
+    def get(self,param,safeexit=True):
+        """Loop over the photopoints (following the list_id sorting) to get the parameters
+        using the photopoint.get() method.
 
-
+        If safeexit is True NaN will be set to cases where the get(key) does not exist.
+        Otherwise this raises a ValueError.
         
+        Returns
+        -------
+        list
+        """
+        return [self.photopoints[id_].get(param,safeexit=safeexit)
+                for id_ in self.list_id]
+
+    # ------------------- #
+    # - Setter          - #
+    # ------------------- #
+    def set_meta(self,key,values):
+        """
+        Assign to all photopoints of the instance a 'value' registered as 'key' in their meta dict.
+        If the 'values' could either be a constant or an N-array where N is the number of photopoints
+
+        Returns:
+        --------
+        Void
+        """
+        if "__iter__" not in values:
+            values = [values]*self.nsources
+        elif len(values)==1:
+            values = [values[0]]*self.nsources
+        elif len(values) !=self.nsources:
+            raise ValueError("the given 'values', must provide a value for each photopoints (%d) or a unique value  %d given"%(self.nsources,len(values)))
+        for id_,v in zip(self.list_id,values):
+            self.photopoints[id_].meta[key] = v
     # ------------------- #
     # - Plot Stuff      - #
     # ------------------- #
-    def show_sed(self,savefile=None,toshow="flux",ax=None,
-                cmap="jet",show=True,**kwargs):
+    def show(self,mode="sed",savefile=None,toshow="flux",ax=None,
+             cmap="jet",show=True,**kwargs):
         """
         """
-        kwargs["function_of_time"] = False
-        return self._show_(savefile=savefile,toshow=toshow,ax=ax,
-                    cmap=cmap,show=show,**kwargs)
-
-    def show_lightcurve(self,savefile=None,toshow="flux",ax=None,
-                        cmap="jet",show=True,**kwargs):
-        """
-        """
-        kwargs["function_of_time"] = True
-        return self._show_(savefile=savefile,toshow=toshow,ax=ax,
-                    cmap=cmap,show=show,**kwargs)
+        if mode.lower()=="sed":
+            kwargs["function_of_time"] = False
+            return self._show_(savefile=savefile,toshow=toshow,ax=ax,
+                        cmap=cmap,show=show,**kwargs)
+        if mode.lower()=="lightcurve":
+            kwargs["function_of_time"] = True
+            return self._show_(savefile=savefile,toshow=toshow,ax=ax,
+                        cmap=cmap,show=show,**kwargs)
+        
 
         
     # ========================== #
@@ -783,12 +854,6 @@ class PhotoPointCollection( Collection ):
         self._plot['prop'] = kwargs
         fig.figout(savefile=savefile,show=show)
 
-        
-    def _get_list_prop_(self,param):
-        """
-        """
-        return [eval("self.photopoints[id_].%s"%param)
-                for id_ in self.list_id]
     
     # ========================== #
     # = Properties             = #
@@ -805,9 +870,9 @@ class PhotoPointCollection( Collection ):
     # -- Bands
     @property
     def bandnames(self):
-        """This returns an array of the recorded images' bandname"""
+        """This returns an array of the recorded images' bandname (self.bandnames<==>self.get('bandname'))"""
         # -- This might be included in the add/remove image tools
-        return self._get_list_prop_("bandname")
+        return self.get("bandname")
 
     @property
     def nbands(self):
@@ -817,31 +882,265 @@ class PhotoPointCollection( Collection ):
     # -- Flux Variances etc.
     @property
     def lbdas(self):
-        """The wavelength of every photopoints"""
-        return self._get_list_prop_("lbda")
+        """The wavelength of every photopoints (self.lbdas<==>self.get(lbda'))"""
+        return self.get("lbda")
 
     @property
     def fluxes(self):
-        """The fluxes of every photopoints"""
-        return self._get_list_prop_("flux")
+        """The fluxes of every photopoints (self.fluxs<==>self.get('flux'))"""
+        return self.get("flux")
     
     @property
     def fluxvars(self):
-        """The flux variances of every photopoints"""
-        return self._get_list_prop_("var")
+        """The flux variances of every photopoints (self.fluxvars<==>self.get('var'))"""
+        return self.get("var")
     
     @property
     def mags(self):
-        """The (AB) mag of every photopoints"""
-        return self._get_list_prop_("mag")
+        """The (AB) mag of every photopoints (self.mags<==>self.get('mag'))"""
+        return self.get("mag")
 
     @property
     def magvars(self):
-        """The (AB) mag variances of every photopoints"""
-        return self._get_list_prop_("magvar")
+        """The (AB) mag variances of every photopoints (self.magvars<==>self.get('magvar'))"""
+        return self.get("magvar")
     
     # -- Times
     @property
     def mjds(self):
-        """The modified Julian Dates of every photopoints"""
-        return self._get_list_prop_("mjd")
+        """The modified Julian Dates of every photopoints (self.mdjs<==>self.get('mjd'))"""
+        return self.get("mjd")
+
+    @property
+    def metakeys(self):
+        """ This is the list of all the meta keys known by at least one photopoints
+        You can access these get from self.get(key)
+        """
+        return np.unique(np.concatenate(self.get("meta.keys()"))).tolist()
+    
+    # --------------
+    # - Derived
+    @property
+    def data(self):
+        """ The builds an astropy table containing the fundatemental parameters of the collection """
+        # - Main
+        maindata = [self.list_id,self.fluxes,self.fluxvars,self.lbdas,self.mjds,self.bandnames,
+                    self.get("zp"),self.get("zpsys")]
+        mainnames= ["id","flux","var","wavelength","mjd","bandname","zp","zpsystem"]
+        # - Meta
+        metaname = self.metakeys
+        metadata = [self.get(metak) for metak in metaname]
+        return Table(data=maindata+metadata,
+                     names=mainnames+metaname)
+
+########################################
+#                                      #
+# Hi Level Classes:  PhotoMap          #
+#                                      #
+########################################
+
+class PhotoMap( PhotoPointCollection ):
+    """
+    """
+    #__nature__ = "PhotoMap"
+    
+    def __init__(self, photopoints=None,coords=None,
+                 filein=None,empty=False,wcs=None,**kwargs):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        if filein is not None:
+            self.load(filein,**kwargs)
+            
+        if photopoints is not None:
+            self.create(photopoints,coords,wcs=wcs,**kwargs)
+        
+            
+    def __build__(self):
+        """
+        """
+        self._properties_keys = self._properties_keys+["wcsid"]
+        self._side_properties_keys = self._side_properties_keys + \
+          ["refmap","wcs"]
+        super(PhotoMap,self).__build__()
+
+    def _read_table_comment_(self, comments):
+        """
+        """
+        for c in comments:
+            key,value = c.split()
+            if key == "wcsid":
+                self._properties["wcsid"]=bool(value)
+            else:
+                print "comment not saved: ", c
+                
+    # =============================== #
+    # = Building Methods            = #
+    # =============================== #
+
+    # ---------------- #
+    # - SUPER THEM   - #
+    # ---------------- #
+    def create(self,photopoints,coords, wcs_coords=None,
+               wcs=None,refmaps=None,**kwargs):
+        """
+        wcs_coords means that the coordinate are given in ra,dec.
+        
+        """
+        super(PhotoMap,self).create(photopoints,ids=coords,**kwargs)
+        if wcs is not None:
+            self.set_wcs(wcs)
+        if refmaps is not None:
+            self.set_refmaps(wcs)
+        
+    def add_photopoint(self,photopoint,coords):
+        """
+        """
+        if coords is None:
+            raise ValueError("The coordinates of the photopoint are necessary")
+        
+        if type(coords) is str or type(coords) is np.string_:
+            # -- If this failse, the coordinate format is not correct
+            coords = self.id_to_coords(coords)
+        elif np.shape(coords) != (2,):
+            raise TypeError("the given coordinate must be a 2d array (x,y)/(ra,dec)")
+        
+        super(PhotoMap,self).add_photopoint(photopoint,self.coords_to_id(*coords))
+
+    def writeto(self,filename,format="ascii.commented_header",**kwargs):
+        comments = "".join(["# %s %s \n "%(key, value) for key,value in [["wcsid",self._wcsid]]])
+        super(PhotoMap,self).writeto(filename,format,comment=comments,**kwargs)
+        
+    # =============================== #
+    # = Main Methods                = #
+    # =============================== #
+    def coords_to_id(self,x,y):
+        """ this enables to have consistent coordinate/id mapping """
+        return "%.8f,%.8f"%(x,y)
+    
+    def id_to_coords(self,id):
+        return np.asarray(id.split(","),dtype="float")
+
+    # ------------- #
+    # - SETTER    - #
+    # ------------- #
+    def set_wcs(self,wcs,force_it=False):
+        """
+        """
+        if self.has_wcs() and force_it is False:
+            raise AttributeError("'wcs' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+                    
+        from .astrometry import get_wcs
+        self._side_properties["wcs"] = get_wcs(wcs,verbose=True)
+
+    def set_refmap(self, photomap,force_it=False):
+        """
+        Set here the reference map associated to the current one.
+        The ordering of the point must be consistant with that of the current
+        photomap. 
+        """
+        if self.has_refmap() and force_it is False:
+            raise AttributeError("'refmap' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        #if "__nature__" not in dir(photomap) or photomap.__nature__ != "PhotoMap":
+        #    raise TypeError("The given reference map must be a astrobject PhotoMap")
+
+        self._side_properties["refmap"] = photomap
+
+    # ------------- #
+    # - GETTER    - #
+    # ------------- #
+    def get_ids_around(self, ra, dec, radius):
+        """
+        Parameters:
+        ----------
+        ra, dec : [float]          Position in the sky *in degree*
+
+        radius: [astropy.Quantity] distance of search, using astropy.units
+
+        Return
+        ------
+        (SkyCoords.search_around_sky output)
+        """
+        from astropy import coordinates
+        sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
+        ra_,dec_ = self.coords.T
+        return coordinates.SkyCoord(ra=ra_*units.degree,dec=dec_*units.degree).search_around_sky(sky, radius)
+
+    # ------------- #
+    # - PLOTTER   - #
+    # ------------- #
+    def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,**kwargs):
+        """
+        """
+        if ax is None:
+            fig = mpl.figure(figsize=[8,8])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            ax.set_xlabel("x" if not wcs_coords else "Ra",fontsize = "x-large")
+            ax.set_ylabel("y" if not wcs_coords else "Dec",fontsize = "x-large")
+        elif "imshow" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        from ..utils.mpladdon import voronoi_patchs
+        # -----------------
+        # - The plot itself
+        out = ax.voronoi_patchs(self.radec if wcs_coords else self.xy,
+                                self.get(toshow),**kwargs)
+        ax.figure.canvas.draw()
+        return out
+        
+    # =============================== #
+    # = properties                  = #
+    # =============================== #
+    @property
+    def radec(self):
+        """ """
+        if self._wcsid:
+            return self._coords
+        if not self.has_wcs():
+            raise AttributeError("You need a wcs solution to convert radec to pixels. None set.")
+        return self.wcs.pix2wcs(*self._coords.T)
+    
+    @property
+    def xy(self):
+        """ """
+        if not self._wcsid:
+            return self._coords
+        if not self.has_wcs():
+            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
+        return self.wcs.wcs2pix(*self._coords.T)
+    
+    @property
+    def _coords(self):
+        """ """
+        return np.asarray([self.id_to_coords(id_) for id_ in self.list_id])
+    @property
+    def _wcsid(self):
+        if self._properties["wcsid"] is None:
+            warnings.warn("No information about the nature of the coordinate ids (wcs/pixel?). **WCS system assumed**")
+            self._properties["wcsid"] = True
+        return self._properties["wcsid"]
+    
+    # -------------
+    # - WCS
+    @property
+    def wcs(self):
+        return self._side_properties['wcs']
+    
+    def has_wcs(self):
+        return self.wcs is not None
+    # -------------
+    # - RefMap
+    @property
+    def refmap(self):
+        return self._side_properties['refmap']
+    
+    def has_refmap(self):
+        return self.refmap is not None

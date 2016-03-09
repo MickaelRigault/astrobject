@@ -44,7 +44,7 @@ def image(filename=None,astrotarget=None,**kwargs):
     return Image(filename,astrotarget=astrotarget,
                  **kwargs)#.copy()
 
-def photopoint(lbda,flux,var,
+def photopoint(lbda=None,flux=None,var=None,
                zp=None,bandname=None,
                mjd=None,source=None,
                instrument_name=None,**kwargs):
@@ -82,6 +82,14 @@ def photopoint(lbda,flux,var,
     ------
     PhotoPoint
     """
+    # -------------
+    # - Parser
+    if "variance" in kwargs.keys() and var is None:
+        var = kwargs.pop("variance")
+    if "wavelength" in kwargs.keys() and lbda is None:
+        lbda = kwargs.pop("wavelength")
+    if "zpsystem" in kwargs.keys():
+        kwargs["zpsys"] = kwargs.pop("zpsystem")
     return PhotoPoint(lbda,flux,var,source=source,
                       instrument_name=instrument_name,
                       mjd=mjd,zp=zp,bandname=bandname,
@@ -870,7 +878,8 @@ class Image( BaseObject ):
                                  subpix=subpix,**kwargs)
 
     
-    def get_aperture(self,x,y,radius=None,runits="pixels",
+    def get_aperture(self,x,y,radius=None,
+                     runits="pixels",wcs_coords=False,
                      aptype="circle",subpix=5,
                      ellipse_args={"a":None,"b":None,"theta":None},
                      annular_args={"rin":None,"rout":None},
@@ -879,7 +888,8 @@ class Image( BaseObject ):
         This method uses K. Barary's Sextractor python module SEP
         to measure the aperture photometry. See details here:
         sep.readthedocs.org/en/v0.4.x/apertures.html
-
+        *Remark* you can use the radec option to give x,y as radec coordinates.
+        This will only works if you have a wcs solution loaded.
         
         Parameters
         ----------
@@ -904,11 +914,13 @@ class Image( BaseObject ):
                                     (no other type allowed)
                                                
         
-        radius: [float]          Size of the circle radius. In pixels.
+        radius: [float]            Size of the circle radius. In pixels.
                                    (This is used only if aptype is circle)
                                    
         runits: [str/astropy.units] The unit of the radius
 
+        wcs_coords: [bool]         Set True if x,y are ra,dec coordinates
+        
         subpix: [int]              Division of the real pixel to perform the
                                    circle to square overlap.
 
@@ -944,7 +956,17 @@ class Image( BaseObject ):
             raise ValueError("the given aptype (%s) is not a "+\
                              "known/implemeted sep aperture"%aptype)
 
+        # ---------------
+        # Input Parsing
+        # - radius
         r_pixels = radius*self.units_to_pixels(runits)
+        # - position
+        if wcs_coords and not self.has_wcs():
+            raise AttributeError("you cannot provide ra,dec coordinate without a wcs solution. cannot convert them into pixel coords")
+        if wcs_coords:
+            x,y = self.coords_to_pixel(x,y).T 
+            
+            
         # -------------
         # - SEP Input 
         gain = None if "_dataunits_to_electron" not in dir(self) else self._dataunits_to_electron
@@ -1471,7 +1493,7 @@ class Image( BaseObject ):
             ax.figure.canvas.draw()        
         return pl
 
-    def display_sepobjects(self,ax=None,wcs_coords=True,draw=True,**kwargs):
+    def display_sepobjects(self,ax=None,draw=True,**kwargs):
         """If sep_extract has been ran, you have an sepobjects entry.
         This entry will be red and parsed here.
         """
@@ -1481,7 +1503,7 @@ class Image( BaseObject ):
             raise ValueError('no ax defined')
         ax = self._plot['ax'] if ax is None else ax
         
-        self.sepobjects.display(ax,world_coords=wcs_coords,draw=draw,
+        self.sepobjects.display(ax,draw=draw,
                                 **kwargs)
 
     def display_catalogue(self,ax=None,wcs_coords=True,draw=True,**kwargs):
@@ -1901,7 +1923,8 @@ class PhotoPoint( BaseObject ):
     __nature__ = "PhotoPoint"
 
     _properties_keys = ["lbda","flux","var","mjd","bandname","zp"]
-    _side_properties_keys = ["source","intrument_name","target","zpsys"]
+    _side_properties_keys = ["source","intrument_name","target","zpsys",
+                             "meta"]
     _derived_properties_keys = []
     
     # =========================== #
@@ -1939,6 +1962,9 @@ class PhotoPoint( BaseObject ):
 
         instrument_name:[string]   Give a name of the intrument that enable to take the
                                    photometric point.
+
+        *META*  any additional key will be stored as a dictionary accessible with the meta entry
+        and more generally with the get() method.
         
         Return
         ------
@@ -1958,7 +1984,7 @@ class PhotoPoint( BaseObject ):
     def create(self,lbda,flux,var,
                source=None,instrument_name=None,
                mjd=None,zp=None,bandname=None,zpsys="ab",
-               force_it=False):
+               force_it=False,**meta):
         """
         This method creates the object by setting the fundamental parameters.
 
@@ -1995,6 +2021,7 @@ class PhotoPoint( BaseObject ):
         if self.flux is not None and not force_it:
             raise AttributeError("object is already defined."+\
                     " Set force_it to True if you really known what you are doing")
+                    
         # ****************** #
         # * Creation       * #
         # ****************** #
@@ -2004,7 +2031,7 @@ class PhotoPoint( BaseObject ):
 
         self._side_properties["source"] = source
         self._side_properties["instrument_name"] = instrument_name
-        
+        self._side_properties["meta"] = meta
         # -- Interactive ones
         self._side_properties["zpsys"] = zpsys
         self.mjd = mjd
@@ -2021,14 +2048,13 @@ class PhotoPoint( BaseObject ):
             raise AttributeError("no data to display")
         # -----------
         # - Input
+        y = self.get(toshow)
         if toshow == "flux":
-            y = self.flux
             dy= np.sqrt(self.var) if self.var is not None else None
         elif toshow == "mag":
-            y = self.mag
             dy= np.sqrt(self.magvar) if self.magvar is not None else None
-        else:
-            raise ValueError("%s is not a known parameter"%toshow)
+            
+
         # -----------
         # - Fancy
         default_prop = dict(marker="o",ecolor="0.7",
@@ -2062,7 +2088,23 @@ class PhotoPoint( BaseObject ):
         
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
+
+
+    def get(self,key, safeexit=False):
+        """ Generic method to access information of the instance.
+        Taken either from the instance itself self.`key` or from the meta parameters"""
+        ## Tested, try except faster than if key in dir(self) and enable things like key="meta.keys()"
+        try: # if key in dir(self):
+            return eval("self.%s"%key)
+        except:
+            if key in self.meta.keys():
+                return self.meta[key]
+            elif not safeexit:
+                raise ValueError("No instance or meta key %s "%key)
+            warnings.warn("No instance or meta key %s. NaN returned"%key)
+            return np.NaN
         
+            
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
@@ -2120,8 +2162,8 @@ class PhotoPoint( BaseObject ):
     
     @bandname.setter
     def bandname(self,value):
-        if type(value) != str:
-            raise TypeError("The bandname must be a string")
+        if type(value) != str and type(value) != np.string_:
+            raise TypeError("The bandname must be a string", type(value))
         self._properties["bandname"] = value
 
     @property
@@ -2165,25 +2207,31 @@ class PhotoPoint( BaseObject ):
     def has_target(self):
         return False if self.target is None \
           else True
-          
+
+    # -- Meta
+    @property
+    def meta(self):
+        if self._side_properties["meta"] is None:
+            self._side_properties["meta"]= {}
+        return self._side_properties["meta"]
+    
     # ------------
-    # - Derived 
+    # - Derived
+    # magnitudes
     @property
     def mag(self):
         return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[0]
+
     @property
     def magvar(self):
-        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2
+        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2    
 
-    # ------------
-    # - Derived 
     @property
     def magabs(self):
         if not self.has_target():
             raise AttributeError("No target defined, I can't get the distance")
         return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
-
-    
+        
 #######################################
 #                                     #
 # Base Object Classes: LightCurve     #
@@ -2206,6 +2254,7 @@ class LightCurve( BaseObject ):
                  times=None,empty=False):
         """
         """
+        print "Decrepated... To be moved to PhotoPointCollection'"
         self.__build__()
         if empty:
             return
@@ -2400,6 +2449,7 @@ class PhotoMap( BaseObject ):
                  empty=False):
         """
         """
+        print "photometry.PhotoMap DECREPATED. See collection.PhotoMap"
         self.__build__()
         if empty:
             return
@@ -2575,7 +2625,8 @@ class PhotoMap( BaseObject ):
         if key is None:
             return None
         _sep_keys_ = self.sep_params.keys()
-        _derived_keys_ = ["flux_ratio","scaled_flux_ratio"]
+        _derived_keys_ = ["flux_ratio","scaled_flux_ratio",
+                          "elongation","ellipticity"]
         help_text = " Known keys are: "+", ".join(_sep_keys_+_derived_keys_)
         # ---------------
         # - key parsing
@@ -2590,9 +2641,14 @@ class PhotoMap( BaseObject ):
         if key in _derived_keys_:
             if key == "flux_ratio":
                 val_ = self.fluxes / self.refmap.fluxes
-            if key == "scaled_flux_ratio":
+            elif key == "scaled_flux_ratio":
                 ratio = self.get("flux_ratio")
                 val_ =  ratio - np.median(ratio)
+            elif key == "elongation":
+                val_ = self.sep_params["a"] / self.sep_params["b"]
+            elif key == "ellipticity":
+                val_ = 1. - 1. / self.get("elongation")
+                
             return val_ if mask is None else val_[mask]
         
         raise NotImplementedError("'%s' access is not implemented"+help_text)
@@ -3324,7 +3380,7 @@ class SexObjects( BaseObject ):
     def radec(self):
         if not self.has_wcs():
             raise AttributeError("no 'wcs' solution avialable. Cannot have radec")
-        return np.asarray([self.wcs.pix2wcs(x_,y_) for x_,y_ in zip(self.data["x"],self.data["y"])]).T
+        return np.asarray(self.wcs.pix2wcs(self.data["x"],self.data["y"])).T
 
     @property
     def xy(self):
