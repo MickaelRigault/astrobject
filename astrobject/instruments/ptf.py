@@ -103,7 +103,7 @@ class PTF( Instrument ):
     @property
     def mab0(self):
         if self._properties["mab0"] is None:
-            self.mab0 = self.header["ZP"]
+            self.mab0 = 20#self.header["ZP"]
             
         return self._properties["mab0"]
 

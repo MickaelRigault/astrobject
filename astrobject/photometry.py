@@ -1065,14 +1065,14 @@ class Image( BaseObject ):
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
         
-        return self.wcs.pix2wcs(pixel_x,pixel_y)
+        return self.wcs.pix2wcs(np.asarray(pixel_x),np.asarray(pixel_y))
 
     def coords_to_pixel(self,ra,dec):
         """Return the pixel (x,y) associated to the given ra,dec (degree) coordinate"""
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
-        
-        return self.wcs.wcs2pix(ra,dec)
+        # Remark the np.asarray are only required by the astLib wcs solution
+        return np.asarray(self.wcs.wcs2pix(np.asarray(ra),np.asarray(dec)))
 
     # ------------------- #
     # - SEP Tools       - #
@@ -3250,7 +3250,8 @@ class SexObjects( BaseObject ):
         ellipticity = 1- psf_b[0]/psf_a[0]
         # - cos/ sin what angle in radian
         
-        ax.plot([0,np.cos(psf_theta[0])*ellipticity],[0,np.sin(psf_theta[0])*ellipticity],ls="-",lw=2,
+        ax.plot([0,np.cos(psf_theta[0])*ellipticity],
+                [0,np.sin(psf_theta[0])*ellipticity],ls="-",lw=2,
                  color=mpl.cm.Blues(0.8),zorder=8)
 
         Cone_error = Polygon( [ [0,0],[np.cos(psf_theta[0]-psf_theta[1])*ellipticity,
@@ -3380,7 +3381,8 @@ class SexObjects( BaseObject ):
     def radec(self):
         if not self.has_wcs():
             raise AttributeError("no 'wcs' solution avialable. Cannot have radec")
-        return np.asarray(self.wcs.pix2wcs(self.data["x"],self.data["y"])).T
+        return np.asarray(self.wcs.pix2wcs(np.asarray(self.data["x"]),
+                                           np.asarray(self.data["y"]))).T
 
     @property
     def xy(self):

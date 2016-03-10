@@ -165,7 +165,8 @@ class _WCSbackup(astWCS.WCS):
     # - Mimic astLib     - #
     # -------------------- #
     #def pix2wcs(self,x,y):
-    #    super(_WCSbackup,self).pix2wcs(x,y)
+    #    """ """
+    #    return astWCS.WCS.pix2wcs(self,np.asarray(x),np.asarray(y))
     # 
     # def wcs2pix(self,ra,dec):
     #     super(_WCSbackup,self).wcs2pix(ra,dec)

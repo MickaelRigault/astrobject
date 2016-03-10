@@ -732,7 +732,8 @@ class PhotoPointCollection( Collection ):
 
     def writeto(self,filename,format="ascii",**kwargs):
         """
-        The 
+        Save the PhotoPointCollection following the astropy's Table 'write()' method.
+        Such data will be accessible using the 'load()' method of the class.
         """
         self.data.write(filename,format=format,**kwargs)
         
