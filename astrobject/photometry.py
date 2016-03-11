@@ -1072,7 +1072,7 @@ class Image( BaseObject ):
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
         # Remark the np.asarray are only required by the astLib wcs solution
-        return np.asarray(self.wcs.wcs2pix(np.asarray(ra),np.asarray(dec)))
+        return np.asarray(self.wcs.wcs2pix(ra,dec))
 
     # ------------------- #
     # - SEP Tools       - #
