@@ -1107,7 +1107,7 @@ class PhotoMap( PhotoPointCollection ):
             return self._coords
         if not self.has_wcs():
             raise AttributeError("You need a wcs solution to convert radec to pixels. None set.")
-        return self.wcs.pix2wcs(*self._coords.T)
+        return self.wcs.pix2world(*self._coords.T)
     
     @property
     def xy(self):
@@ -1116,7 +1116,7 @@ class PhotoMap( PhotoPointCollection ):
             return self._coords
         if not self.has_wcs():
             raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
-        return self.wcs.wcs2pix(*self._coords.T)
+        return self.wcs.world2pix(*self._coords.T)
     
     @property
     def _coords(self):

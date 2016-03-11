@@ -73,13 +73,13 @@ class WCS(pyWCS):
     # -------------------- #
     # - Mimic astLib     - #
     # -------------------- #
-    def pix2wcs(self,x,y):
+    def pix2world(self,x,y):
         if "__iter__" not in dir(x):
             return self.wcs_pix2world([[x,y]],1)[0]
         
         return self.wcs_pix2world(np.asarray([x,y]).T.tolist(),1)
     
-    def wcs2pix(self,ra,dec):
+    def world2pix(self,ra,dec):
         if "__iter__" not in dir(ra):
             return self.wcs_world2pix([[ra,dec]],0)[0]
          
@@ -139,7 +139,7 @@ class WCS(pyWCS):
                 v3 = np.asarray([np.ones(npoints-1)*a2, width[::-1][:-1]]).T
                 v4 = np.asarray([heigh[::-1][:-1], np.ones(npoints-1)*0]).T
                 
-                ra,dec = np.asarray([self.pix2wcs(i,j)
+                ra,dec = np.asarray([self.pix2world(i,j)
                                 for i,j in np.concatenate([v1,v2,v3,v4],axis=0)]).T
                 self._contour = shape.get_contour_polygon(ra,dec)
             
@@ -148,7 +148,7 @@ class WCS(pyWCS):
     @property
     def contours_pxl(self,**kwargs):
         """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
-        x,y = np.asarray([self.wcs2pix(ra_,dec_) for ra_,dec_ in
+        x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
                           np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
         return shape.get_contour_polygon(x,y)
     
@@ -157,20 +157,27 @@ class WCS(pyWCS):
         return self.contours is not None
 
 
-class _WCSbackup(astWCS.WCS):
+class _WCSbackup(astWCS.WCS ):
 
     __nature__ = "WCS"
 
     # -------------------- #
     # - Mimic astLib     - #
     # -------------------- #
-    #def pix2wcs(self,x,y):
-    #    """ """
-    #    return astWCS.WCS.pix2wcs(self,np.asarray(x),np.asarray(y))
-    # 
-    # def wcs2pix(self,ra,dec):
-    #     super(_WCSbackup,self).wcs2pix(ra,dec)
-    
+    def pix2world(self,x,y):
+        """
+        """
+        if "__iter__" in dir(x):
+            x,y = np.asarray(x),np.asarray(y)
+        return self.pix2wcs(x,y)
+        
+    def world2pix(self,ra,dec):
+        """
+        """
+        if "__iter__" in dir(ra):
+            ra,dec = np.asarray(ra),np.asarray(dec)
+        return self.wcs2pix(ra,dec)
+        
 
     def coordsAreInImage(self,ra,dec):
         """
@@ -179,7 +186,7 @@ class _WCSbackup(astWCS.WCS):
         
     @property
     def central_coords(self):
-        return self.pix2wcs(self._naxis1/2.,self._naxis2/2.)
+        return self.pix2world(self._naxis1/2.,self._naxis2/2.)
 
     @property
     def edge_size(self):
@@ -208,7 +215,7 @@ class _WCSbackup(astWCS.WCS):
                                 [0.5, naxis2 + 0.5],
                                 [naxis1 + 0.5, naxis2 + 0.5],
                                 [naxis1 + 0.5, 0.5]], dtype = np.float64)
-        return np.asarray([self.pix2wcs(*p_) for p_ in corners])
+        return np.asarray([self.pix2world(*p_) for p_ in corners])
 
         
     @property
@@ -247,7 +254,7 @@ class _WCSbackup(astWCS.WCS):
                 v3 = np.asarray([np.ones(npoints-1)*a2, width[::-1][:-1]]).T
                 v4 = np.asarray([heigh[::-1][:-1], np.ones(npoints-1)*0]).T
                 
-                ra,dec = np.asarray([self.pix2wcs(i,j)
+                ra,dec = np.asarray([self.pix2world(i,j)
                                 for i,j in np.concatenate([v1,v2,v3,v4],axis=0)]).T
                 
                 self._contour = shape.get_contour_polygon(ra,dec)
@@ -257,7 +264,7 @@ class _WCSbackup(astWCS.WCS):
     @property
     def contours_pxl(self,**kwargs):
         """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
-        x,y = np.asarray([self.wcs2pix(ra_,dec_) for ra_,dec_ in
+        x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
                           np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
         return shape.get_contour_polygon(x,y)
     

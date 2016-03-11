@@ -256,7 +256,7 @@ def wcsplot(ax, wcs, exp_order=10,
         v2 = np.asarray([heigh[:-1], np.ones(npoints-1)*wcs._naxis1]).T
         v3 = np.asarray([np.ones(npoints-1)*wcs._naxis2, width[::-1][:-1]]).T
         v4 = np.asarray([heigh[::-1][:-1], np.ones(npoints-1)*0]).T
-        v = np.asarray([wcs.pix2wcs(i,j)
+        v = np.asarray([wcs.pix2world(i,j)
                         for i,j in np.concatenate([v1,v2,v3,v4],axis=0)])
     else:
         from .shape import polygon_to_vertices

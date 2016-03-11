@@ -1065,14 +1065,14 @@ class Image( BaseObject ):
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
         
-        return self.wcs.pix2wcs(pixel_x,pixel_y)
+        return self.wcs.pix2world(pixel_x,pixel_y)
 
     def coords_to_pixel(self,ra,dec):
         """Return the pixel (x,y) associated to the given ra,dec (degree) coordinate"""
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
         # Remark the np.asarray are only required by the astLib wcs solution
-        return np.asarray(self.wcs.wcs2pix(ra,dec))
+        return np.asarray(self.wcs.world2pix(ra,dec))
 
     # ------------------- #
     # - SEP Tools       - #
@@ -2767,7 +2767,7 @@ class PhotoMap( BaseObject ):
         if not self.has_wcs():
             raise AttributeError("no 'wcs' solution defined")
         
-        return self.wcs.wcs2pix(self.ra,self.dec)
+        return self.wcs.world2pix(self.ra,self.dec)
         
     # ----------------      
     # -- References
@@ -2894,7 +2894,7 @@ class SexObjects( BaseObject ):
         mask = np.zeros(self.nobjects,dtype=bool)
         for i in idx:
             mask[i] = True
-        return np.asaray(mask,dtype=bool)
+        return np.asarray(mask,dtype=bool)
         
     # ------------------ #
     # - SETTER         - #
@@ -3381,8 +3381,8 @@ class SexObjects( BaseObject ):
     def radec(self):
         if not self.has_wcs():
             raise AttributeError("no 'wcs' solution avialable. Cannot have radec")
-        return np.asarray(self.wcs.pix2wcs(np.asarray(self.data["x"]),
-                                           np.asarray(self.data["y"]))).T
+        return np.asarray(self.wcs.pix2world(self.data["x"],
+                                           self.data["y"])).T
 
     @property
     def xy(self):

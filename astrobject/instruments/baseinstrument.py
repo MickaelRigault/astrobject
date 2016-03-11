@@ -72,6 +72,7 @@ class Instrument( Image ):
                                    aptype="circle",**kwargs)
         pp.set_target(self.target)
         return pp
+    
     # =========================== #
     # = Main Methods            = #
     # =========================== #
@@ -781,7 +782,7 @@ class Catalogue( BaseObject ):
     @property
     def wcs_xy(self):
         if self.has_wcs():
-            return np.asarray([self.wcs.wcs2pix(ra_,dec_) for ra_,dec_ in zip(self.ra,self.dec)]).T
+            return np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in zip(self.ra,self.dec)]).T
         raise AttributeError("no 'wcs' solution loaded")
 
     # ----------------------
