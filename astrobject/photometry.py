@@ -1065,7 +1065,7 @@ class Image( BaseObject ):
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
         
-        return self.wcs.pix2wcs(np.asarray(pixel_x),np.asarray(pixel_y))
+        return self.wcs.pix2wcs(pixel_x,pixel_y)
 
     def coords_to_pixel(self,ra,dec):
         """Return the pixel (x,y) associated to the given ra,dec (degree) coordinate"""

@@ -90,10 +90,8 @@ def astrotarget(name=None,zcmb=None, ra=None, dec=None,
         
     forced_mwebmv = kwargs.pop("forced_mwebmv",kwargs.pop("MWebmv",kwargs.pop("MWebv",None)))
     
-    name = kwargs.pop("object",None)
     dec = kwargs.pop("Dec",dec)
     ra = kwargs.pop("Ra",ra)
-    type_ = kwargs.pop("type",type)
     empty = kwargs.pop("empty",False)
     
     return AstroTarget(name=name,zcmb=zcmb,ra=ra,dec=dec,
