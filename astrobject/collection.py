@@ -6,7 +6,9 @@
 import numpy as np
 import warnings
 from astropy.table import Table
-        
+
+
+from .photometry import photopoint
 from .baseobject import BaseObject
 from .instruments import instrument as inst
 from ..utils.tools import kwargs_update
@@ -302,7 +304,8 @@ class ImageCollection( Collection ):
 
         return im
 
-    def get_subcatalogue(self, kind="all", isolated_only=False, stars_only=False):
+    def get_subcatalogue(self, kind="all", isolated_only=False,
+                         stars_only=False,catmag_range=[None,None]):
         """
         Get a copy of a catalogue. If could be the entire catalogue (kind=None or kind="all")
         or the shared fov catalogue (kind="shared" or "union") or the combined fov catalogue
@@ -324,7 +327,8 @@ class ImageCollection( Collection ):
         # - get the new catalogue
         return self.catalogue.get_subcatalogue(contours=contours,
                                                isolated_only=isolated_only,
-                                               stars_only=stars_only)
+                                               stars_only=stars_only,
+                                               catmag_range=catmag_range)
     # --------------------- #
     # - Get Extraction     - #
     # --------------------- #
@@ -740,7 +744,6 @@ class PhotoPointCollection( Collection ):
     def load(self,filename,format="ascii",**kwargs):
         """
         """
-        from .photometry import photopoint
         data = Table.read(filename,format=format)
         ids,pps = [],[]
         # - This way to be able to call create that might be more
@@ -996,8 +999,9 @@ class PhotoMap( PhotoPointCollection ):
         if refmaps is not None:
             self.set_refmaps(wcs)
         
-    def add_photopoint(self,photopoint,coords):
+    def add_photopoint(self,photopoint,coords,refphotopoint=None):
         """
+        Add a new photopoint to the photomap. If you have set a 
         """
         if coords is None:
             raise ValueError("The coordinates of the photopoint are necessary")
@@ -1009,7 +1013,13 @@ class PhotoMap( PhotoPointCollection ):
             raise TypeError("the given coordinate must be a 2d array (x,y)/(ra,dec)")
         
         super(PhotoMap,self).add_photopoint(photopoint,self.coords_to_id(*coords))
-
+        # -----------------------
+        # - Complet the refmap
+        if self.has_refmap():
+            if refphotopoint is None:
+                refphotopoint = photopoint(empty=True)
+            self.remap.add_photopoint(refphotopoint,coords)
+            
     def writeto(self,filename,format="ascii.commented_header",**kwargs):
         comments = "".join(["# %s %s \n "%(key, value) for key,value in [["wcsid",self._wcsid]]])
         super(PhotoMap,self).writeto(filename,format,comment=comments,**kwargs)
@@ -1075,7 +1085,8 @@ class PhotoMap( PhotoPointCollection ):
     # ------------- #
     # - PLOTTER   - #
     # ------------- #
-    def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,**kwargs):
+    def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,
+                        show_nods=True,**kwargs):
         """
         """
         if ax is None:
@@ -1094,6 +1105,11 @@ class PhotoMap( PhotoPointCollection ):
         # - The plot itself
         out = ax.voronoi_patchs(self.radec if wcs_coords else self.xy,
                                 self.get(toshow),**kwargs)
+        if show_nods:
+            x,y = self.radec.T if wcs_coords else self.xy.T
+            ax.plot(x,y,marker=".",ls="None",color="k",
+                    scalex=False,scaley=False,
+                    alpha=kwargs.pop("alpha",0.8),zorder=kwargs.pop("zorder",3)+1)
         ax.figure.canvas.draw()
         return out
         
@@ -1137,6 +1153,7 @@ class PhotoMap( PhotoPointCollection ):
     
     def has_wcs(self):
         return self.wcs is not None
+    
     # -------------
     # - RefMap
     @property
@@ -1145,3 +1162,19 @@ class PhotoMap( PhotoPointCollection ):
     
     def has_refmap(self):
         return self.refmap is not None
+
+    # ------------- #
+    # - Derived   - #
+    # ------------- #
+    @property
+    def contours(self):
+        from ..utils import shape
+        return shape.get_contour_polygon(*self.radec.T)
+    
+    @property
+    def contours_pxl(self):
+        """
+        """
+        from ..utils import shape
+        return shape.get_contour_polygon(*self.xy.T)
+    

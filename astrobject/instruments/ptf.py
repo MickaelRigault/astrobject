@@ -116,9 +116,15 @@ class PTF( Instrument ):
     # --------------
     # - FWHM
     @property
-    def fwhm(self):
+    def fwhm(self,fromheader=True):
         if not self.has_fwhm():
-            self.set_fwhm(self.header["SEEING"] * units.arcsec)
+            if fromheader:
+                self.set_fwhm(self.header["SEEING"] * units.arcsec)
+            elif not self.has_sepobjects():
+                raise AttributeError("'fwhm' is not defined and no sepobjects loaded."+\
+                                     " You could use the header value (set fromheader to True)")
+            fwhm_pxl = self.sepobjects.get_fwhm_pxl(isolated_only=True,stars_only=True)
+            self.set_fwhm(fwhm_pxl/self.units_to_pixels("arcsec").value*units.arcsec)
             
         return self._derived_properties["fwhm"]
     # --------------

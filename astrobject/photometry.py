@@ -15,7 +15,7 @@ from .baseobject   import BaseObject
 from ..utils.tools import kwargs_update,flux_to_mag
 
 
-__all__ = ["image","photopoint","photomap"]
+__all__ = ["image","photopoint"]
 
 
 def image(filename=None,astrotarget=None,**kwargs):
@@ -90,47 +90,11 @@ def photopoint(lbda=None,flux=None,var=None,
         lbda = kwargs.pop("wavelength")
     if "zpsystem" in kwargs.keys():
         kwargs["zpsys"] = kwargs.pop("zpsystem")
+        
     return PhotoPoint(lbda,flux,var,source=source,
                       instrument_name=instrument_name,
                       mjd=mjd,zp=zp,bandname=bandname,
                       **kwargs)
-
-def photomap(fluxes=None,variances=None,ra=None,dec=None,lbda=None,
-             photopoints=None,**kwargs):
-    """
-    Get the object gathering photometric and coordinate informations
-    
-    Parameters
-    ----------
-
-    flux: [array]              The fluxes (*not magnitude*) of the photometric points.
-
-    variances: [array]         The variance associated to the point's fluxes.
-
-    ra,dec: [array,array]      Coordinates *in degree* of the given points
-
-    
-    - option -
-
-    lbda: [float]              The central wavelength associated to the photometric
-                               points.
-
-    photopoints: [array]       list of photopoints. Set that instead of fluxes / variances
-                               and lbda. (ra and dec style requiered)
-    
-    empty: [bool]              Set True to return an empty object.
-
-    
-    - other options ; not exhautive ; goes to 'create' -
-
-
-    Return
-    ------
-    PhotoMap
-    """
-    return PhotoMap(fluxes=fluxes,variances=variances,
-                    ra=ra,dec=dec,lbda=lbda,
-                    photopoints=photopoints,**kwargs)
 
 def lightcurve(datapoints,times,**kwargs):
     """
@@ -426,7 +390,6 @@ class Image( BaseObject ):
 
         self.set_background(background)
         self._update_(update_background=False)
-
 
     # ------------------- #
     # - Set Methods     - #
@@ -992,20 +955,20 @@ class Image( BaseObject ):
                 raise ValueError("You must set the annular arguments 'annular_arg'")
             
             rin,rout = [annular_args[k] for k in ["rin","rout"]]
-            return sep.sum_circann(self.data,x,y,rin,rout,
+            sepout= sep.sum_circann(self.data,x,y,rin,rout,
                                   r_pixels,subpix=subpix,
                                   var=var,gain=gain,**kwargs)
         # - Ellipse
-        if aptype == "ellipse":
+        elif aptype == "ellipse":
             if np.asarray([k is None for k in ellipse_args.values()]).any():
                 raise ValueError("You must set the ellipse arguments 'ellipse_arg'")
             
             a,b,theta = [annular_args[k] for k in ["a","b","theta"]]
-            return sep.sum_ellipse(self.data,x,y,a,b,theta,
+            sepout= sep.sum_ellipse(self.data,x,y,a,b,theta,
                                     r_pixels,subpix=subpix,
                                     var=var,gain=gain,**kwargs)
         # - Elliptical Annulus
-        if aptype == "ellipan":
+        elif aptype == "ellipan":
             if np.asarray([k is None for k in ellipse_args.values()]).any():
                 raise ValueError("You must set the ellipse arguments 'ellipse_arg'")
             if np.asarray([k is None for k in annular_args.values()]).any():
@@ -1013,11 +976,12 @@ class Image( BaseObject ):
             
             rin,rout = [annular_args[k] for k in ["rin","rout"]]
             a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
-            return sep.sum_ellipan(self.data,x,y,a,b,theta,rin,rout,
+            sepout= sep.sum_ellipan(self.data,x,y,a,b,theta,rin,rout,
                                     r_pixels,subpix=subpix,
                                     var=var,gain=gain,**kwargs)
-            
-
+        # ===================================
+        # = Return of the aperture extraction
+        return sepout
     # ------------------- #
     # - WCS Tools       - #
     # ------------------- #
@@ -1175,7 +1139,7 @@ class Image( BaseObject ):
     # - Plot Methods    - #
     # ------------------- #        
     def show(self,toshow="data",savefile=None,logscale=True,
-             ax=None,show=True,zoomon=None,zoompxl=200,
+             ax=None,show=True,zoomon=None,zoom=200,zunits="pixels",
              show_sepobjects=False,propsep={},
              show_catalogue=False,proptarget={},
              **kwargs):
@@ -1223,9 +1187,11 @@ class Image( BaseObject ):
                                    to the target's [x,y] coordinates.
                                    Set None not to zoom.
 
-        zoompxl: [float]           If you zoomin (zoonin!=None) this set the pixel box
-                                   of the zoom (width and height of 2*zoompxl)
+        zoom: [float]              If you zoomin (zoonin!=None) this set the  box
+                                   of the zoom (width and height of 2*zoom).
                                    
+        zunits: [string]          units of the zoom value (pixels, fhhm, kpc, arcsec..)
+        
         // Data/display options
         
         savefile: [None/string]    Give the name of the file where the plot should be
@@ -1327,7 +1293,7 @@ class Image( BaseObject ):
             coords_zoom = None
 
         if coords_zoom is not None:
-            width = zoompxl 
+            width = zoom * self.units_to_pixels(zunits)
             ax.set_xlim(coords_zoom[0]-width,coords_zoom[0]+width)
             ax.set_ylim(coords_zoom[1]-width,coords_zoom[1]+width)
             
@@ -1838,8 +1804,16 @@ class Image( BaseObject ):
     # FWHM
     @property
     def fwhm(self):
+        """ full width half maximum in arcsec.
+        If you did not set it manually,
+        this will use sepobjects' get_fwhm_pxl() method to set it.
+        """
         if not self.has_fwhm():
-            raise AttributeError("'fwhm' is not defined")
+            if self.has_sepobjects():
+                fwhm_pxl = self.sepobjects.get_fwhm_pxl(isolated_only=True,stars_only=True)
+                self.set_fwhm(fwhm_pxl/self.units_to_pixels("arcsec").value*units.arcsec)
+            else:
+                raise AttributeError("'fwhm' is not defined and no sepobjects loaded.")
         return self._derived_properties["fwhm"]
 
     def has_fwhm(self):               
@@ -2090,10 +2064,21 @@ class PhotoPoint( BaseObject ):
         self._side_properties["target"] = newtarget.copy()
 
 
-    def get(self,key, safeexit=False):
+    def get(self, key, safeexit=False):
         """ Generic method to access information of the instance.
-        Taken either from the instance itself self.`key` or from the meta parameters"""
+        Taken either from the instance itself self.`key` or from the meta parameters.
+
+        *Remark* 'key' could be an list of keys.
+
+        Returns:
+        --------
+        Value (or list)
+        """
         ## Tested, try except faster than if key in dir(self) and enable things like key="meta.keys()"
+
+        if "__iter__" in dir(key):
+            return [self.get(key_,safeexit=safeexit) for key_ in key]
+        
         try: # if key in dir(self):
             return eval("self.%s"%key)
         except:
@@ -2231,7 +2216,9 @@ class PhotoPoint( BaseObject ):
         if not self.has_target():
             raise AttributeError("No target defined, I can't get the distance")
         return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
-        
+
+
+
 #######################################
 #                                     #
 # Base Object Classes: LightCurve     #
@@ -2431,370 +2418,6 @@ class LightCurve( BaseObject ):
 
 #######################################
 #                                     #
-# Base Object Classes: PhotoMap       #
-#                                     #
-#######################################
-class PhotoMap( BaseObject ):
-    """
-    """
-    __nature__ = "PhotoMap"
-    
-    _properties_keys = ["fluxes","variances","ra","dec","lbda"]
-    _side_properties_keys = ["refmap", "wcs", "sep_params"]
-    _derived_properties_keys = [""]
-    
-    def __init__(self,fluxes=None,variances=None,
-                 ra=None,dec=None,lbda=None,
-                 photopoints=None,
-                 empty=False):
-        """
-        """
-        print "photometry.PhotoMap DECREPATED. See collection.PhotoMap"
-        self.__build__()
-        if empty:
-            return
-
-        if photopoints is not None:
-            self.create_from_photopoints(photopoints,ra,dec)
-            return
-        
-        if fluxes is not None and variances is not None:
-            self.create(fluxes,variances,ra,dec,lbda)
-            
-            
-        
-    # ========================== #
-    # = Init Methods           = #
-    # ========================== #
-    def create(self, fluxes, variances, ra, dec,lbda):
-        """
-        This method is the core function that create the object.
-        All the other initializing method rely on this one.
-        
-        
-        Parameters
-        ----------
-
-        fluxes: [array]            The fluxes of each points
-
-        variances: [array]         Associated variances
-
-        ra,dec: [array,array]      Poisiton in the sky *in degree*
-
-        lbda: [None, float]        wavelength associated to the points
-
-        Return
-        ------
-        void
-        """
-        
-        if len(fluxes) != len(variances):
-            raise ValueError("fluxes and variances must have the same size")
-
-        if len(fluxes) != len(ra):
-            raise ValueError("fluxes and ra must have the same size")
-
-        if len(fluxes) != len(dec):
-            raise ValueError("ra and dec must have the same size")
-
-        if "__iter__" in dir(lbda):
-            raise TypeError("lbda must be a float or an int. not an array")
-
-        # ********************* #
-        # * Creation          * #
-        # ********************* #
-        self._properties["lbda"] = np.float(lbda) if lbda is not None else None
-        self._properties["fluxes"] = np.asarray(fluxes,dtype= float)
-        self._properties["variances"] = np.asarray(variances,dtype= float)
-        self._properties["ra"] = np.asarray(ra,dtype= float)
-        self._properties["dec"] = np.asarray(dec,dtype= float)
-        
-        
-    def create_from_photopoints(self,photopoints,
-                                ra,dec):
-        """
-        This methods enable to extract, from a list of photpoints
-        the requiered input for this instance. Remark that if
-        the photpoints have a target set and if this target has
-        ra and dec defined, no need to inpout radec. Otherwisem you do.
-
-        Parameters
-        ----------
-
-        photopoints: [array of PhotoPoints]
-                                   a list of photopoints that contains
-                                   the flux/error/lbda [target] parameters
-
-        Return
-        ------
-        Void
-        """
-        fluxes, variances, lbda = np.asarray([ [p.flux, p.var, p.lbda]
-                                                for p in photopoints ]).T
-        # -- ra,dec
-        ra,dec = radec if radec is not None else None,None
-        if ra is not None and len(ra) != len(flux):
-            raise ValueError("radec size must be equal to flux's one")
-        if ra is None:
-            try:
-                ra,dec = np.asarray([ [p.target.ra,p.target.dec] 
-                                 for p in photopoints]).T
-            except:
-                raise AttributeError("no radec provided and no photopoint.target to find it.")
-        
-        # ------------ #
-        # call create
-        # ------------ #
-        self.create(fluxes, variances, ra, dec, lbda)
-
-        
-    def writeto(self,savefile):
-        """
-        """
-        print "to be done"
-                
-    def load(self,filename):
-        """
-        """
-        print "to be done"
-    # ========================== #
-    # = Get Methods            = #
-    # ========================== #
-    def get_photopoint(self,index):
-        """
-        """
-        print "to be done"
-        
-    def get_index_around(self,ra, dec, radius):
-        """
-        Parameters:
-        ----------
-        ra, dec : [float]          Position in the sky *in degree*
-
-        radius: [float with unit]  distance of search, using astropy.units
-
-        Return
-        ------
-        (SkyCoords.search_around_sky output)
-        """
-        sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
-        return self.sky_radec.search_around_sky(sky, radius)
-    
-    # ========================== #
-    # = Set Methods            = #
-    # ========================== #
-    def set_wcs(self,wcs,force_it=False):
-        """
-        """
-        if self.has_wcs() and force_it is False:
-            raise AttributeError("'wcs' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        self._side_properties["wcs"] = astrometry.get_wcs(wcs,verbose=True)
-
-    def set_refmap(self, photomap,force_it=False):
-        """
-        Set here the reference map associated to the current one.
-        The ordering of the point must be consistant with that of the current
-        photomap. 
-        """
-        if self.has_refmap() and force_it is False:
-            raise AttributeError("'refmap' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(photomap) or photomap.__nature__ != "PhotoMap":
-            raise TypeError("The given reference map must be a astrobject PhotoMap")
-
-        self._side_properties["refmap"] = photomap
-
-
-    def set_sep_params(self, sep_params,force_it=True):
-        """
-        sep_param is a dictionnary containing some SEP info. Setting it here
-        will enable to use the associated function (e.g. some 'get' keyword)
-        """
-        if self.has_sep_params() and force_it is False:
-            raise AttributeError("'sep_params' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        self._side_properties["sep_params"] = sep_params
-        
-    def get(self,key,mask=None):
-        """
-        """
-        if key is None:
-            return None
-        _sep_keys_ = self.sep_params.keys()
-        _derived_keys_ = ["flux_ratio","scaled_flux_ratio",
-                          "elongation","ellipticity"]
-        help_text = " Known keys are: "+", ".join(_sep_keys_+_derived_keys_)
-        # ---------------
-        # - key parsing
-        
-        if key in ["help","keys","keylist"]:
-            print help_text
-            return
-        
-        if key in _sep_keys_:
-            return self.sep_params[key] if mask is None else self.sep_params[key][mask]
-        
-        if key in _derived_keys_:
-            if key == "flux_ratio":
-                val_ = self.fluxes / self.refmap.fluxes
-            elif key == "scaled_flux_ratio":
-                ratio = self.get("flux_ratio")
-                val_ =  ratio - np.median(ratio)
-            elif key == "elongation":
-                val_ = self.sep_params["a"] / self.sep_params["b"]
-            elif key == "ellipticity":
-                val_ = 1. - 1. / self.get("elongation")
-                
-            return val_ if mask is None else val_[mask]
-        
-        raise NotImplementedError("'%s' access is not implemented"+help_text)
-    
-    # ========================== #
-    # = Plot Methods           = #
-    # ========================== #
-    def display_voronoi(self,ax,toshow="scaled_flux_ratio",wcs_coords=False,**kwargs):
-        """
-        This methods enables to display in the given axes patchs following the voronoi
-        tesselation based on the photomap radec/xy (see wcs_coords) parameters.
-        This methods won't scale the ax according to the voronoi tesselation.
-
-        Parameters
-        ----------
-
-        ax: [matplotlib.Axes]      where the voronoi patch collection should be drawn
-        
-        - options -
-
-        toshow: [string]           keyword set to self.get that parses it. Use 'help'
-                                   for additional information.
-                                   The value of this key will define the color of the
-                                   patchs.
-        
-        - kwargs goes to mpladdon.voronoi_patchs -
-
-        non-exhaustive list of key arguments: *vmin, vmax, cmap,
-        cbar [bool or ax], cblabel, any matplotlib.PolyCollection keys*
-        
-        Return
-        ------
-        PatchCollection (see mpladdon.voronoi_patchs)
-        """
-        from ..utils.mpladdon import voronoi_patchs
-        
-        # -----------------
-        # - What to show
-        if wcs_coords:
-            x,y = self.ra,self.dec
-        else:
-            xy = np.asarray(self.wcs_xy)
-            
-        # -----------------
-        # - The plot itself
-        out = ax.voronoi_patchs(xy,self.get(toshow),**kwargs)
-        ax.figure.canvas.draw()
-        return out
-        
-    
-    # =========================== #
-    # Properties and Settings     #
-    # =========================== #
-    @property
-    def npoints(self):
-        if self.ra is None:
-            return 0
-        return len(self.ra)
-    
-    # ----------------
-    # - PhotoPoints
-    @property
-    def lbda(self):
-        return self._properties["lbda"]
-    
-    @property
-    def fluxes(self):
-        return self._properties["fluxes"]
-
-    @property
-    def variances(self):
-        return self._properties["variances"]
-
-    @property
-    def _mag_magerr(self):
-        return flux_to_mag(self.fluxes,np.sqrt(self.variances), self.lbda)
-    
-    @property
-    def mag(self):
-        return self._mag_magerr[0]
-    @property
-    def magerr(self):
-        return self._mag_magerr[1]
-    # --------------
-    # - radec
-    @property
-    def ra(self):
-        return self._properties["ra"]
-    
-    @property
-    def dec(self):
-        return self._properties["dec"]
-
-    @property
-    def sky_radec(self):
-        """This is an advanced radec methods tight to astropy SkyCoords"""
-        ra,dec = self.ra,self.dec
-        return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
-    
-    # --------------- #
-    # - Side Prop   - #
-    # --------------- #
-    
-    # ----------------      
-    # -- WCS
-    @property
-    def wcs(self):
-        return self._side_properties['wcs']
-
-    def has_wcs(self):
-        return False if self.wcs is None \
-          else True
-          
-    @property
-    def wcs_xy(self):
-        if not self.has_wcs():
-            raise AttributeError("no 'wcs' solution defined")
-        
-        return self.wcs.world2pix(self.ra,self.dec)
-        
-    # ----------------      
-    # -- References
-    @property
-    def refmap(self):
-        return self._side_properties["refmap"]
-    
-    
-    def has_refmap(self):
-        return False if self.refmap is None\
-          else True
-
-    # ----------------      
-    # -- sep Parameters
-    @property
-    def sep_params(self):
-        if self._side_properties["sep_params"] is None:
-            self._side_properties["sep_params"] = {}
-        return self._side_properties["sep_params"]
-    
-    def has_sep_params(self):
-        return False if len(self.sep_params.keys())==0 \
-          else True
-
-
-#######################################
-#                                     #
 # Base Object Classes: SEPObjects     #
 #                                     #
 #######################################
@@ -2954,10 +2577,19 @@ class SexObjects( BaseObject ):
         """
         This function enable to get from the data the values of the given keys
         or derived values, like ellipticity. Set 'help' for help.
+
+        *Remark* 'key' could be an list of keys.
+
+        Returns:
+        --------
+        array (or list of)
         """
         if not self.has_data():
             raise AttributeError("no 'data' defined")
 
+        if "__iter__" in dir(key):
+            return [self.get(key_,mask=mask) for key_ in key]
+        
         # -- These are the default key values
         _data_keys_ = self.data.keys()
         _matching_keys_ = ["angsep"]
@@ -2987,10 +2619,20 @@ class SexObjects( BaseObject ):
                           help_text)
                           
         return val_ if mask is None else val_[mask]
-            
+
+    def get_fwhm_pxl(self,stars_only=True,isolated_only=True,
+                    catmag_range=[None,None]):
+        """
+        This is defined as 2 * sqrt(ln(2) * (a^2 + b^2))
+        """
+        mask = self.get_indexes(isolated_only=isolated_only,
+                                stars_only=stars_only,
+                                catmag_range=catmag_range)
+        return np.median(2 * np.sqrt( np.log(2) * (self.get('a',mask)**2 + self.get('b',mask)**2)))
+    
     # -----------------
     # - get ellipse    
-    def get_ellipse_mask(self,width,height, r=2, apply_catmask=False):
+    def get_ellipse_mask(self,width,height, r=3, apply_catmask=False):
         """
         This method returns a boolean mask of the detected ellipses
         on the given width x height pixels image
@@ -3080,6 +2722,10 @@ class SexObjects( BaseObject ):
         -------
         array (dtype=bool)
         """
+        if catmag_range[0] is None:
+            warnings.warn("No lower catalogue magnitude limit given. 13mag set.")
+            catmag_range[0] = 13
+            
         mask = np.asarray(self.get_catmag_mask(*catmag_range))
         if isolated_only:
             mask = mask & self.catisolatedmask

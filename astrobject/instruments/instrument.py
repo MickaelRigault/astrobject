@@ -14,7 +14,7 @@ __all__ = ["instrument","catalogue"]
 
 KNOWN_INSTRUMENTS = ["sdss","hst","stella","ptf"]
 
-def catalogue(source,radec,radius,extracolums=[],column_filters={"gmag":"13..22"},**kwargs):
+def catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
     """
     """
     if source == "sdss":

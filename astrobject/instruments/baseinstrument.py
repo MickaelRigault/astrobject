@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from sncosmo import get_bandpass
-from astropy import coordinates
+from astropy import coordinates,units
 from astropy.table.table import Table,TableColumns
 
 import pyfits as pf
@@ -15,8 +15,6 @@ from .. import astrometry
 from ...astrobject.photometry import Image,photopoint
 from ..baseobject import BaseObject,astrotarget
 __all__ = ["Instrument"]
-
-
 
 class Instrument( Image ):
     """
@@ -132,7 +130,7 @@ class Catalogue( BaseObject ):
     
     _properties_keys = ["filename","data","header"]
     _side_properties_keys = ["wcs","fovcontours","fovmask","matchedmask","lbda"]
-    _derived_properties_keys = ["fits","naround","contours"]
+    _derived_properties_keys = ["fits","naround","naround_nofovcut","contours"]
 
     
     def __init__(self, catalogue_file=None,empty=False,
@@ -381,28 +379,101 @@ class Catalogue( BaseObject ):
     # --------------------- #
     # Get Methods           #
     # --------------------- #
-    def get_subcatalogue(self, contours=None, stars_only=False, isolated_only=False):
+    def get(self,key,mask=None):
+        """
+        get any 'key' known by the instance (self.`key`) or more generally
+        in the data. You can mask the returned data (*CAUTION* some values
+        have default fovmasking (ra,dec... use _`key` like _ra to have the
+        none fov mask values.
+        
+        *Remark* 'key' could be an list of keys.
+
+        Returns:
+        --------
+        array (or list of)
+        """
+        if "__iter__" in dir(key):
+            return [self.get(key_,mask=mask) for key_ in key]
+        
+        if key in dir(self):
+            val_ = eval("self.%s"%key)
+        elif key in self.data.keys():
+            val_ = self.data[key]
+        else:
+            raise ValueError("Unknown key %s"%key)
+        return val_ if mask is None else val_[mask]
+    
+    def get_subcatalogue(self, contours=None, catmag_range=[None,None],
+                         stars_only=False, isolated_only=False,**kwargs):
         """ Returns a value of a sub fov of the catalogue. Only objects within the contours' fov
         will be contained in the returned catalogue """
 
-        mask = np.ones(self.nobjects,dtype="bool")
-        if stars_only:
-            mask *= self.starmask
-        if isolated_only:
-            mask *= self.isolatedmask
-        if contours is not None:
-            mask *= self.get_contour_mask(contours)
-        
+        mask = self.get_mask(contours=contours, catmag_range=catmag_range,
+                            stars_only=stars_only, isolated_only=isolated_only,
+                            fovmask=False)
         subcat = self.__class__(empty=True)
         subcat.create(self.data[mask], None, force_it=True,**self._build_properties)
         return subcat
+
+    def get_mask(self,catmag_range=[13,None],stars_only=False,
+                 isolated_only=False,contours=None,
+                 fovmask=True):
+        """ This returns a bolean mask following the argument cuts. """
+        
+        mask = np.ones(self.nobjects_in_fov, dtype="bool") if fovmask else\
+          np.ones(self.nobjects, dtype="bool")
+
+        # - stars etc.        
+        if stars_only:
+            mask *= self.starmask if fovmask else self._starmask
+        # - isolation
+        if isolated_only:
+            mask *= self.isolatedmask if fovmask else self._isolatedmask
+        # - contours
+        if contours is not None:
+            mask *= self.get_contour_mask(contours,infov=fovmask)
+        # - magcut
+        if catmag_range[0] is not None or catmag_range[1] is not None:
+            if catmag_range[0] is None:
+                catmag_range[0] = np.nanmin(self.mag if fovmask else self._mag)
+            if catmag_range[1] is None:
+                catmag_range[1] = np.nanmax(self.mag if fovmask else self._mag)
+                
+            magmask = (self.mag>=catmag_range[0]) & (self.mag<=catmag_range[1]) \
+              if fovmask \
+              else (self._mag>=catmag_range[0]) & (self._mag<=catmag_range[1])
+            mask *= magmask
+         
+        return mask
+            
+    def get_idx_around(self,ra,dec,radius,runits="arcsec",wcs_coords=True,**kwargs):
+        """
+        Returns the catalogue indexes of the elements within `radius` `runits`around
+        the `ra` `dec` location.
+        Returns:
+        --------
+        2xN index array (idx, angular sep. N is the number of matching elements.)
+        """
+        # --------------
+        # - Input 
+        if not wcs_coords and not self.has_wcs():
+            raise AttributeError("Needs a wcs solution to get pixel coordinates")
+        if not wcs_coords:
+            ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
+
+        skytarget = coordinates.SkyCoord([ra*units.degree],[dec*units.degree])
+        return self.sky_radec.search_around_sky(skytarget,
+                                                radius*units.Unit(runits))[1:3]
     
-    def get_contour_mask(self, contours):
+    def get_contour_mask(self, contours, infov=True):
         """  returns a boolean array for the given contours """
-        if type(contours) != shape.polygon.Polygon and type(contours) != shape.multipolygon.MultiPolygon:
+        if type(contours) != shape.polygon.Polygon and\
+           type(contours) != shape.multipolygon.MultiPolygon:
             raise TypeError("contours must be a shapely Polygon or MultiPolygon")
+        _ra = self.ra if infov else self._ra
+        _dec = self.dec if infov else self._dec
         return np.asarray([shape.point_in_contours(ra,dec, contours)
-                           for ra,dec in zip(self._ra,self._dec)])
+                           for ra,dec in zip(_ra,_dec)])
     
     def get_photomap(self,idx_only=None,lbda=None):
         """
@@ -570,7 +641,6 @@ class Catalogue( BaseObject ):
         self._build_properties['key_%s'%build_key] = vkey[0]
 
 
-        
     def _automatic_key_ra_match_(self):
         """
         """
@@ -680,6 +750,11 @@ class Catalogue( BaseObject ):
     def sky_radec(self):
         """This is an advanced radec methods tight to astropy SkyCoords"""
         return coordinates.SkyCoord(ra=self.ra,dec=self.dec, unit="deg")
+
+    @property
+    def _sky_radec(self):
+        """This is an advanced radec methods tight to astropy SkyCoords"""
+        return coordinates.SkyCoord(ra=self._ra,dec=self._dec, unit="deg")
     
     # - mag
     @property
@@ -741,7 +816,8 @@ class Catalogue( BaseObject ):
         if self._build_properties["key_mag"] is None or \
           self._build_properties["key_magerr"] is None:
             if verbose:
-                print "No 'key_mag'/'key_magerr' set ; call 'set_mag_keys'. List of potential keys: "\
+                print "No 'key_mag'/'key_magerr' set ; call 'set_mag_keys'." +\
+                  " List of potential keys: "\
                   +", ".join([k for k in self.data.keys() if "mag" in k or "MAG" in k])
             return False
         return True
@@ -758,17 +834,27 @@ class Catalogue( BaseObject ):
         return self.data[self._build_properties["key_class"]]
     
     @property
-    def starmask(self):
+    def starmask(self, infov=True):
         """ This will tell which of the datapoints is a star
         Remark, you need to have defined key_class and value_star
         in the __build_properties to be able to have access to this mask
         """
         if "value_star" not in self._build_properties.keys():
             return None
-
-        flag = self.objecttype == self._build_properties["value_star"]
+        flag = (self.objecttype == self._build_properties["value_star"])
         return flag.data  #not self.fovmask already in objecttype
 
+    @property
+    def _starmask(self):
+        """ This will tell which of the datapoints is a star
+        Remark, you need to have defined key_class and value_star
+        in the __build_properties to be able to have access to this mask
+        """
+        if "value_star" not in self._build_properties.keys():
+            return None
+        flag = (self._objecttype == self._build_properties["value_star"])
+        return flag.data  #not self.fovmask already in objecttype
+        
     def has_starmask(self):
         return False if self.starmask is None \
           else True
@@ -782,7 +868,8 @@ class Catalogue( BaseObject ):
     @property
     def wcs_xy(self):
         if self.has_wcs():
-            return np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in zip(self.ra,self.dec)]).T
+            return np.asarray([self.wcs.world2pix(ra_,dec_)
+                               for ra_,dec_ in zip(self.ra,self.dec)]).T
         raise AttributeError("no 'wcs' solution loaded")
 
     # ----------------------
@@ -790,29 +877,51 @@ class Catalogue( BaseObject ):
     def define_around(self,ang_distance):
         """
         """
+        # -- FoV cut
         idxcatalogue = self.sky_radec.search_around_sky(self.sky_radec,
                                                         ang_distance)[0]
         self._derived_properties["naround"] = np.bincount(idxcatalogue)
-
+        # -- no FoV cut
+        _idxcatalogue = self._sky_radec.search_around_sky(self._sky_radec,
+                                                        ang_distance)[0]
+        self._derived_properties["naround_nofovcut"] = np.bincount(_idxcatalogue)
+        
     def _is_around_defined(self):
         return False if self._derived_properties["naround"] is None\
           else True
         
     @property
     def nobjects_around(self):
-        """ """
+        """ Number of object around an object. """
         if not self._is_around_defined():
             print "INFORMATION: run 'define_around' to set nobject_around"
         return self._derived_properties["naround"]
+
+    @property
+    def _nobjects_around(self):
+        """ Number of object around an object. No FoV Cut"""
+        if not self._is_around_defined():
+            print "INFORMATION: run 'define_around' to set nobject_around"
+        return self._derived_properties["naround_nofovcut"]
     
     @property
     def isolatedmask(self):
         """
         """
         if not self._is_around_defined():
-            raise AttributeError("no 'nobjects_around' parameter derived. Run 'define_around'")
-        
+            raise AttributeError("no 'nobjects_around' parameter derived."+\
+                                 " Run 'define_around'")
         return (self.nobjects_around == 1)
+
+    @property
+    def _isolatedmask(self):
+        """
+        """
+        if not self._is_around_defined():
+            raise AttributeError("no 'nobjects_around' parameter derived."+\
+                                 " Run 'define_around'")
+        return (self._nobjects_around == 1)
+    
 
     # ----------------------
     # - Shapely

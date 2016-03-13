@@ -15,7 +15,7 @@ from ...utils.decorators import _autogen_docstring_inheritance
 # BASIC SDSS: Catalogue         #
 #                               #
 #################################
-def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"gmag":"12..20"}):
+def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5..25"}):
     """
     """
     from .sdss import SDSS_INFO
@@ -87,7 +87,7 @@ class SDSSCatalogue( Catalogue ):
 # BASIC 2MASS: Catalogue        #
 #                               #
 #################################
-def fetch_2mass_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"10..30"}):
+def fetch_2mass_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5..30"}):
     """
     """
     try:
@@ -188,7 +188,7 @@ class MASSCatalogue( Catalogue ):
 # BASIC WISE: Catalogue         #
 #                               #
 #################################
-def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"10..30"}):
+def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5..30"}):
     """
     """
     try:
