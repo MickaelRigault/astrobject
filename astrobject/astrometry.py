@@ -169,14 +169,14 @@ class _WCSbackup(astWCS.WCS ):
         """
         if "__iter__" in dir(x):
             x,y = np.asarray(x),np.asarray(y)
-        return self.pix2wcs(x,y)
+        return np.asarray(self.pix2wcs(x,y))
         
     def world2pix(self,ra,dec):
         """
         """
         if "__iter__" in dir(ra):
             ra,dec = np.asarray(ra),np.asarray(dec)
-        return self.wcs2pix(ra,dec)
+        return np.asarray(self.wcs2pix(ra,dec))
         
 
     def coordsAreInImage(self,ra,dec):

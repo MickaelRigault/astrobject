@@ -330,7 +330,7 @@ class ImageCollection( Collection ):
                                                stars_only=stars_only,
                                                catmag_range=catmag_range)
     # --------------------- #
-    # - Get Extraction     - #
+    # - Get Extraction    - #
     # --------------------- #
     def get_photopoints(self,ra,dec,radius, runits="arcsec",
                         ids=None):
@@ -942,7 +942,6 @@ class PhotoPointCollection( Collection ):
 # Hi Level Classes:  PhotoMap          #
 #                                      #
 ########################################
-
 class PhotoMap( PhotoPointCollection ):
     """
     """
@@ -1178,3 +1177,4 @@ class PhotoMap( PhotoPointCollection ):
         from ..utils import shape
         return shape.get_contour_polygon(*self.xy.T)
     
+

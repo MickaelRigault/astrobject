@@ -445,8 +445,23 @@ class Catalogue( BaseObject ):
             mask *= magmask
          
         return mask
-            
-    def get_idx_around(self,ra,dec,radius,runits="arcsec",wcs_coords=True,**kwargs):
+
+    def get_mask_around(self,ra,dec,radius,runits="arcsec",wcs_coords=True,
+                        stars_only=False, isolated_only=False, infov=True,**kwargs):
+        """
+        return the mask of the ra dec 
+        -- kwargs goes to get_mask() --
+        """
+        maskbase = self.get_mask(stars_only=stars_only, isolated_only=isolated_only,
+                                 fovmask=infov,**kwargs)
+        maskaround = self.idx_to_mask(self.get_idx_around(ra,dec,radius, runits=runits,
+                                                          wcs_coords=wcs_coords,infov=infov)[0],
+                                                          infov=infov)
+        return maskaround * maskbase
+        
+        
+    def get_idx_around(self,ra,dec,radius,runits="arcsec",wcs_coords=True,
+                       infov=True):
         """
         Returns the catalogue indexes of the elements within `radius` `runits`around
         the `ra` `dec` location.
@@ -462,9 +477,10 @@ class Catalogue( BaseObject ):
             ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
 
         skytarget = coordinates.SkyCoord([ra*units.degree],[dec*units.degree])
-        return self.sky_radec.search_around_sky(skytarget,
-                                                radius*units.Unit(runits))[1:3]
-    
+        catsky = self.sky_radec if infov else self._sky_radec
+        return catsky.search_around_sky(skytarget,
+                                        radius*units.Unit(runits))[1:3]
+        
     def get_contour_mask(self, contours, infov=True):
         """  returns a boolean array for the given contours """
         if type(contours) != shape.polygon.Polygon and\
@@ -499,8 +515,8 @@ class Catalogue( BaseObject ):
                         wcs =self.wcs)
         return pmap
     
-    def idx_to_mask(self,idx):
-        mask = np.zeros(self.nobjects,dtype=bool)
+    def idx_to_mask(self,idx, infov=False):
+        mask = np.zeros(self.nobjects,dtype=bool) if not infov else np.zeros(self.nobjects_in_fov,dtype=bool)
         for i in idx:
             mask[i] = True
         return mask

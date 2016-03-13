@@ -4,7 +4,7 @@
 
 import numpy as np
 import matplotlib.pyplot as mpl
-
+import warnings
 from .tools import kwargs_update
 from .decorators import make_method
 # remark: do no import .plot.*** at this level
@@ -329,6 +329,8 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
             c = [c]*npoint
         else:
             c = np.asarray(c)
+            # - because shift happens
+            c[np.isinf(c)] = np.nanmax(c[~ np.isinf(c)])
             if vmin is None:
                 vmin = np.nanmin(c)
             else:
@@ -339,7 +341,13 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
                 vmax = vmax if type(vmax) is not str else np.percentile(c[c==c],float(vmax))
                 
             vmax = c.max() if vmax is None else vmax
+            # --- nancleaning
             color = cmap((c-vmin)/(vmax-vmin))
+            # - because shift happens
+            if len(color[c!=c]) >0:
+                warnings.warn("There is nan values you aim to convert in patch color. I set then transparent")
+                color[c!=c]= mpl.cm.binary(0.,0)
+            
         edgecolors = kwargs.pop("edgecolors","k")
     else:
         color = "None"
