@@ -345,7 +345,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
             color = cmap((c-vmin)/(vmax-vmin))
             # - because shift happens
             if len(color[c!=c]) >0:
-                warnings.warn("There is nan values you aim to convert in patch color. I set then transparent")
+                warnings.warn("There is nan values you aim to convert in patch color. I set them transparent")
                 color[c!=c]= mpl.cm.binary(0.,0)
             
         edgecolors = kwargs.pop("edgecolors","k")
@@ -363,7 +363,8 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
     # ----------------- #
     if not (color is "None" or not cbar):
         # - this means it is not an ax
-        axcar = ax.insert_ax(space=.05,pad=0.03,location="right") if "imshow" not in dir(cbar) else cbar
+        axcar = ax.insert_ax(space=.05,pad=0.03,location="right") \
+          if "imshow" not in dir(cbar) else cbar
         calpha = cbarprop.pop('alpha',kwargs.pop("alpha",None))
         return collec, axcar.colorbar(cmap,vmin=vmin,vmax=vmax,label=cblabel,
                                       alpha=calpha,**cbarprop)

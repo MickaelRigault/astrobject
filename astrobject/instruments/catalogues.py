@@ -28,7 +28,7 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5.
     # - DL info
     columns = ["cl","objID",#"SDSS9",
                "RAJ2000","e_RAJ2000","DEJ2000","e_DEJ2000",
-               #"ObsDate","Q"#"mode",,
+               #"ObsDate","Q"#"mode",
                ]
     for band in SDSS_INFO["bands"]:
         columns.append("%smag"%band)

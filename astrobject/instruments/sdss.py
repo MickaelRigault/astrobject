@@ -173,7 +173,11 @@ class SDSS( Instrument ):
         if self.header is None:
             raise AttributeError("no header loaded ")
         from astropy import time
-        return time.Time("%sT%s"%(self.header["DATE-OBS"],self.header["TAIHMS"])).mjd
+        dateobs = self.header["DATE-OBS"] if "/" not in self.header["DATE-OBS"]\
+          else "19"+"-".join(self.header["DATE-OBS"].split("/")[::-1])
+            
+        return time.Time("%sT%s"%(dateobs,self.header["TAIHMS"])).mjd
+        
 
     # -- Derived values
     @property
