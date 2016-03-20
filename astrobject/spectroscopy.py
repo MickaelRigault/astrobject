@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """This module gather the spectral-objects and there associated tools"""
 import numpy  as np
-import pyfits as pf
+from astropy.io import fits as pf
 from .baseobject import BaseObject
 
 

@@ -338,10 +338,8 @@ class ImageCollection( Collection ):
         """
         idused = self.list_id if ids is None else\
           [ids] if "__iter__" not in dir(ids) else ids
-
-        
-        
-            
+          
+        print "ToBeDone"
     # --------------------- #
     # - Get Target        - #
     # --------------------- #
@@ -453,7 +451,7 @@ class ImageCollection( Collection ):
         
         photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius=radius,runits=runits,
                                             **kwargs) for image_ in images])
-        
+        photopoints.set_target(self.target)
         # ------------------------------
         # - Shall we delete the files ?
         if onflight:
@@ -801,6 +799,7 @@ class PhotoPointCollection( Collection ):
             raise ValueError("the given 'values', must provide a value for each photopoints (%d) or a unique value  %d given"%(self.nsources,len(values)))
         for id_,v in zip(self.list_id,values):
             self.photopoints[id_].meta[key] = v
+            
     # ------------------- #
     # - Plot Stuff      - #
     # ------------------- #
@@ -816,8 +815,6 @@ class PhotoPointCollection( Collection ):
             kwargs["function_of_time"] = True
             return self._show_(savefile=savefile,toshow=toshow,ax=ax,
                         cmap=cmap,show=show,**kwargs)
-        
-
         
     # ========================== #
     # = Internal Stufff        = #
@@ -966,7 +963,7 @@ class PhotoMap( PhotoPointCollection ):
         """
         self._properties_keys = self._properties_keys+["wcsid"]
         self._side_properties_keys = self._side_properties_keys + \
-          ["refmap","wcs"]
+          ["refmap","wcs","catalogue"]
         super(PhotoMap,self).__build__()
 
     def _read_table_comment_(self, comments):
@@ -1061,6 +1058,45 @@ class PhotoMap( PhotoPointCollection ):
 
         self._side_properties["refmap"] = photomap
 
+    def set_catalogue(self,catalogue,force_it=True):
+        """
+        Attach to this instance a catalogue.
+        
+        Parameters
+        ---------
+        Return
+        ------
+        Voids
+        """
+        if self.has_catalogue() and force_it is False:
+            raise AttributeError("'catalogue' already defined"+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
+            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+
+        # ----------------------
+        # - Clean the catalogue 
+        catalogue.reset()
+        
+        # -------------------------
+        # - Add the world_2_pixel            
+        if self.has_wcs():
+            if catalogue.has_wcs():
+                warnings.warn("WARNING the given 'catalogue' already has a wcs solution. This did not overwrite it.")
+            else:
+                catalogue.set_wcs(self.wcs)
+                
+        # ---------------------
+        # - Test consistancy
+        if catalogue.nobjects_in_fov < 1:
+            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
+            return
+        
+        # ---------------------
+        # - Good To Go
+        self._side_properties["catalogue"] = catalogue
+        
     # ------------- #
     # - GETTER    - #
     # ------------- #
@@ -1085,8 +1121,10 @@ class PhotoMap( PhotoPointCollection ):
     # - PLOTTER   - #
     # ------------- #
     def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,
-                        show_nods=True,**kwargs):
+                        show_nods=False,**kwargs):
         """
+        Show a Voronoy cell map colored as a function of the given 'toshow'.
+        You can see the nods used to define the cells setting show_nods to True.    
         """
         if ax is None:
             fig = mpl.figure(figsize=[8,8])
@@ -1162,6 +1200,16 @@ class PhotoMap( PhotoPointCollection ):
     def has_refmap(self):
         return self.refmap is not None
 
+    # -------------
+    # - RefMap
+    @property
+    def catalogue(self):
+        return self._side_properties["catalogue"]
+    
+    def has_catalogue(self):
+        return False if self.catalogue is None\
+          else True
+    
     # ------------- #
     # - Derived   - #
     # ------------- #

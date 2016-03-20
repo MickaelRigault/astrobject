@@ -5,7 +5,7 @@ from sncosmo import get_bandpass
 from astropy import coordinates,units
 from astropy.table.table import Table,TableColumns
 
-import pyfits as pf
+from astropy.io import fits as pf
 import numpy as np
 from ...utils.decorators import _autogen_docstring_inheritance
 from ...utils.tools import kwargs_update,mag_to_flux,load_pkl,dump_pkl
@@ -293,6 +293,24 @@ class Catalogue( BaseObject ):
         else:
             self._writeto_fits_(savefile,force_it=force_it)
 
+    # --------------------- #
+    # Unset Methods         #
+    # --------------------- #
+    def reset(self):
+        """This method removed masking on the catalogue, i.e. no more FoV defined, no more matching mask"""
+        # ---------------------
+        # - No more matching
+        self.set_matchedmask(None)
+        # ---------------------
+        # - No more fovmask 
+        self.remove_fovmask()
+
+    def remove_fovmask(self):
+        """
+        """
+        self._load_default_fovmask_()
+        self._side_properties["fovcontours"] = None
+        
     # --------------------- #
     # Set Methods           #
     # --------------------- #

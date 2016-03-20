@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-import pyfits as pf
+from astropy.io import fits as pf
 from astropy import units
 from .baseinstrument import Instrument,get_bandpass
 from ...utils.decorators import _autogen_docstring_inheritance

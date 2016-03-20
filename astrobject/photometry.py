@@ -5,11 +5,14 @@
 
 import warnings
 import numpy  as np
-import pyfits as pf
+
+from astropy.io import fits as pf
+
 from scipy.stats import sigmaclip
 
 from astropy     import units,coordinates
 from astropy.table import Table
+
 from . import astrometry
 from .baseobject   import BaseObject 
 from ..utils.tools import kwargs_update,flux_to_mag
@@ -2089,7 +2092,6 @@ class PhotoPoint( BaseObject ):
             warnings.warn("No instance or meta key %s. NaN returned"%key)
             return np.NaN
         
-            
     # =========================== #
     # = Internal Methods        = #
     # =========================== #

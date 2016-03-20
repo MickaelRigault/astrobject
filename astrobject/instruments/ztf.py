@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-import pyfits as pf
+from astropy.io import fits as pf
 from .baseinstrument import Instrument
 
 ZTF_INFO = {"g":{"lbda":4686,"ABmag0":22.50},
