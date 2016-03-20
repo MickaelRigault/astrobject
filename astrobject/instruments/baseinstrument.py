@@ -595,8 +595,7 @@ class Catalogue( BaseObject ):
 
         # -- plot loop
         axout = []
-        for x_,y_,show_,propextra in [[x_starin,  y_starin,True,
-                                       {}],
+        for x_,y_,show_,propextra in [[x_starin,  y_starin,True,{}],
                                       [x_nostarin,y_nostarin,True,
                                         dict(mfc="None",mec=colorin,mew=2,alpha=0.6)],
                                       [x_starout, y_starout, show_nonmatched,
@@ -902,8 +901,7 @@ class Catalogue( BaseObject ):
     @property
     def wcs_xy(self):
         if self.has_wcs():
-            return np.asarray([self.wcs.world2pix(ra_,dec_)
-                               for ra_,dec_ in zip(self.ra,self.dec)]).T
+            return np.asarray(self.wcs.world2pix(self.ra,self.dec))
         raise AttributeError("no 'wcs' solution loaded")
 
     # ----------------------

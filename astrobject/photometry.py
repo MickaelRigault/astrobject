@@ -17,9 +17,7 @@ from . import astrometry
 from .baseobject   import BaseObject 
 from ..utils.tools import kwargs_update,flux_to_mag
 
-
 __all__ = ["image","photopoint"]
-
 
 def image(filename=None,astrotarget=None,**kwargs):
     """
@@ -236,6 +234,7 @@ class Image( BaseObject ):
     # =========================== #
     def __init__(self,filename=None,
                  astrotarget=None,data_index=0,
+                 dataslice0=[0,-1],dataslice1=[0,-1],
                  empty=False,**kwargs):
         """
         Initalize the image by giving its filelocation (*filename*). This
@@ -261,6 +260,7 @@ class Image( BaseObject ):
         if filename is not None:
             force_it = kwargs.pop("force_it",True)
             self.load(filename,force_it=force_it,
+                      dataslice0=dataslice0,dataslice1=dataslice1,
                       **kwargs)
         # - Set the target if any
         if astrotarget is not None:
@@ -275,7 +275,9 @@ class Image( BaseObject ):
         # -- How to read the image
         self._build_properties = dict(
                 data_index = data_index,
-                header_exptime = "EXPTIME"
+                header_exptime = "EXPTIME",
+                dataslice0="undefined",
+                dataslice1="undefined"
                 )
 
     # =========================== #
@@ -285,7 +287,8 @@ class Image( BaseObject ):
     # - I/O Methods     - #
     # ------------------- #
     def load(self,filename,index=None,
-             force_it=False):
+             force_it=False,
+             dataslice0=[0,-1],dataslice1=[0,-1]):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
@@ -297,6 +300,10 @@ class Image( BaseObject ):
         filename: [string.fits]    The file containing the fits data
 
         - options -
+
+        dataslice0/1 [2D-array]    load only the data within the given boundaries.
+                                   The 0-offset will be accessible in self._dataoffset
+                                   and will be passed to the wcs solution.
         
         index: [int]               The fits entry that contains the data
                                    If None, this will fetch it in the build_properties
@@ -317,35 +324,35 @@ class Image( BaseObject ):
           else index
           
         # -------------------------- #
-        #  Check The input           #
+        #  fits file and wcs         #
         # -------------------------- #
         try:
-            fits = pf.open(filename)
+            fits = pf.open(filename,memmap=True)
         except:
             raise TypeError("'filename' cannot be open by pyfits.")
 
-        data = fits[index].data
-        if data is None:
-            raise ValueError("no 'data' in the given fits file for the given index")
-        
-        # -------------------------- #
-        #  Everythin looks good !    #
-        # -------------------------- #
         try:
-            wcs_ = astrometry.wcs(filename,
-                                  extension=index)
+            wcs_ = astrometry.wcs(filename,extension=index)
         except:
             wcs_ = None
             
+        # ---------- #
+        # - Data   - #
+        # ---------- #
+        data = fits[index].data[dataslice0[0]:dataslice0[1],
+                                dataslice1[0]:dataslice1[1]]
+        self._build_properties["dataslice0"] = dataslice0
+        self._build_properties["dataslice1"] = dataslice1            
+        # -------------------------- #
+        #  Everythin looks good !    #
+        # -------------------------- #
         self.create(data,None,wcs_,
                     background= None,
                     header=fits[index].header,
                     filename=filename,fits=fits,
                     force_it=True)
         
-        # -- closing the fits file
-        fits.close()
-        
+            
     def create(self,rawdata,variance,wcs,mask=None,
                background=None,header=None,exptime=None,
                filename=None,fits=None,force_it=False):
@@ -364,6 +371,7 @@ class Image( BaseObject ):
         ------
         Void
         """
+            
         # -- Check if you will not overwrite anything
         if self.rawdata is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
@@ -371,29 +379,45 @@ class Image( BaseObject ):
         # ********************* #
         # * Create the object * #
         # ********************* #
-        self._properties["filename"]     = filename
-        self._derived_properties["fits"] = fits
-        # basics data and wcs
-        self._side_properties["datamask"] = mask
-        self._properties["rawdata"]      = np.asarray(rawdata,dtype="float")
-        if self.has_datamask():
-            self._properties["rawdata"][self.datamask] = np.NaN
-        self._properties["header"]       = pf.Header() if header is None else header
-        self._properties["var"]          = variance
-        if self.has_datamask() and self.has_var():
-            self._properties["var"][self.datamask] = np.NaN
-            
-            
-        
-        # -- Side, exposure time
-        self._side_properties["exptime"] = exptime
-        # -------------------
+        # --------------
+        # - Set instance
+        self._properties["filename"]      = filename
+        self._derived_properties["fits"]  = fits
+        self._properties["header"]        = pf.Header() if header is None else header
+        self._side_properties["exptime"]  = exptime
         # - WCS solution
-        self._side_properties["wcs"]     = astrometry.get_wcs(wcs,verbose=True)
+        self.set_wcs(wcs)
+        
+        # --------------
+        # - Read data
+        self._set_data_(rawdata,mask,
+                        variance=variance,
+                        background=background)
+        
+    def reload_data(self, dataslice0, dataslice1,
+                    variance=None,background=None,mask=None):
+        """ Change the slicing of the data.
+        This will update the background, variance and the wcs solution's offset.
+        If you had an sepobjects loaded, this will update it."""
+        
+        rawdata = self.fits[self._build_properties["data_index"]].data[
+            dataslice0[0]:dataslice0[1],
+            dataslice1[0]:dataslice1[1]]
+        # -- no more sepobject attached
+        reload_sep = self.has_sepobjects()
 
-        self.set_background(background)
-        self._update_(update_background=False)
-
+        self._derived_properties["sepobjects"] = None
+        self._set_data_(rawdata,mask=mask,
+                        variance=variance,
+                        background=background)
+        
+        self._build_properties["dataslice0"] = dataslice0
+        self._build_properties["dataslice1"] = dataslice1
+        if self.has_wcs():
+            self.wcs.set_offset(*self._dataoffset)
+            
+        if reload_sep: self.sep_extract()
+        
     # ------------------- #
     # - Set Methods     - #
     # ------------------- #
@@ -430,7 +454,66 @@ class Image( BaseObject ):
                                                                     newtarget.dec))
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
+        
+    def set_wcs(self,wcs,force_it=False):
+        """
+        """
+        if self.has_wcs() and not force_it:
+            raise AttributeError("A wcs solution is already loaded."\
+                    " Set force_it to True if you really known what you are doing")
 
+        if "__nature__" not in dir(wcs) or wcs.__nature__ != "WCS":
+            raise TypeError("The given wcs solution is not a astrobject WCS instance")
+        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
+        self.wcs.set_offset(*self._dataoffset)
+        
+    def set_catalogue(self,catalogue,force_it=False):
+        """
+        A Catalogue object will be loaded to this instance, you could then access it
+        as 'self.catalogue' ('self.has_catalogue()' will be True).
+
+        The wcs solution of this
+        instance will be passed to the 'calague' one, as well as the sepobject
+        if you have one. This way, the detected object will directly be match to the
+        'catalogue'
+
+        Catalogue: must be an astrobject Catalogue
+        
+        Return
+        ------
+        Void
+        """
+        if self.has_catalogue() and force_it is False:
+            raise AttributeError("'catalogue' already defined"+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
+            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+        # -------------------------
+        # - Add the world_2_pixel
+        
+        if not self.has_wcs():
+            print "WARNING: no wcs solution."+"\n"+\
+              " catalogue recorded, but most likely is useless"
+            
+        else:
+            # -- Lets only consider the objects in the FoV
+            catalogue.set_wcs(self.wcs,force_it=True)
+            if catalogue.nobjects_in_fov < 1:
+                warnings.warn("WARNING No object in the field of view,"+"\n"+\
+                              "  -> catalogue not loaded")
+                return
+            
+            # -- Lets save the pixel values
+            if self.has_sepobjects():
+                self.sepobjects.set_catalogue(catalogue,force_it=True)
+                self.sepobjects.match_catalogue()
+            
+                
+        # --------
+        # - set it
+        self._side_properties["catalogue"] = catalogue
+        
     def set_background(self,background,
                        force_it=False,check=True):
         """
@@ -460,115 +543,25 @@ class Image( BaseObject ):
         ------
         Void
         """
+            
         # -- Check if you will not overwrite anything
         if self.background is not None and force_it is False:
             raise AttributeError("'background' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        if background is None:
+        if background is None:            
             background  = self._get_default_background_()
             self._uses_default_background = True
         else:
             self._uses_default_background = False
             
-        
         # Shape test
         if self.rawdata is not None and np.shape(background) != self.shape:
             raise ValueError("The given background must have rawdata's shape")
         # -- Looks good
         self._properties['background'] = np.asarray(background)
         self._update_data_(update_background=False)
-
-
-    def set_catalogue(self,catalogue,force_it=False):
-        """
-        A Catalogue object will be loaded to this instance, you could then access it
-        as 'self.catalogue' ('self.has_catalogue()' will be True).
-
-        The wcs solution of this
-        instance will be passed to the 'calague' one, as well as the sepobject
-        if you have one. This way, the detected object will directly be match to the
-        'catalogue'
-
-        Catalogue: must be an astrobject Catalogue
         
-        Return
-        ------
-        Void
-        """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-        # -------------------------
-        # - Add the world_2_pixel
-        
-        if not self.has_wcs():
-            print "WARNING: no wcs solution. catalogue recorded, but most likely is useless"
-            
-        else:
-            # -- Lets only consider the objects in the FoV
-            catalogue.set_wcs(self.wcs,force_it=True)
-            if catalogue.nobjects_in_fov < 1:
-                warnings.warn("WARNING No object in the field of view, catalogue not loaded")
-                return
-            
-            # -- Lets save the pixel values
-            if self.has_sepobjects():
-                self.sepobjects.set_catalogue(catalogue,force_it=True)
-                self.sepobjects.match_catalogue()
-            
-                
-        # --------
-        # - set it
-        self._side_properties["catalogue"] = catalogue
-        
-    def set_apertures_photos(self,radius_range=[0.5,25],runits="pixles",bins=30,
-                            catmag_range=None,isolated_only=True,
-                            curveclipping=4, 
-                            **kwargs):
-        """
-        """
-        if catmag_range is None:
-            catmag_range = [None,None]
-        # --------------------
-        # - Get the Apertures
-        ap = self.get_aperture_photometries(radius_range=radius_range,runits=runits,
-                                            bins=bins,
-                                            catmag_range=catmag_range,
-                                            isolated_only=isolated_only,
-                                            **kwargs)
-        # --------------------
-        # - Derived Values
-        
-        counts = ap["counts"] / np.mean(ap["counts"],axis=0)
-        countT = counts.T
-        # - outlier rejection
-        mask = np.ones(len(countT),dtype=bool)
-        again,iwhile = True,0
-        while again:
-            mean_count = np.median(countT[mask],axis=0)
-            std_count = np.std(countT[mask],axis=0)
-            mewmasked = np.asarray([not (np.abs(c- mean_count) >curveclipping* std_count).any()
-                                    for i,c in enumerate(countT)],dtype=bool)
-            # -- while conditions, again ?
-            if (mewmasked == mask).all() or i==10:
-                again = False
-            mask = mewmasked
-            iwhile+=1
-
-        # --------------
-        # - Set it
-        ap["aperture_curve"]= {"counts":mean_count,
-                               "std":std_count,
-                               "maskused":mask,
-                               "clipping":curveclipping}
-        self._derived_properties["apertures_photos"] = ap
-        if not self.has_fwhm():
-            self.derive_fwhm()
-            
     def set_fwhm(self,value,force_it=True):
         """
         value is the value of the fwhm. If no units is provided (astropy units)
@@ -585,9 +578,9 @@ class Image( BaseObject ):
             
         self._derived_properties['fwhm'] = value
         
-    # ------------------- #
-    # - download Methods- #
-    # ------------------- #
+    # --------------------- #
+    # - download Methods  - #
+    # --------------------- #
     def download_catalogue(self,source="sdss",
                            set_it=True,force_it=False,
                            **kwargs):
@@ -612,67 +605,8 @@ class Image( BaseObject ):
                                     **kwargs)
         if not set_it:
             return cat
-        
         self.set_catalogue(cat,force_it=force_it)
-
-    def derive_fwhm(self,percent_gain=0.2,
-                    set_it=True,force_it=False):
-        """
-        Based on the arpetures_photos, this methods derive the full width half maximum.
-        The maximum is defined with the increase of flux from 1 radius to the next is
-        lower than *percent_gain* (in percent of the radius' flux). 
-        
-        (Remark: the fhwm is a diameter, not a radius, and is given in
-        astropy.units.arcsec)
-        
-        Parameters
-        ----------
-
-        - options -
-        
-        percent_gain: [float]      The fraction of flux gain from on radius to the next
-                                   one. The first radius below this criteria will is
-                                   the "radius at maximum".
-                                   (see get_max_aperture_index)
-        set_it, force_it [bool, bool]
-                                   Shall this method update the current fwhm of this
-                                   instance ? If it already is set, you have to set
-                                   *force_it* to True to overwitre the former one.
-        Return
-        ------
-        fwhm in astropy.units (arcsec)
-        """
-        
-        maxidx = self.get_max_aperture_index(percent_gain=percent_gain)
-        
-        # -- guess area
-        r_refined = np.linspace(1,20,1000)
-        r_fwhm = r_refined[np.argmin(np.abs(self._aperture_func(r_refined)- \
-                                            self.apertures_curve[1][maxidx]/2.))] * 2
-        
-        
-        if set_it:
-            self.set_fwhm(r_fwhm* self.pixel_size_arcsec * units.arcsec,
-                          force_it=force_it)
-
-    def load_calibration(self,catmag_range=None,
-                                calibrate=True,verbose=True):
-        """
-        This module enable to load a unit (self.calibration) that enable to
-        calibrate the current image
-        """
-        from ..calibration.photocatalogue import PhotoCatalogue
-        self.calibration_module = PhotoCatalogue(self,verbose=verbose)
-        if catmag_range is None:
-            if self.has_apertures_photos():
-                catmag_range = self.apertures_photos["property"]["catmag_range"]
-            else:
-                catmag_range = [None,None]
-                
-        if calibrate:
-            if verbose: print "Loading the aperture Photometries"
-            self.calibration_module.calibrate(catmag_range=catmag_range)
-        
+    
         
     # ------------------- #
     # - get Methods     - #
@@ -680,116 +614,6 @@ class Image( BaseObject ):
     # ----------- #
     #  Aperture   #
     # ----------- #
-    def correct_aperture(self,radius_pixel):
-        """
-        
-        """
-        if not self.has_apertures_photos():
-            raise AttributeError("set 'apertures_photos' prior to use this function")
-        
-        maxapidx = self.get_max_aperture_index()
-        if self.apertures_curve[0][maxapidx] <= radius_pixel:
-            return 1
-        count_max = self.apertures_curve[1][maxapidx]
-        count_radius = self._aperture_func(radius_pixel)
-        ratio =count_max/count_radius
-        return ratio if ratio>1 else 1
-    
-    def get_max_aperture_index(self,percent_gain=0.2):
-        """
-        This methods enable to fetch the maximum raduis to get the entire
-        star fluxes.
-
-        Based on the arpetures_photos, this methods derive the full width half maximum.
-        The maximum is defined with the increase of flux from 1 radius to the next is
-        lower than *percent_gain* (in percent of the radius' flux). 
-        
-        (Remark: the fhwm is a diameter, not a radius, and is given in
-        astropy.units.arcsec)
-        
-        Parameters
-        ----------
-
-        - options -
-        
-        percent_gain: [float]      The fraction of flux gain from on radius to the next
-                                   one. The first radius below this criteria will is
-                                   the "radius at maximum"
-
-        Return
-        ------
-        index (of apertures_curve:apertures_curve[0][index] to get the maximum radius)
-        """
-        
-        if not self.has_apertures_photos():
-            raise AttributeError("set 'aperture_photos' first")
-        
-        delta_counts = (self.apertures_curve[1][1:] - self.apertures_curve[1][:-1]) / self.apertures_curve[1][:-1]
-        goods = (np.argwhere(delta_counts*100 < percent_gain))
-        if len(goods) ==0:
-            print "WARNING the maximum radius of the aperture photometries is too small"
-            self._aperture_ok = False
-            return len(self.apertures_curve)
-        
-        idx = np.min(goods)+1
-        if idx>= len(self.apertures_curve[0]):
-            self._aperture_ok = False
-            print "WARNING maximum aperture index is the highest measured aperture raduis"
-
-        self._aperture_ok = True
-        return idx
-    
-    def get_aperture_photometries(self,radius_range=[0.5,20],units="pixels",bins=18,
-                                  catmag_range=None,isolated_only=True,
-                                  **kwargs
-                                  ):
-        """This method loop over the given range of pixel radius
-        and return the associated counts
-
-        **kwargs goes to instrument.get_aperture ; so K Barbary's sep
-        """
-        # ------------------
-        # - Input
-        if not self.has_catalogue() or not self.has_sepobjects():
-            raise AttributeError("a 'catalogue' and 'sepobjects' are required")
-        
-        # ----------------
-        # - Aperture Info
-        radiuses = np.linspace(radius_range[0],radius_range[1],bins)
-        
-        kwardsmask = dict(stars_only=True,isolated_only=isolated_only,
-                          catmag_range=catmag_range)
-        mask = self.sepobjects.get_mask(**kwardsmask)
-        catidx = self.sepobjects.get_indexes(cat_indexes=True,**kwardsmask)
-        # ---------------------
-        # - get the coordinate
-        x,y = self.sepobjects.get("x",mask=mask),self.sepobjects.get("y",mask=mask)
-        # ---------------------
-        # - Edge Issues
-        edge_issue = (x<rpixel_range[-1]) + (y<rpixel_range[-1]) + \
-          (x+rpixel_range[-1]>self.shape[0]) + (y+rpixel_range[-1]>self.shape[1])
-        x,y,mask,catidx = x[~edge_issue], y[~edge_issue], mask[~edge_issue], catidx[~edge_issue]
-          
-            
-        # ---------------
-        # - SHOUD BE FASTER
-        ap = {}
-        for radius in radiuses:
-            counts,err,flag = self.get_aperture(x,y,radius=radius,runits=runits,**kwargs)
-            ap[radius] = {"counts":counts,
-                          "errors":err,
-                          "flag":flag}
-        return {"radius":radiuses,
-                "runits":runits,
-                "counts":np.asarray([ap[d]["counts"] for d in radius]),
-                "errors":np.asarray([ap[d]["errors"] for d in radius]),
-                "idx_catalogue":catidx,
-                "idx":mask,
-                "property":kwargs_update( dict(catmag_range=catmag_range,
-                                        isolated_only=isolated_only),
-                                        **kwargs)
-                }
-
     def get_stars_aperture(self, radius,runits="pixels",aptype="circle",
                            isolated_only=True, catmag_range=[None,None],
                            **kwargs):
@@ -813,7 +637,7 @@ class Image( BaseObject ):
 
         if isolated_only and not self.catalogue._is_around_defined():
             raise AttributeError("no 'around' not defined in the catalogue."+ \
-                                 " Run catalogue.defined_around or set isolated_only to False")
+                    " Run catalogue.defined_around or set isolated_only to False")
             
         # -------------------- #
         # - Pairing          - #
@@ -829,9 +653,11 @@ class Image( BaseObject ):
         # -------------------- #
         # - Get it           - #
         # -------------------- #
-        return idx, cat_idx, self.get_aperture(x,y,radius=radius,runits=runits,aptype=aptype,**kwargs)
+        return idx, cat_idx, self.get_aperture(x,y,radius=radius,runits=runits,
+                                               aptype=aptype,**kwargs)
     
-    def get_target_aperture(self,radius,runits="pixels",aptype="circle",subpix=5,**kwargs):
+    def get_target_aperture(self,radius,runits="pixels",aptype="circle",subpix=5,
+                            **kwargs):
         """If a target is loaded, this will get the target coords and run
         'get_aperture'.
         """
@@ -843,7 +669,6 @@ class Image( BaseObject ):
                                  aptype=aptype,
                                  subpix=subpix,**kwargs)
 
-    
     def get_aperture(self,x,y,radius=None,
                      runits="pixels",wcs_coords=False,
                      aptype="circle",subpix=5,
@@ -935,7 +760,8 @@ class Image( BaseObject ):
             
         # -------------
         # - SEP Input 
-        gain = None if "_dataunits_to_electron" not in dir(self) else self._dataunits_to_electron
+        gain = None if "_dataunits_to_electron" not in dir(self) else \
+          self._dataunits_to_electron
         gain = kwargs.pop("gain",gain)
         # -----------------
         # - Variance Trick
@@ -985,6 +811,7 @@ class Image( BaseObject ):
         # ===================================
         # = Return of the aperture extraction
         return sepout
+    
     # ------------------- #
     # - WCS Tools       - #
     # ------------------- #
@@ -996,7 +823,6 @@ class Image( BaseObject ):
         if pixel:
             return self.wcs.contours_pxl
         return self.wcs.contours
-
 
     # - Conversion tools
     def units_to_pixels(self,units_):
@@ -1031,7 +857,7 @@ class Image( BaseObject ):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
         if self.has_wcs() is False:
             raise AttributeError("no wcs solution loaded.")
-        
+        pixelsoffset = self._dataoffset
         return self.wcs.pix2world(pixel_x,pixel_y)
 
     def coords_to_pixel(self,ra,dec):
@@ -1060,8 +886,8 @@ class Image( BaseObject ):
             
             return self._sepbackground.back()
         
-        self.set_background(self._sepbackground.back())
-        self.sep_extract(match_catalogue=~cleaning_sep)
+        self.set_background(self._sepbackground.back(),force_it=True)
+        self.sep_extract(match_catalogue= not cleaning_sep)
         self._rmsep=cleaning_sep
         return self.get_sep_background(update_background=True)
 
@@ -1086,13 +912,14 @@ class Image( BaseObject ):
                                     the absolute threshold at pixel (j, i) will be
                                     thresh * err[j, i]."
 
-        set_catalogue: [bool]      If the current instance has a catalogue, it will be transfered
-                                   to the SexOutput object created. Set False to avoid that.
+        set_catalogue: [bool]      If the current instance has a catalogue, it will be
+                                   transfered to the SexOutput object created.
+                                   Set False to avoid that.
                                    
                                    
         returnobjects: [bool]      Change the output of this function. if True the
-                                   extracted objects are recorded and returned (self.sepobjects)
-                                   if not they are just recorded.
+                                   extracted objects are recorded and returned
+                                   (self.sepobjects) if not they are just recorded.
 
         
         - others options -
@@ -1170,8 +997,8 @@ class Image( BaseObject ):
                                   catalogue is loaded, only the catalogue matched
                                   sources will be displayed.
                                   
-        propsep: [dict]           If the sepobjects are display, this set the properties
-                                  of the ellipse (mpl.Patches)
+        propsep: [dict]           If the sepobjects are display, this set the
+                                  properties of the ellipse (mpl.Patches)
 
         show_catalogue: [bool]   Add in the location of the stars (full markers) and
                                  galaxies (open marker) of the catalogue objects.
@@ -1202,8 +1029,8 @@ class Image( BaseObject ):
                                    If None, nothing will be saved, the plot will be
                                    shown instead (but see *show*)
 
-        show: [bool]               If the image is not recorded (savefile=None) the plot
-                                   will be shown except if this is set to False
+        show: [bool]               If the image is not recorded (savefile=None) the
+                                   plot will be shown except if this is set to False
                                    
         ax: [None/mpl.Axes]        Where the imshow will be displayed. If None, this
                                    will create a figure and a unique axis to set 'ax'
@@ -1308,7 +1135,6 @@ class Image( BaseObject ):
         self._plot["imshow"] = im
         self._plot["prop"]   = prop
         self._plot["target_plot"] = pl_tgt
-        #self._plot["wcs_coords"] = wcs_coords
         
         fig.figout(savefile=savefile,show=show)
         
@@ -1370,7 +1196,6 @@ class Image( BaseObject ):
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
         self._plot["hist"] = pl
-        #self._plot["target_plot"] = pl_tgt
         self._plot["prop"]   = prop
         
         fig.figout(savefile=savefile,show=show)
@@ -1495,131 +1320,6 @@ class Image( BaseObject ):
                                       scalex=False,scaley=False,
                                       **kwargs)
 
-    
-    def show_aperture_photos(self,savefile=None,ax=None,show=True,
-                                   cmap=None,cbar=True,set_axes_labels=True,
-                                   show_fwhm=True,**kwargs
-                                   ):
-        """
-        Show the normalized counts (saved using set_apertures_photos) as a function
-        of the aperture raduis. This lines will be colored by the catalogue magnitude
-        of the stars.
-        
-                                   
-        Parameters
-        -----------
-                                   
-        ax: [mpl.Axes]             The axes where the image will be shown.
-                                   if *cbar* is not False, the dimension of this
-                                   axes will be reduced to fit an errorbar 
-
-        savefile: [string]         Give the name of the file where the plot should be
-                                   saved (no extention, pdf and png will be made)
-                                   If None, nothing will be saved, the plot will be
-                                   shown instead (but see *show*)
-                                   
-        show: [bool]               set to False to avoid displaying the plot
-                                   
-        cmap: [mpl.cm]             a matplotlib cmap. This will be used to set
-                                   the color of the lines as a function of the
-                                   catalogue magnitude.
-                                   
-        cbar: [bool or ax]         provide here an ax where the colorbar should be
-                                   drawn. You can also set True to have a default one
-                                   or set False to avoid having a colorbar.
-        Return
-        ------
-        dict (with plot information)
-        """
-        if not self.has_apertures_photos():
-            raise AttributeError("no 'apertures_photos' defined")
-        
-        # ---------------
-        # -- Setting 
-        from ..utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        
-        if ax is None:
-            fig = mpl.figure(figsize=[8,6])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "hist" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-        
-        # -- Properties -- #
-
-        # -----------------
-        # - Data To show
-        counts = self.apertures_photos['counts']  /np.mean(self.apertures_photos['counts'],axis=0)
-        # ------------------
-        # - Colors  
-        catmag = self.catalogue.mag[self.apertures_photos['idx_catalogue']]
-        catmag_range = self.apertures_photos['property']['catmag_range']
-        
-        if catmag_range is None:
-            catmag_range = [catmag.min(),catmag.max()]
-        else:    
-            if catmag_range[0] is None:
-                catmag_range[0] = catmag.min()
-                
-            if catmag_range[1] is None:
-                catmag_range[1] = catmag.max()
-            
-        cmap = mpl.cm.jet if cmap is None else cmap
-        
-        colors = cmap((catmag-catmag_range[0])/(catmag_range[1]-catmag_range[0]))
-        
-        alpha = kwargs.pop("alpha",0.5)
-        used_mask = self.apertures_photos["aperture_curve"]["maskused"]
-        
-        # ------------------
-        # - Da Plot
-        pl = [ax.plot(self.apertures_curve[0],c_ , color=color,
-                      alpha=alpha,zorder=6,**kwargs)
-              for c_,color in zip(counts.T[used_mask],colors[used_mask])]
-
-        if (~used_mask).any():
-            pl.append(ax.plot(self.apertures_curve[0],counts.T[~used_mask].T , color="0.7",alpha=np.min(alpha,0.3),zorder=5,**kwargs))
-            
-        pl.append(ax.plot(*self.apertures_curve , color="k",
-                         alpha=1,zorder=8,lw=3,**kwargs))
-
-        if show_fwhm:
-            maxidx = self.get_max_aperture_index()
-            ax.axhline(self.apertures_curve[1][maxidx],ls="-",lw=1,color="0.5")
-            ax.axvline(self.apertures_curve[0][maxidx],ls="-",lw=1,color="0.5")
-            ax.axvline(self.fwhm.value / 2. / self.pixel_size_arcsec,
-                       ls="--",lw=1,color="0.5")
-            
-        # ----------------------
-        # - colorbar
-        # - this means it is not an ax
-        if cbar:
-            from ..utils.mpladdon import colorbar,insert_ax
-            if "imshow" not in dir(cbar):
-                axcar = ax.insert_ax(space=.05,pad=0.03,location="right")
-            else:
-                axcar = cbar
-            cbar = axcar.colorbar(cmap,vmin=catmag_range[0],vmax=catmag_range[1],
-                                label="catalogue magnitude",alpha=alpha)
-            
-        # -- Save the data -- #
-        self._plot["figure"] = fig
-        self._plot["ax"]     = ax
-        self._plot["pl"]     = pl
-
-        # -------------
-        # -Output
-        if set_axes_labels:
-            ax.set_xlabel(r"$\mathrm{Aperture\ radius\ in\ pixels}$",fontsize="x-large")
-            ax.set_ylabel(r"$\mathrm{Normalized\ counts\ per\ apertures}$",fontsize="x-large")
-            
-        fig.figout(savefile=savefile,show=show)        
-        return self._plot
-
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -1648,7 +1348,22 @@ class Image( BaseObject ):
         
         self._properties['rawdata'] = np.asarray(value)
         self._update_data_()
-        
+
+    @property
+    def _dataoffset(self):
+        if self._build_properties["dataslice0"] == "undefined":
+            warnings.warn("No _build_properties['dataslice0'] defined. 0 assumed")
+            offset0 = [0,-1]
+        else:
+            offset0=self._build_properties["dataslice0"]
+        if self._build_properties["dataslice1"] == "undefined":
+            warnings.warn("No _build_properties['dataslice1'] defined. 0 assumed")
+            offset1 = [0,-1]
+        else:
+            offset1=self._build_properties["dataslice1"]
+            
+        return offset0[0],offset1[0]
+            
     # Background
     @property
     def background(self):
@@ -1776,34 +1491,7 @@ class Image( BaseObject ):
         return False if self.catalogue is None\
           else True
 
-    # ----------------      
-    # -- Aperture Photo
-    # APERTURE PHOTOMETRIES
-    @property
-    def apertures_photos(self):
-        """
-        """
-        if self._derived_properties['apertures_photos'] is None:
-            self._derived_properties['apertures_photos'] = {}
-            
-        return self._derived_properties['apertures_photos']
     
-    def has_apertures_photos(self):
-        return not len(self.apertures_photos.keys())==0
-
-    # -- derived properties
-    @property
-    def apertures_curve(self):
-        """ This is the clipped mean photo_aperture curves"""
-        if not self.has_apertures_photos():
-            raise AttributeError("no 'apertures_photos' defined. see set_apertures_photos")
-        
-        return self.apertures_photos["radius"],self.apertures_photos["aperture_curve"]["counts"]
-
-    def _aperture_func(self,radius):
-        from scipy.interpolate import interp1d
-        return interp1d(*self.apertures_curve,
-                        kind="quadratic")(radius)
     # FWHM
     @property
     def fwhm(self):
@@ -1813,8 +1501,10 @@ class Image( BaseObject ):
         """
         if not self.has_fwhm():
             if self.has_sepobjects():
-                fwhm_pxl = self.sepobjects.get_fwhm_pxl(isolated_only=True,stars_only=True)
-                self.set_fwhm(fwhm_pxl/self.units_to_pixels("arcsec").value*units.arcsec)
+                fwhm_pxl = self.sepobjects.get_fwhm_pxl(isolated_only=True,
+                                                        stars_only=True)
+                self.set_fwhm(fwhm_pxl/self.units_to_pixels("arcsec").value*\
+                              units.arcsec)
             else:
                 raise AttributeError("'fwhm' is not defined and no sepobjects loaded.")
         return self._derived_properties["fwhm"]
@@ -1825,6 +1515,28 @@ class Image( BaseObject ):
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
+    def _set_data_(self,rawdata,mask=None,
+                   variance=None,
+                   background=None):
+        """ Change the instance fondamental: the rawdata """
+        
+        self._properties["rawdata"]       = self._read_rawdata_(rawdata)
+        self._side_properties["datamask"] = mask
+        if self.has_datamask():
+            self._properties["rawdata"][self.datamask] = np.NaN
+
+        # VARIANCE
+        self._properties["var"]          = variance
+        if self.has_datamask() and self.has_var():
+            self._properties["var"][self.datamask] = np.NaN
+        # BACKGROUND   
+        self.set_background(background, force_it=True)
+        # --> update
+        self._update_(update_background=False)
+    
+    def _read_rawdata_(self,rawdata):
+        return np.asarray(rawdata,dtype="float")
+    
     def _get_default_variance_(self):
         """
         """
@@ -1884,7 +1596,7 @@ class Image( BaseObject ):
             if "_sepbackground" in dir(self):
                 self._measure_sep_background_(**self._sepbackground_prop)
                 if self._uses_default_background:
-                    self.set_background(self._get_default_background_())
+                    self.set_background(self._get_default_background_(),force_it=True)
                 
         self._derived_properties["data"] = self.rawdata - self.background
         
@@ -2569,7 +2281,6 @@ class SexObjects( BaseObject ):
 
         if not catalogue._is_around_defined():
             catalogue.define_around(default_isolation_def)
-
         self._side_properties["catalogue"] = catalogue
                 
     # ------------------ #
