@@ -10,7 +10,6 @@ Python
 
 - numpy
 - scipy
-- pyfits
 - matplotlib
 - astropy (pip install astropy)
 - astroquery (pip install astroquery)
