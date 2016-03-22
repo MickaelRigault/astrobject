@@ -122,7 +122,14 @@ class _MotherWCS_( object ):
         if "_image_offset" not in dir(self) or self._image_offset is None:
             self.set_offset(0,0,None,None)
         return self._image_offset
+    
+    @property
+    def central_coords(self):
+        return self.pix2world(self.image_height/2.,self.image_width/2.)
 
+    @property
+    def _central_coords_nooffset(self):
+        return self.pix2world(self._naxis1/2.,self._naxis2/2., withoffset=False)
     # ----------------
     # - Contours
     # ----------------
@@ -171,26 +178,30 @@ class WCS(pyWCS,_MotherWCS_):
     # -------------------- #
     # - Mimic astLib     - #
     # -------------------- #
-    def pix2world(self,x,y):
+    def pix2world(self,x,y, withoffset=True):
+        """ Convert pixel to world coordinate """
+        offset = self.image_offset[::-1] if withoffset else np.asarray([0,0])
+        
         if "__iter__" not in dir(x):
-            xoffset = x-self.image_offset[1]+1
-            yoffset = y-self.image_offset[0]+1
+            xoffset = x-offset[0]+1
+            yoffset = y-offset[1]+1
             return self.wcs_pix2world([[xoffset,yoffset]],
                                         1)[0]
         
-        xyoffset = np.asarray([x,y]).T-self.image_offset[::-1]+1
+        xyoffset = np.asarray([x,y]).T-offset+1    
         return self.wcs_pix2world(xyoffset.tolist(),1)
     
-    def world2pix(self,ra,dec):
+    def world2pix(self,ra,dec,withoffset=True):
         """
         """
+        offset = self.image_offset[::-1] if withoffset else np.asarray([0,0])
         if "__iter__" not in dir(ra):
-            x,y = self.wcs_world2pix([[ra,dec]],0)[0] 
-            return x+self.image_offset[1],y+self.image_offset[0]
-
+            x,y = self.wcs_world2pix([[ra,dec]],0)[0]
+            return x+offset[0],y+offset[1]
+            
         x,y = np.asarray(self.wcs_world2pix(np.asarray([ra,dec]).T.tolist(),0)).T
-        return np.asarray([np.asarray(x)+self.image_offset[1],
-                           np.asarray(y)+self.image_offset[0]]).T
+        return np.asarray([np.asarray(x)+offset[0],
+                            np.asarray(y)+offset[1]]).T
 
     def coordsAreInImage(self,ra,dec):
         """
@@ -198,11 +209,7 @@ class WCS(pyWCS,_MotherWCS_):
         return shape.point_in_contours(ra,dec,self.contours)
         
     
-    @property
-    def central_coords(self):
-        return self.wcs_pix2world([[self.image_height/2.,
-                                    self.image_width/2.]],1)[0]
-
+    
     @property
     def edge_size(self):
         """return the p1,p2 and p2,p3 size (The order is counter-clockwise starting with the bottom left corner. p1,p2,p3,p4)"""
@@ -233,20 +240,22 @@ class _WCSbackup(astWCS.WCS,_MotherWCS_):
     # -------------------- #
     # - Mimic astLib     - #
     # -------------------- #
-    def pix2world(self,x,y):
+    def pix2world(self,x,y, withoffset=True):
         """
         """
-        x,y = (np.asarray([x,y]).T-self.image_offset[::-1]+1).T
+        offset = self.image_offset if withoffset else np.asarray([0,0])
+        x,y = (np.asarray([x,y]).T-offset[::-1]+1).T
         return np.asarray(self.pix2wcs(x,y))
 
-    def world2pix(self,ra,dec):
+    def world2pix(self,ra,dec, withoffset=True):
         """
         """
+        offset = self.image_offset if withoffset else np.asarray([0,0])
         if "__iter__" in dir(ra):
             ra,dec = np.asarray(ra),np.asarray(dec)
         x,y = np.asarray(self.wcs2pix(ra,dec)).T
-        return  np.asarray(x)+self.image_offset[1],\
-          np.asarray(y)+self.image_offset[0]
+        return  np.asarray(x)+offset[1],\
+          np.asarray(y)+offset[0]
         
 
     def coordsAreInImage(self,ra,dec):
@@ -254,9 +263,6 @@ class _WCSbackup(astWCS.WCS,_MotherWCS_):
         """
         return shape.point_in_contours(ra,dec,self.contours)
         
-    @property
-    def central_coords(self):
-        return self.pix2world(self.image_height/2.,self.image_width/2.)
 
     @property
     def edge_size(self):

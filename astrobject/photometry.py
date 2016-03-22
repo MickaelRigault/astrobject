@@ -385,14 +385,13 @@ class Image( BaseObject ):
         self._derived_properties["fits"]  = fits
         self._properties["header"]        = pf.Header() if header is None else header
         self._side_properties["exptime"]  = exptime
-        # - WCS solution
-        self.set_wcs(wcs)
-        
         # --------------
         # - Read data
         self._set_data_(rawdata,mask,
                         variance=variance,
                         background=background)
+        # - WCS solution
+        self.set_wcs(wcs)
         
     def reload_data(self, dataslice0, dataslice1,
                     variance=None,background=None,mask=None):
@@ -600,8 +599,8 @@ class Image( BaseObject ):
         Void (or the Catalogue if set_it is False)
         """
         from .instruments import instrument
-        radec = "%s %s"%(self.wcs.central_coords[0],
-                         self.wcs.central_coords[1])
+        radec = "%s %s"%(self.wcs._central_coords_nooffset[0],
+                         self.wcs._central_coords_nooffset[1])
         radius = self.wcs.diag_size/1.8 # not 2 to have some room around
         cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
                                     **kwargs)
@@ -1335,6 +1334,7 @@ class Image( BaseObject ):
         
     @property
     def _dataslicing(self):
+        """ return offset0, offset1, height, width """
         if self._build_properties["dataslice0"] == "undefined":
             warnings.warn("No _build_properties['dataslice0'] defined. 0 assumed")
             offset0 = [0,-1]
