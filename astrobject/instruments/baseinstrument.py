@@ -366,7 +366,7 @@ class Catalogue( BaseObject ):
         elif fovcontours is None:
             raise ValueError("Either wcs or fovcontours must be provided")
         
-        self.fovmask = self.get_contour_mask(fovcontours)
+        self.fovmask = self.get_contour_mask(fovcontours, infov=False)
         self._side_properties["fovcontours"] = fovcontours
         
     def set_matchedmask(self,matchedmask):
@@ -901,7 +901,7 @@ class Catalogue( BaseObject ):
     @property
     def wcs_xy(self):
         if self.has_wcs():
-            return np.asarray(self.wcs.world2pix(self.ra,self.dec))
+            return np.asarray(self.wcs.world2pix(self.ra,self.dec)).T
         raise AttributeError("no 'wcs' solution loaded")
 
     # ----------------------
@@ -960,7 +960,25 @@ class Catalogue( BaseObject ):
     @property
     def contours(self):
         return self._derived_properties["contours"]
+
+    @property
+    def contours_pxl(self,**kwargs):
+        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        if not self.has_wcs():
+            raise AttributeError("no wcs solution loaded. You need one.")
+        x,y = np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in
+                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)
     
     @property
     def fovcontours(self):
         return self._side_properties["fovcontours"]
+
+    @property
+    def fovcontours_pxl(self,**kwargs):
+        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        if not self.has_wcs():
+            raise AttributeError("no wcs solution loaded. You need one.")
+        x,y = np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in
+                          np.asarray(self.fovcontours.exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)

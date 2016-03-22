@@ -414,8 +414,10 @@ class Image( BaseObject ):
         self._build_properties["dataslice0"] = dataslice0
         self._build_properties["dataslice1"] = dataslice1
         if self.has_wcs():
-            self.wcs.set_offset(*self._dataoffset)
-            
+            self.wcs.set_offset(*self._dataslicing)
+            if self.has_catalogue():
+                self.catalogue.set_fovmask(wcs=self.wcs)
+        
         if reload_sep: self.sep_extract()
         
     # ------------------- #
@@ -465,7 +467,7 @@ class Image( BaseObject ):
         if "__nature__" not in dir(wcs) or wcs.__nature__ != "WCS":
             raise TypeError("The given wcs solution is not a astrobject WCS instance")
         self._side_properties["wcs"] = astrometry.get_wcs(wcs)
-        self.wcs.set_offset(*self._dataoffset)
+        self.wcs.set_offset(*self._dataslicing)
         
     def set_catalogue(self,catalogue,force_it=False):
         """
@@ -826,32 +828,13 @@ class Image( BaseObject ):
 
     # - Conversion tools
     def units_to_pixels(self,units_):
-        """units should be a parsable string or a astropy units"""
-        
-        if type(units_) == str:
-            # - astropy units
+        """units should be a parsable string or a astropy units. Uses the wcs method units_to_pixels()
+        In addition, you have access to the 'psf [==fwhm]' unit"""
+        if type(units_) == str and units_.lower() in ["fwhm","psf"]:
+            units_ = self.fwhm
             
-            if units_.lower() in ["pixel","pixels","pxl","pix","pxls","pixs"]:
-                return units.Quantity(1.)
-            elif units_.lower() in ["fwhm","psf"]:
-                units_ = self.fwhm
-            elif units_.lower() in ["kpc"]:
-                if not self.has_target():
-                    raise AttributeError("You need a target to convert kpc->arcsec")
-                units_ = self.target.arcsec_per_kpc * units.arcsec
-            elif units_ in dir(units):
-                units_ = 1*units.Unit(units_)
-            else:
-                TypeError("unparsable units %s: astropy.units or pixels/pxl or kpc could be provided."%units_)
-        # ----------------
-        # - astropy Units
-        if type(units_) is units.core.Unit:
-            units_ = 1*units_
-
-        if type(units_) is units.quantity.Quantity:
-            return units_.to("arcsec") / self.pixel_size_arcsec
-        
-        raise TypeError("unparsable units: astropy.units or pixels/pxl or kpc could be provided.")
+        return self.wcs.units_to_pixels(units_,target=self.target)
+    
             
     def pixel_to_coords(self,pixel_x,pixel_y):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
@@ -1349,8 +1332,9 @@ class Image( BaseObject ):
         self._properties['rawdata'] = np.asarray(value)
         self._update_data_()
 
+        
     @property
-    def _dataoffset(self):
+    def _dataslicing(self):
         if self._build_properties["dataslice0"] == "undefined":
             warnings.warn("No _build_properties['dataslice0'] defined. 0 assumed")
             offset0 = [0,-1]
@@ -1361,8 +1345,14 @@ class Image( BaseObject ):
             offset1 = [0,-1]
         else:
             offset1=self._build_properties["dataslice1"]
-            
-        return offset0[0],offset1[0]
+
+        if offset0[1] <0: offset0[1] = self.height+offset0[1]+2
+        if offset1[1] <0: offset1[1] = self.width +offset1[1]+2
+        return offset0[0],offset1[0],offset0[1]-offset0[0],offset1[1]-offset1[0]
+    
+    @property
+    def _dataoffset(self):
+        return self._dataslicing[:2]
             
     # Background
     @property
@@ -1454,7 +1444,6 @@ class Image( BaseObject ):
             return [ps.to("arcsec") for ps in self.pixel_size_deg]
         return self.pixel_size_deg.to("arcsec")
 
-    
     # ----------------      
     # -- target tools
     @property
@@ -1476,7 +1465,7 @@ class Image( BaseObject ):
           else False
           
     @property
-    def sepmask(self,r=5):
+    def sepmask(self,r=10):
         if not self.has_sepobjects():
             raise AttributeError("No sepobjects loaded. Run sep_extract")
         return self.sepobjects.get_ellipse_mask(self.width,self.height,r=r)

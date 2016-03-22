@@ -6,7 +6,7 @@
 import numpy as np
 import warnings
 from astropy.table import Table
-
+from astropy.io import fits as pf
 
 from .photometry import photopoint
 from .baseobject import BaseObject
@@ -280,18 +280,33 @@ class ImageCollection( Collection ):
     # ========================== #
     # = Get                    = #
     # ========================== #
-    def get_image(self,id,load_catalogue=True):
+    def get_image(self,id,load_catalogue=True,
+                  dataslice0=[0,-1],dataslice1=[0,-1],
+                  **kwargs):
         """
+
+        **kwargs goes to instrument's init if the image is loaded for the first time
+        and to reload_data() if not and dataslicing differ from what have been loaded before.
+        
         """
         self._test_id_(id)
         # --------------------
         # - image already exist
         if self.images[id]["image"] is None:
-            self._load_image_(id)
-            return self.get_image(id)
-        
+            self._load_image_(id,dataslice0=dataslice0,
+                                 dataslice1=dataslice1,
+                              **kwargs)
+            return self.get_image(id,dataslice0=dataslice0,
+                                    dataslice1=dataslice1)
+
         im = self.images[id]["image"]
-        
+        # ------------------
+        # - Check if slicing ok
+        if dataslice0 != im._build_properties["dataslice0"] or \
+          dataslice1 != im._build_properties["dataslice1"]:
+            # -- Remark: This update the self.images[id]["image"]
+            im.reload_data(dataslice0, dataslice1,**kwargs)
+            
         # ---------------
         # Target
         if not im.has_target() and self.has_target():
@@ -329,6 +344,40 @@ class ImageCollection( Collection ):
                                                isolated_only=isolated_only,
                                                stars_only=stars_only,
                                                catmag_range=catmag_range)
+
+    def get_pixels_slicing(self,central_coords, radius, runits="arcmin", id_=None,
+                           wcs_coords=True, clean=True):
+        """
+        The dataslice0,dataslice1 for the given 'central_coords' with a +/- 'radius' 'runits' value.
+        This slicing will be cleaned (pixels within the image FoV) except if clean is False
+        """
+        # ---------------
+        # - one id_
+        if id_ is not None:
+            self._test_id_(id_)
+            radec = np.asarray(central_coords) if not wcs_coords else\
+              np.asarray(self.images[id_]["wcs"].world2pix(*central_coords))
+            pixels   = radius*self.images[id_]["wcs"].units_to_pixels(runits).value
+            dataslice0,dataslice1 = [[radec_-pixels,radec_+pixels] for radec_ in radec[::-1]]
+            if clean:
+                # -- cleaning
+                max0 = self.images[id_]["wcs"]._naxis1
+                max1 = self.images[id_]["wcs"]._naxis2
+                if dataslice0[0] <0    : dataslice0[0] = 0
+                if dataslice1[0] <0    : dataslice1[0] = 0
+                if dataslice0[1] >max0 : dataslice0[1] = max0
+                if dataslice1[1] >max1 : dataslice1[1] = max1
+            return {"dataslice0":np.asarray(dataslice0,dtype=int).tolist(),
+                    "dataslice1":np.asarray(dataslice1,dtype=int).tolist()}
+        
+        # ---------------
+        # - get all id_
+        if id_ is None:
+            out = {}
+            for id_ in self.list_id:
+                out[id_] = self.get_pixels_slicing(central_coords, radius, runits="arcmin", id_=id_)
+            return out
+        
     # --------------------- #
     # - Get Extraction    - #
     # --------------------- #
@@ -338,8 +387,8 @@ class ImageCollection( Collection ):
         """
         idused = self.list_id if ids is None else\
           [ids] if "__iter__" not in dir(ids) else ids
+            
           
-        print "ToBeDone"
     # --------------------- #
     # - Get Target        - #
     # --------------------- #
@@ -604,10 +653,10 @@ class ImageCollection( Collection ):
             }
         return ID
         
-    def _load_image_(self,id):
+    def _load_image_(self,id,**kwargs):
         """
         """
-        self.images[id]["image"] = inst.instrument(self.images[id]["file"])
+        self.images[id]["image"] = inst.instrument(self.images[id]["file"],**kwargs)
         
     # ========================== #
     # = Properties             = #

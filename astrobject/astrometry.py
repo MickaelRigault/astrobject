@@ -69,14 +69,101 @@ class _MotherWCS_( object ):
     """ This shoud be merged with WCS once the aslLib dependency is cleaned """
     __nature__ = "WCS"
 
-    def set_offset(self,offset0,offset1):
+    # ---------------- #
+    # - Converstion  - #
+    # ---------------- #
+    def units_to_pixels(self,units_, target=None):
+        """units should be a parsable string or a astropy units"""
+        
+        if type(units_) == str:
+            # - astropy units
+            if units_.lower() in ["pixel","pixels","pxl","pix","pxls","pixs"]:
+                return units.Quantity(1.)
+            elif units_.lower() in ["kpc"]:
+                if target is None:
+                    raise AttributeError("You need a target to convert kpc->arcsec")
+                units_ = target.arcsec_per_kpc * units.arcsec
+            elif units_ in dir(units):
+                units_ = 1*units.Unit(units_)
+            else:
+                TypeError("unparsable units %s: astropy.units or pixels/pxl or kpc could be provided."%units_)
+        # ----------------
+        # - astropy Units
+        if type(units_) is units.core.Unit:
+            units_ = 1*units_
+
+        if type(units_) is units.quantity.Quantity:
+            return units_.to("degree") / self.pix_indeg
+        
+        raise TypeError("unparsable units: astropy.units or pixels/pxl or kpc could be provided.")
+
+    # ---------------- #
+    # - Offset Stuff - #
+    # ---------------- #
+    def set_offset(self,offset0,offset1, width=None, height=None):
+        self._image_width  = width
+        self._image_height = height
+        self._reload_contours = True
         self._image_offset = -np.asarray([offset0,offset1])
 
+
+    @property
+    def image_width(self):
+        return self._image_width if "_image_width" in dir(self) and self._image_width is not None\
+          else self._naxis2
+          
+    @property
+    def image_height(self):
+        return self._image_height if "_image_height" in dir(self) and self._image_height is not None\
+          else self._naxis1
+                    
     @property
     def image_offset(self):
         if "_image_offset" not in dir(self) or self._image_offset is None:
-            self.set_offset(0,0)
+            self.set_offset(0,0,None,None)
         return self._image_offset
+
+    # ----------------
+    # - Contours
+    # ----------------
+    @property
+    def contours(self,exp_order=5):
+        # -- Load it the fist time you use it
+        if "_contour" not in dir(self) or\
+           ("_reload_contours" in dir(self) and self._reload_contours):
+            self._reload_contours = False
+            from ..utils import shape
+            if not shape.HAS_SHAPELY:
+                self._contour = None
+            else:
+                a2,a1 = self.image_height,self.image_width
+                # This could be improved
+                npoints = 2+exp_order
+                # -- This defines the contours
+                width = np.linspace(0,a1,npoints)
+                height = np.linspace(0,a2,npoints)
+                v1 = np.asarray([np.ones(npoints-1)*0, width[:-1]]).T
+                v2 = np.asarray([height[:-1], np.ones(npoints-1)*a1]).T
+                v3 = np.asarray([np.ones(npoints-1)*a2, width[::-1][:-1]]).T
+                v4 = np.asarray([height[::-1][:-1], np.ones(npoints-1)*0]).T
+                
+                ra,dec = np.asarray([self.pix2world(i,j)
+                                for i,j in np.concatenate([v1,v2,v3,v4],axis=0)]).T
+                
+                self._contour = shape.get_contour_polygon(ra,dec)
+            
+        return self._contour
+
+    @property
+    def contours_pxl(self,**kwargs):
+        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
+                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)
+    
+    def has_contours(self):
+        return self.contours is not None
+
     
 class WCS(pyWCS,_MotherWCS_):
     """
@@ -102,8 +189,8 @@ class WCS(pyWCS,_MotherWCS_):
             return x+self.image_offset[1],y+self.image_offset[0]
 
         x,y = np.asarray(self.wcs_world2pix(np.asarray([ra,dec]).T.tolist(),0)).T
-        return np.asarray(x)+self.image_offset[1],\
-          np.asarray(y)+self.image_offset[0]
+        return np.asarray([np.asarray(x)+self.image_offset[1],
+                           np.asarray(y)+self.image_offset[0]]).T
 
     def coordsAreInImage(self,ra,dec):
         """
@@ -113,7 +200,8 @@ class WCS(pyWCS,_MotherWCS_):
     
     @property
     def central_coords(self):
-        return self.wcs_pix2world([[self._naxis1/2.,self._naxis2/2.]],1)[0]
+        return self.wcs_pix2world([[self.image_height/2.,
+                                    self.image_width/2.]],1)[0]
 
     @property
     def edge_size(self):
@@ -139,43 +227,6 @@ class WCS(pyWCS,_MotherWCS_):
         return  pxl[0] * units.Unit(self.wcs.cunit[0]).in_units("degree")* units.degree,\
           pxl[1] * units.Unit(self.wcs.cunit[1]).in_units("degree")* units.degree
           
-    
-    @property
-    def contours(self,exp_order=5):
-        # -- Load it the fist time you use it
-        if "_contour" not in dir(self):
-            from ..utils import shape
-            if not shape.HAS_SHAPELY:
-                self._contour = None
-            else:
-                a2,a1 = self._naxis1,self._naxis2
-                # This could be improved
-                npoints = 2+exp_order
-                # -- This defines the contours
-                width = np.linspace(0,a1,npoints)
-                heigh = np.linspace(0,a2,npoints)
-                v1 = np.asarray([np.ones(npoints-1)*0, width[:-1]]).T
-                v2 = np.asarray([heigh[:-1], np.ones(npoints-1)*a1]).T
-                v3 = np.asarray([np.ones(npoints-1)*a2, width[::-1][:-1]]).T
-                v4 = np.asarray([heigh[::-1][:-1], np.ones(npoints-1)*0]).T
-
-                ra,dec = self.pix2world(*np.concatenate([v1,v2,v3,v4],axis=0).T).T
-                
-                self._contour = shape.get_contour_polygon(ra,dec)
-            
-        return self._contour
-
-    @property
-    def contours_pxl(self,**kwargs):
-        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
-        x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
-                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
-        return shape.get_contour_polygon(x,y)
-    
-    def has_contours(self):
-        """Test if this have contours defined"""
-        return self.contours is not None
-
 
 class _WCSbackup(astWCS.WCS,_MotherWCS_):
 
@@ -205,7 +256,7 @@ class _WCSbackup(astWCS.WCS,_MotherWCS_):
         
     @property
     def central_coords(self):
-        return self.pix2world(self._naxis1/2.,self._naxis2/2.)
+        return self.pix2world(self.image_height/2.,self.image_width/2.)
 
     @property
     def edge_size(self):
@@ -223,7 +274,7 @@ class _WCSbackup(astWCS.WCS,_MotherWCS_):
     # = 
     # ===================== #
     def calc_footprint(self,center=True):
-        naxis1,naxis2 = self._naxis1,self._naxis2
+        naxis1,naxis2 = self.image_height,self.image_width
         if center == True:
             corners = np.array([[1, 1],
                                 [1, naxis2],
@@ -254,38 +305,4 @@ class _WCSbackup(astWCS.WCS,_MotherWCS_):
     # = 
     # ===================== #
     
-    @property
-    def contours(self,exp_order=5):
-        # -- Load it the fist time you use it
-        if "_contour" not in dir(self):
-            from ..utils import shape
-            if not shape.HAS_SHAPELY:
-                self._contour = None
-            else:
-                a2,a1 = self._naxis1,self._naxis2
-                # This could be improved
-                npoints = 2+exp_order
-                # -- This defines the contours
-                width = np.linspace(0,a1,npoints)
-                heigh = np.linspace(0,a2,npoints)
-                v1 = np.asarray([np.ones(npoints-1)*0, width[:-1]]).T
-                v2 = np.asarray([heigh[:-1], np.ones(npoints-1)*a1]).T
-                v3 = np.asarray([np.ones(npoints-1)*a2, width[::-1][:-1]]).T
-                v4 = np.asarray([heigh[::-1][:-1], np.ones(npoints-1)*0]).T
-                
-                ra,dec = np.asarray([self.pix2world(i,j)
-                                for i,j in np.concatenate([v1,v2,v3,v4],axis=0)]).T
-                
-                self._contour = shape.get_contour_polygon(ra,dec)
-            
-        return self._contour
-
-    @property
-    def contours_pxl(self,**kwargs):
-        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
-        x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
-                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
-        return shape.get_contour_polygon(x,y)
     
-    def has_contours(self):
-        return self.contours is not None
