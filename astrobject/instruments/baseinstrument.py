@@ -54,8 +54,8 @@ class Instrument( Image ):
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
                             for flux_,var_ in zip(flux,var)]
-        from ..collection import PhotoMap
-        return PhotoMap(pps,np.asarray([x,y]).T,
+        from ..collections import get_photomap
+        return get_photomap(pps,np.asarray([x,y]).T,
                         wcs=self.wcs,
                         catalogue=self.catalogue.get_subcatalogue(fovmask=True, catmag_range=[1,30]) \
                           if self.has_catalogue() else None,

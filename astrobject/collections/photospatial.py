@@ -1,0 +1,736 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import warnings
+import numpy as np
+
+from astropy import table, coordinates, units
+from ..collection import PhotoPointCollection
+from ..photometry import photopoint
+from ...utils.tools import kwargs_update
+
+__all__ = ["get_photomap","get_sepobject"]
+
+
+
+def get_photomap(photopoints=None,coords=None,wcs_coords=True,**kwargs):
+    """
+    """
+    return PhotoMap(photopoints=photopoints,
+                    coords=coords,
+                    wcs_coords=wcs_coords,
+                    **kwargs)
+
+
+def get_sepobject(sepoutput, wcs_coords=False,ppointkwargs={},
+                   **kwargs):
+    """
+    """
+    if is_sepoutput(sepoutput):
+        inputphotomap = parse_sepoutput(sepoutput,**ppointkwargs)
+        pmap = SexObject(photopoints=inputphotomap["ppoints"],
+                         coords=inputphotomap["coords"],
+                         wcs_coords=wcs_coords, **kwargs)
+        [pmap.set_meta(k,inputphotomap["meta"][k].data) for k in inputphotomap["meta"].keys()]
+        return pmap
+        
+# ======================= #
+#                         #
+# Internal Functions      #
+#                         #
+# ======================= #
+def is_sepoutput(array):
+    """
+    """
+    if type(array) != np.ndarray:
+        return False
+    tsep = table.Table(array)
+    if "cxx" not in tsep.keys():
+        return False
+    return True
+
+def parse_sepoutput(sepoutput,lbda=None,**kwargs):
+    """
+    """
+    if type(sepoutput) != np.ndarray:
+        raise TypeError("the given 'sexoutput' is not an ndarray ; This is not a sepoutput")
+
+    tsep = table.Table(sepoutput)
+    if "cxx" not in tsep.keys():
+        raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+\
+                            "\n"+" It most likely is not a sextrator/sep output ")
+    ppoints = [photopoint(lbda,t_["flux"],None,
+                          source="sepextract",**kwargs)
+                          for t_ in tsep]
+    coords = np.asarray([tsep["x"],tsep["y"]]).T
+    return {"ppoints":ppoints,"coords":coords,"meta":tsep[[t_ for t_ in tsep.keys() if t_ not in ["flux"]]]}
+    
+    
+    
+
+
+######################################
+#                                    #
+# PhotoMetric Mapping                #
+#                                    #
+######################################
+
+class PhotoMap( PhotoPointCollection ):
+    """
+    """
+    #__nature__ = "PhotoMap"
+    
+    def __init__(self, photopoints=None,coords=None,
+                 filein=None,empty=False,wcs=None,catalogue=None,
+                 **kwargs):
+        """
+        """
+        self.__build__()
+        if empty:
+            return
+        if filein is not None:
+            self.load(filein,**kwargs)
+            
+        if photopoints is not None:
+            self.create(photopoints,coords,wcs=wcs,catalogue=catalogue,**kwargs)
+        
+            
+    def __build__(self):
+        """
+        """
+        self._properties_keys = self._properties_keys+["wcsid"]
+        self._side_properties_keys = self._side_properties_keys + \
+          ["refmap","wcs","catalogue","catmatch"]
+          
+        super(PhotoMap,self).__build__()
+        
+
+    def _read_table_comment_(self, comments):
+        """
+        """
+        for c in comments:
+            key,value = c.split()
+            if key == "wcsid":
+                self._build_properties["wcsid"]=bool(value)
+            else:
+                print "comment not saved: ", c
+                
+    # =============================== #
+    # = Building Methods            = #
+    # =============================== #
+
+    # ---------------- #
+    # - SUPER THEM   - #
+    # ---------------- #
+    def create(self,photopoints,coords, wcs_coords=True,
+               wcs=None,refmaps=None,catalogue=None,**kwargs):
+        """
+        wcs_coords means that the coordinate are given in ra,dec.
+        
+        """
+        super(PhotoMap,self).create(photopoints,ids=coords,**kwargs)
+        self._build_properties["wcsid"] = wcs_coords
+        
+        if wcs is not None:
+            self.set_wcs(wcs)
+        if refmaps is not None:
+            self.set_refmaps(wcs)
+        if catalogue is not None:
+            self.set_catalogue(catalogue)
+        
+    def add_photopoint(self,photopoint,coords,refphotopoint=None):
+        """
+        Add a new photopoint to the photomap. If you have set a 
+        """
+        if coords is None:
+            raise ValueError("The coordinates of the photopoint are necessary")
+        
+        if type(coords) is str or type(coords) is np.string_:
+            # -- If this failse, the coordinate format is not correct
+            coords = self.id_to_coords(coords)
+        elif np.shape(coords) != (2,):
+            raise TypeError("the given coordinate must be a 2d array (x,y)/(ra,dec)")
+        
+        super(PhotoMap,self).add_photopoint(photopoint,self.coords_to_id(*coords))
+        # -----------------------
+        # - Complet the refmap
+        if self.has_refmap():
+            if refphotopoint is None:
+                refphotopoint = photopoint(empty=True)
+            self.remap.add_photopoint(refphotopoint,coords)
+            
+    def writeto(self,filename,format="ascii.commented_header",**kwargs):
+        comments = "".join(["# %s %s \n "%(key, value) for key,value in [["wcsid",self._wcsid]]])
+        super(PhotoMap,self).writeto(filename,format,comment=comments,**kwargs)
+        
+    # =============================== #
+    # = Main Methods                = #
+    # =============================== #
+    def coords_to_id(self,x,y):
+        """ this enables to have consistent coordinate/id mapping """
+        return "%.8f,%.8f"%(x,y)
+    
+    def id_to_coords(self,id):
+        return np.asarray(id.split(","),dtype="float")
+
+    def match_catalogue(self,catalogue=None,
+                        force_it=False, arcsec_size=2):
+        """
+        This methods enable to attached a given sexobject entry
+        to a catalog value.
+        You can set a catalogue.
+        """
+        # --------------
+        # - input 
+        if catalogue is not None:
+            self.set_catalogue(catalogue, force_it=force_it)
+
+        if not self.has_catalogue():
+            raise AttributeError("No 'catalogue' defined or given.")
+        
+        if self.has_wcs():
+            # -- matching are made in degree space
+            ra,dec = self.radec.T
+            skyradec = coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
+            idxcatalogue, idxsexobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, arcsec_size*units.arcsec)
+        else:
+            raise NotImplementedError("You currently need a wcs solution in the SexObjects to match a catalogue")
+        # --------------------
+        # - Save the results
+        self._derived_properties["catmatch"] = {
+            "idx_catalogue":idxcatalogue,
+            "idx":idxsexobjects,
+            "angsep":d2d
+            }
+        
+        self.catalogue.set_matchedmask(idxcatalogue)
+        
+    # ------------- #
+    # - SETTER    - #
+    # ------------- #
+    def set_wcs(self,wcs,force_it=False):
+        """
+        """
+        if self.has_wcs() and force_it is False:
+            raise AttributeError("'wcs' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+                    
+        from ..astrometry import get_wcs
+        self._side_properties["wcs"] = get_wcs(wcs,verbose=True)
+
+    def set_refmap(self, photomap,force_it=False):
+        """
+        Set here the reference map associated to the current one.
+        The ordering of the point must be consistant with that of the current
+        photomap. 
+        """
+        if self.has_refmap() and force_it is False:
+            raise AttributeError("'refmap' is already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+
+        self._side_properties["refmap"] = photomap
+
+    def set_catalogue(self,catalogue,force_it=True,reset=True):
+        """
+        Attach to this instance a catalogue.
+        
+        Parameters
+        ---------
+        Return
+        ------
+        Voids
+        """
+        if self.has_catalogue() and force_it is False:
+            raise AttributeError("'catalogue' already defined"+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
+            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
+
+        # ----------------------
+        # - Clean the catalogue 
+        if reset: catalogue.reset()
+        
+        # -------------------------
+        # - Add the world_2_pixel            
+        if self.has_wcs():
+            if catalogue.has_wcs():
+                warnings.warn("WARNING the given 'catalogue' already has a wcs solution. This did not overwrite it.")
+            else:
+                catalogue.set_wcs(self.wcs)
+                
+        # ---------------------
+        # - Test consistancy
+        if catalogue.nobjects_in_fov < 1:
+            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
+            return
+        
+        # ---------------------
+        # - Good To Go
+        self._side_properties["catalogue"] = catalogue
+        
+    # ------------- #
+    # - GETTER    - #
+    # ------------- #
+    def get_ids_around(self, ra, dec, radius):
+        """
+        Parameters:
+        ----------
+        ra, dec : [float]          Position in the sky *in degree*
+
+        radius: [astropy.Quantity] distance of search, using astropy.units
+
+        Return
+        ------
+        (SkyCoords.search_around_sky output)
+        """
+        sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
+        ra_,dec_ = self.coords.T
+        return coordinates.SkyCoord(ra=ra_*units.degree,dec=dec_*units.degree).search_around_sky(sky, radius)
+
+
+    def get_mask(self,stars_only=False,isolated_only=False,
+                 catmag_range=[None,None]):
+        """
+        This main masking method builds a boolean array following
+        the requested cuts. Remark that this implies doing a catalogue cuts
+        since stars and magnitude information arises from the catalogue.
+        Returns
+        -------
+        array (dtype=bool)
+        """
+        if not self.has_catmatch():
+            raise AttributeError("No catalogue matching performed. Run match_catalogue()")
+
+        if catmag_range[0] is None:
+            warnings.warn("No lower catalogue magnitude limit given. 13mag set.")
+            catmag_range[0] = 13
+            
+        mask = np.asarray(self.get_catmag_mask(*catmag_range))
+        
+        if isolated_only :
+            mask = mask & self.catalogue.isolatedmask[ self.catmatch["idx_catalogue"]]
+            
+        if stars_only and self.catalogue.has_starmask():
+            mask = mask & self.catalogue.starmask[ self.catmatch["idx_catalogue"]]
+        
+        return mask
+
+    def get_catmag_mask(self,magmin,magmax):
+        """
+        return the boolen mask of which matched point
+        belong to the given magnitude range.
+        Set None for no limit
+        (see also get_mask)
+        
+        Returns
+        -------
+        array (dtype=bool)
+        """
+        if not self.has_catalogue():
+            raise AttributeError("no 'catalogue' loaded")
+        if not self.has_catmatch():
+            raise AttributeError("catalogue has not been matched to the data")
+    
+        mags = self.catalogue.mag[self.catmatch["idx_catalogue"]]
+        magmin = np.min(mags) if magmin is None else magmin
+        magmax = np.max(mags) if magmax is None else magmax
+        return (mags>=magmin) & (mags<=magmax)
+    
+    def get_indexes(self,isolated_only=False,stars_only=False,
+                    catmag_range=[None,None], cat_indexes=False):
+        """
+        Converts mask into index. Particularly useful to access the catalogue
+        values (set cat_indexes to True)
+        
+        Returns
+        -------
+        array of indexes
+        """        
+        id_ = "idx_catalogue" if cat_indexes else "idx"
+        return np.unique(self.catmatch[id_][self.get_mask(isolated_only=isolated_only,
+                                                  stars_only=stars_only,
+                                                  catmag_range=catmag_range
+                                                  )])
+
+
+    # ------------- #
+    # - PLOTTER   - #
+    # ------------- #
+    def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,
+                        show_nods=False,**kwargs):
+        """
+        Show a Voronoy cell map colored as a function of the given 'toshow'.
+        You can see the nods used to define the cells setting show_nods to True.    
+        """
+        if ax is None:
+            fig = mpl.figure(figsize=[8,8])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            ax.set_xlabel("x" if not wcs_coords else "Ra",fontsize = "x-large")
+            ax.set_ylabel("y" if not wcs_coords else "Dec",fontsize = "x-large")
+        elif "imshow" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        from ...utils.mpladdon import voronoi_patchs
+        # -----------------
+        # - The plot itself
+        out = ax.voronoi_patchs(self.radec if wcs_coords else self.xy,
+                                self.get(toshow),**kwargs)
+        if show_nods:
+            x,y = self.radec.T if wcs_coords else self.xy.T
+            ax.plot(x,y,marker=".",ls="None",color="k",
+                    scalex=False,scaley=False,
+                    alpha=kwargs.pop("alpha",0.8),zorder=kwargs.pop("zorder",3)+1)
+        ax.figure.canvas.draw()
+        return out
+        
+    # =============================== #
+    # = properties                  = #
+    # =============================== #
+    @property
+    def radec(self):
+        """ """
+        if self._wcsid:
+            return self._coords
+        if not self.has_wcs():
+            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
+        return self.wcs.pix2world(*self._coords.T)
+    
+    @property
+    def xy(self):
+        """ """
+        if not self._wcsid:
+            return self._coords
+        if not self.has_wcs():
+            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
+        return self.wcs.world2pix(*self._coords.T)
+    
+    @property
+    def _coords(self):
+        """ """
+        return np.asarray([self.id_to_coords(id_) for id_ in self.list_id])
+    @property
+    def _wcsid(self):
+        if self._build_properties["wcsid"] is None:
+            warnings.warn("No information about the nature of the coordinate ids (wcs/pixel?). **WCS system assumed**")
+            self._build_properties["wcsid"] = True
+        return self._build_properties["wcsid"]
+    
+    # -------------
+    # - WCS
+    @property
+    def wcs(self):
+        return self._side_properties['wcs']
+    
+    def has_wcs(self):
+        return self.wcs is not None
+    
+    # -------------
+    # - RefMap
+    @property
+    def refmap(self):
+        return self._side_properties['refmap']
+    
+    def has_refmap(self):
+        return self.refmap is not None
+    
+    # ------------- #
+    # - Derived   - #
+    # ------------- #
+    @property
+    def contours(self):
+        from ...utils import shape
+        return shape.get_contour_polygon(*self.radec.T)
+    
+    @property
+    def contours_pxl(self):
+        """
+        """
+        from ...utils import shape
+        return shape.get_contour_polygon(*self.xy.T)
+    
+    # -------------
+    # - Catalogue
+    @property
+    def catalogue(self):
+        return self._side_properties["catalogue"]
+    
+    def has_catalogue(self):
+        return False if self.catalogue is None\
+          else True
+
+    @property
+    def catmatch(self):
+        """This is the match dictionnary"""
+        if self._derived_properties["catmatch"] is None:
+            self._derived_properties["catmatch"] = {}
+            
+        return self._derived_properties["catmatch"]
+
+    def has_catmatch(self):
+        return False if self.catmatch is None or len(self.catmatch.keys())==0 \
+          else True
+
+
+
+######################################
+#                                    #
+# Sextractor Output                  #
+#                                    #
+######################################
+
+class SexObject( PhotoMap ):
+    """
+    """
+
+    # -------------------------- #
+    # -  Plotting tools        - #
+    # -------------------------- #
+    def display(self,ax,draw=True,apply_catmask=True,
+                stars_only=False, isolated_only=False,
+                catmag_range=[None,None]):
+        """ Show the ellipses of the sep extracted sources """
+        
+        ells = self.get_detected_ellipses(scaleup=5,apply_catmask=apply_catmask,
+                                          stars_only=stars_only,
+                                          isolated_only=isolated_only,
+                                          catmag_range=catmag_range)
+        for ell in ells:
+            ell.set_clip_box(ax.bbox)
+            ell.set_facecolor("None")
+            ell.set_edgecolor("k")
+            ax.add_patch(ell)
+        if draw:
+            ax.figure.canvas.draw()
+
+    def show_hist(self,toshow="a",ax=None,
+                  savefile=None,show=True,
+                  apply_catmask=True,
+                  stars_only=False, isolated_only=False,
+                  catmag_range=[None,None],
+                  **kwargs):
+        """This methods enable to show the histogram of any given
+        key."""
+        # -- Properties -- #
+        if not self.has_catalogue():
+            apply_catmask = False
+            
+        mask = None if not apply_catmask else\
+          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                        catmag_range=catmag_range)
+        
+        v = self.get(toshow,mask=mask)
+
+        # -- Setting -- #
+        from ...utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if ax is None:
+            fig = mpl.figure(figsize=[8,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        # -- Properties -- #
+        default_prop = dict(histtype="step",fill=True,
+                            fc=mpl.cm.Blues(0.7,0.5),ec="k",lw=2)
+        prop = kwargs_update(default_prop,**kwargs)
+
+        out = ax.hist(v,**prop)
+
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['hist'] = out
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
+
+    # - Ellipse
+    def show_ellipses(self,ax=None,
+                      savefile=None,show=True,
+                      apply_catmask=True,stars_only=False,
+                      isolated_only=False,catmag_range=[None,None],
+                      **kwargs):
+        """
+        """
+        if not self.has_data():
+            print "WARNING [Sexobjects] No data to display"
+            return
+        
+        from matplotlib.patches import Ellipse,Polygon
+        from ...utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        # ------------------- #
+        # - axes            - #
+        # ------------------- #
+        if ax is None:
+            fig = mpl.figure(figsize=[6,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        # ------------------- #
+        # - axes            - #
+        # ------------------- #
+        if not self.has_catalogue():
+            apply_catmask = False
+            
+        mask = None if not apply_catmask else\
+          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                        catmag_range=catmag_range)
+        # -------------
+        # - Properties
+        ells = [Ellipse([0,0],2.,2*b/a,t*units.radian.in_units("degree"))
+                for a,b,t in zip(self.get("a",mask=mask),self.get("b",mask=mask),
+                                 self.get("theta",mask=mask))]
+        # -- Show the typical angle
+        psf_a,psf_b,psf_theta = self.get_median_ellipse(mask=mask)
+        ellipticity = 1- psf_b[0]/psf_a[0]
+        # - cos/ sin what angle in radian
+        
+        ax.plot([0,np.cos(psf_theta[0])*ellipticity],
+                [0,np.sin(psf_theta[0])*ellipticity],ls="-",lw=2,
+                 color=mpl.cm.Blues(0.8),zorder=8)
+
+        Cone_error = Polygon( [ [0,0],[np.cos(psf_theta[0]-psf_theta[1])*ellipticity,
+                                       np.sin(psf_theta[0]-psf_theta[1])*ellipticity],
+                                [np.cos(psf_theta[0]+psf_theta[1])*ellipticity,
+                                 np.sin(psf_theta[0]+psf_theta[1])*ellipticity],
+                                 [0,0]]
+                                )
+        Cone_error.set_facecolor(mpl.cm.Blues(0.8))
+        Cone_error.set_edgecolor(mpl.cm.Blues(0.8))
+        Cone_error.set_alpha(0.3)
+        ax.add_patch(Cone_error)
+
+        # -- Show the Ellipses
+        for ell in ells:
+            ell.set_clip_box(ax.bbox)
+            ell.set_facecolor("None")
+            ell.set_edgecolor("k")
+            ell.set_alpha(0.1)
+            ax.add_patch(ell)
+
+        ax.set_ylim(-1.1,1.1)
+        ax.set_xlim(-1.1,1.1)
+        # -- show the center
+        ax.axvline(0,ls="--",color="k",alpha=0.2)
+        ax.axhline(0,ls="--",color="k",alpha=0.2)
+        
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
+        
+    # -------------------------- #
+    # Other gets               - #
+    # -------------------------- #
+    def get_fwhm_pxl(self,stars_only=True,isolated_only=True,
+                    catmag_range=[None,None], default_around=10*units.arcsec):
+        """
+        This is defined as 2 * sqrt(ln(2) * (a^2 + b^2))
+        """
+        if isolated_only and self.has_catalogue() and not self.catalogue._is_around_defined():
+            warnings.warn("No isolation defined. default value set: %s"%default_around)
+            self.catalogue.define_around(default_around)
+            
+        mask = self.get_indexes(isolated_only=isolated_only,
+                                stars_only=stars_only,
+                                catmag_range=catmag_range)
+        return np.median(2 * np.sqrt( np.log(2) * (self.get('a',mask)**2 + self.get('b',mask)**2)))
+
+    def get_median_ellipse(self,mask=None,clipping=[3,3]):
+        
+        """This methods look for the stars and return the mean ellipse parameters"""
+        from scipy.stats import sigmaclip
+        if not self.has_catalogue():
+            warnings.warn("No catalogue loaded, not catalogue masking avialable")
+            apply_catmask = False
+          
+        # -- apply the masking
+        a_clipped,_alow,_ahigh = sigmaclip(self.get("a",mask=mask),*clipping)
+        b_clipped,_blow,_bhigh = sigmaclip(self.get("b",mask=mask),*clipping)
+        t_clipped,_tlow,_thigh = sigmaclip(self.get("theta",mask=mask),*clipping)
+        # - so        
+        psf_a,psf_b,psf_t = a_clipped.mean(),b_clipped.mean(),t_clipped.mean()
+        m = np.sqrt(len(a_clipped)-1)
+        
+        return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
+        [psf_t,np.std(t_clipped)/m]
+        
+    def get_detected_ellipses(self,scaleup=5,apply_catmask=True,
+                              stars_only=False, isolated_only=False,
+                              catmag_range=[None,None]):
+        """
+        Get the matplotlib Patches (Ellipse) defining the detected object. You can
+        select the returned ellipses using the apply_catmask, stars_only,
+        isolated_only and catmag_range cuts.
+
+        'scaleup' scale the radius used of the ellipses. 5 means that most of the
+        visible light will be within the inside the returned ellipses.
+
+        Return
+        ------
+        list of patches
+        """
+        from matplotlib.patches import Ellipse
+        
+        # -- maskout non matched one if requested
+        if not self.has_catalogue():
+            apply_catmask = False
+            
+        mask = None if not apply_catmask else\
+          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                        catmag_range=catmag_range)
+            
+        # -------------
+        # - Properties
+        return [Ellipse([x,y],a*scaleup,b*scaleup,
+                        t*units.radian.in_units("degree"))
+                for x,y,a,b,t in zip(self.get("x",mask=mask),self.get("y",mask=mask),
+                                     self.get("a",mask=mask),self.get("b",mask=mask),
+                                     self.get("theta",mask=mask) )]
+
+    def get_ellipse_mask(self,width,height, r=3, apply_catmask=False):
+        """
+        This method returns a boolean mask of the detected ellipses
+        on the given width x height pixels image
+
+        (this method is based on the sep mask_ellipse function)
+        
+        Parameters:
+        -----------
+        r: [float]                 The scale of the ellipse (r=1 is a typical
+                                   contours included the object ; 2 enables to
+                                   get the tail of most of the bright sources
+
+        apply_catmask: [bool]      Only mask the detected object associated with
+                                   the current catalogue. If no catalogue loaded,
+                                   this will be set to False in any case.
+
+        Returns:
+        -------
+        2D-bool array (height x width)
+        """
+        from sep import mask_ellipse
+        ellipsemask = np.asarray(np.zeros((height,width)),dtype="bool")
+        mask = None if not apply_catmask else self.catmask
+        # -- Apply the mask to falsemask
+        mask_ellipse(ellipsemask,
+                     self.get('x',mask=mask),self.get('y',mask=mask),
+                     self.get('a',mask=mask),self.get('b',mask=mask),
+                     self.get('theta',mask=mask),
+                     r=r)
+        
+        return ellipsemask
+    

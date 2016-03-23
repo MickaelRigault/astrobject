@@ -5,8 +5,7 @@
 """This module contain the collection of astrobject"""
 import numpy as np
 import warnings
-from astropy import coordinates, units, table
-from astropy.io import fits as pf
+from astropy import coordinates, table
 
 from .photometry import photopoint
 from .baseobject import BaseObject
@@ -120,7 +119,7 @@ class Collection( BaseCollection ):
         """
         self._side_properties_keys.append("target")
         super(Collection,self).__build__(*args,**kwargs)
-        
+        self._build_properties = {}
     # ----------------- #
     # - Setter        - #
     # ----------------- #
@@ -816,7 +815,7 @@ class PhotoPointCollection( Collection ):
     # ------------------- #
     # - Getter          - #
     # ------------------- #
-    def get(self,param,safeexit=True):
+    def get(self,param, mask=None, safeexit=True):
         """Loop over the photopoints (following the list_id sorting) to get the parameters
         using the photopoint.get() method.
 
@@ -827,8 +826,9 @@ class PhotoPointCollection( Collection ):
         -------
         list
         """
-        return [self.photopoints[id_].get(param,safeexit=safeexit)
-                for id_ in self.list_id]
+        ids = self.list_id if mask is None else np.asarray(self.list_id)[mask]
+        return np.asarray([self.photopoints[id_].get(param,safeexit=safeexit)
+                            for id_ in ids])
 
     # ------------------- #
     # - Setter          - #
@@ -842,7 +842,7 @@ class PhotoPointCollection( Collection ):
         --------
         Void
         """
-        if "__iter__" not in values:
+        if "__iter__" not in dir(values):
             values = [values]*self.nsources
         elif len(values)==1:
             values = [values[0]]*self.nsources
@@ -994,339 +994,3 @@ class PhotoPointCollection( Collection ):
         return table.Table(data=[self.list_id]+metadata,
                             names=["id"]+metanames)
     
-        
-########################################
-#                                      #
-# Hi Level Classes:  PhotoMap          #
-#                                      #
-########################################
-class PhotoMap( PhotoPointCollection ):
-    """
-    """
-    #__nature__ = "PhotoMap"
-    
-    def __init__(self, photopoints=None,coords=None,
-                 filein=None,empty=False,wcs=None,catalogue=None,
-                 **kwargs):
-        """
-        """
-        self.__build__()
-        if empty:
-            return
-        if filein is not None:
-            self.load(filein,**kwargs)
-            
-        if photopoints is not None:
-            self.create(photopoints,coords,wcs=wcs,catalogue=catalogue,**kwargs)
-        
-            
-    def __build__(self):
-        """
-        """
-        self._properties_keys = self._properties_keys+["wcsid"]
-        self._side_properties_keys = self._side_properties_keys + \
-          ["refmap","wcs","catalogue","catmatch"]
-          
-        super(PhotoMap,self).__build__()
-
-    def _read_table_comment_(self, comments):
-        """
-        """
-        for c in comments:
-            key,value = c.split()
-            if key == "wcsid":
-                self._properties["wcsid"]=bool(value)
-            else:
-                print "comment not saved: ", c
-                
-    # =============================== #
-    # = Building Methods            = #
-    # =============================== #
-
-    # ---------------- #
-    # - SUPER THEM   - #
-    # ---------------- #
-    def create(self,photopoints,coords, wcs_coords=None,
-               wcs=None,refmaps=None,catalogue=None,**kwargs):
-        """
-        wcs_coords means that the coordinate are given in ra,dec.
-        
-        """
-        super(PhotoMap,self).create(photopoints,ids=coords,**kwargs)
-        if wcs is not None:
-            self.set_wcs(wcs)
-        if refmaps is not None:
-            self.set_refmaps(wcs)
-        if catalogue is not None:
-            self.set_catalogue(catalogue)
-        
-    def add_photopoint(self,photopoint,coords,refphotopoint=None):
-        """
-        Add a new photopoint to the photomap. If you have set a 
-        """
-        if coords is None:
-            raise ValueError("The coordinates of the photopoint are necessary")
-        
-        if type(coords) is str or type(coords) is np.string_:
-            # -- If this failse, the coordinate format is not correct
-            coords = self.id_to_coords(coords)
-        elif np.shape(coords) != (2,):
-            raise TypeError("the given coordinate must be a 2d array (x,y)/(ra,dec)")
-        
-        super(PhotoMap,self).add_photopoint(photopoint,self.coords_to_id(*coords))
-        # -----------------------
-        # - Complet the refmap
-        if self.has_refmap():
-            if refphotopoint is None:
-                refphotopoint = photopoint(empty=True)
-            self.remap.add_photopoint(refphotopoint,coords)
-            
-    def writeto(self,filename,format="ascii.commented_header",**kwargs):
-        comments = "".join(["# %s %s \n "%(key, value) for key,value in [["wcsid",self._wcsid]]])
-        super(PhotoMap,self).writeto(filename,format,comment=comments,**kwargs)
-        
-    # =============================== #
-    # = Main Methods                = #
-    # =============================== #
-    def coords_to_id(self,x,y):
-        """ this enables to have consistent coordinate/id mapping """
-        return "%.8f,%.8f"%(x,y)
-    
-    def id_to_coords(self,id):
-        return np.asarray(id.split(","),dtype="float")
-
-    def match_catalogue(self,catalogue=None,
-                        force_it=False, arcsec_size=2):
-        """
-        This methods enable to attached a given sexobject entry
-        to a catalog value.
-        You can set a catalogue.
-        """
-        # --------------
-        # - input 
-        if catalogue is not None:
-            self.set_catalogue(catalogue, force_it=force_it)
-
-        if not self.has_catalogue():
-            raise AttributeError("No 'catalogue' defined or given.")
-        
-        if self.has_wcs():
-            # -- matching are made in degree space
-            ra,dec = self.radec.T
-            skyradec = coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
-            idxcatalogue, idxsexobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, arcsec_size*units.arcsec)
-        else:
-            raise NotImplementedError("You currently need a wcs solution in the SexObjects to match a catalogue")
-        # --------------------
-        # - Save the results
-        self._derived_properties["catmatch"] = {
-            "idx_catalogue":idxcatalogue,
-            "idx":idxsexobjects,
-            "angsep":d2d
-            }
-        
-        self.catalogue.set_matchedmask(idxcatalogue)
-        
-    # ------------- #
-    # - SETTER    - #
-    # ------------- #
-    def set_wcs(self,wcs,force_it=False):
-        """
-        """
-        if self.has_wcs() and force_it is False:
-            raise AttributeError("'wcs' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-                    
-        from .astrometry import get_wcs
-        self._side_properties["wcs"] = get_wcs(wcs,verbose=True)
-
-    def set_refmap(self, photomap,force_it=False):
-        """
-        Set here the reference map associated to the current one.
-        The ordering of the point must be consistant with that of the current
-        photomap. 
-        """
-        if self.has_refmap() and force_it is False:
-            raise AttributeError("'refmap' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        self._side_properties["refmap"] = photomap
-
-    def set_catalogue(self,catalogue,force_it=True):
-        """
-        Attach to this instance a catalogue.
-        
-        Parameters
-        ---------
-        Return
-        ------
-        Voids
-        """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-
-        # ----------------------
-        # - Clean the catalogue 
-        catalogue.reset()
-        
-        # -------------------------
-        # - Add the world_2_pixel            
-        if self.has_wcs():
-            if catalogue.has_wcs():
-                warnings.warn("WARNING the given 'catalogue' already has a wcs solution. This did not overwrite it.")
-            else:
-                catalogue.set_wcs(self.wcs)
-                
-        # ---------------------
-        # - Test consistancy
-        if catalogue.nobjects_in_fov < 1:
-            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
-            return
-        
-        # ---------------------
-        # - Good To Go
-        self._side_properties["catalogue"] = catalogue
-        
-    # ------------- #
-    # - GETTER    - #
-    # ------------- #
-    def get_ids_around(self, ra, dec, radius):
-        """
-        Parameters:
-        ----------
-        ra, dec : [float]          Position in the sky *in degree*
-
-        radius: [astropy.Quantity] distance of search, using astropy.units
-
-        Return
-        ------
-        (SkyCoords.search_around_sky output)
-        """
-        from astropy import coordinates
-        sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
-        ra_,dec_ = self.coords.T
-        return coordinates.SkyCoord(ra=ra_*units.degree,dec=dec_*units.degree).search_around_sky(sky, radius)
-
-    # ------------- #
-    # - PLOTTER   - #
-    # ------------- #
-    def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,
-                        show_nods=False,**kwargs):
-        """
-        Show a Voronoy cell map colored as a function of the given 'toshow'.
-        You can see the nods used to define the cells setting show_nods to True.    
-        """
-        if ax is None:
-            fig = mpl.figure(figsize=[8,8])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-            ax.set_xlabel("x" if not wcs_coords else "Ra",fontsize = "x-large")
-            ax.set_ylabel("y" if not wcs_coords else "Dec",fontsize = "x-large")
-        elif "imshow" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-
-        from ..utils.mpladdon import voronoi_patchs
-        # -----------------
-        # - The plot itself
-        out = ax.voronoi_patchs(self.radec if wcs_coords else self.xy,
-                                self.get(toshow),**kwargs)
-        if show_nods:
-            x,y = self.radec.T if wcs_coords else self.xy.T
-            ax.plot(x,y,marker=".",ls="None",color="k",
-                    scalex=False,scaley=False,
-                    alpha=kwargs.pop("alpha",0.8),zorder=kwargs.pop("zorder",3)+1)
-        ax.figure.canvas.draw()
-        return out
-        
-    # =============================== #
-    # = properties                  = #
-    # =============================== #
-    @property
-    def radec(self):
-        """ """
-        if self._wcsid:
-            return self._coords
-        if not self.has_wcs():
-            raise AttributeError("You need a wcs solution to convert radec to pixels. None set.")
-        return self.wcs.pix2world(*self._coords.T)
-    
-    @property
-    def xy(self):
-        """ """
-        if not self._wcsid:
-            return self._coords
-        if not self.has_wcs():
-            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
-        return self.wcs.world2pix(*self._coords.T)
-    
-    @property
-    def _coords(self):
-        """ """
-        return np.asarray([self.id_to_coords(id_) for id_ in self.list_id])
-    @property
-    def _wcsid(self):
-        if self._properties["wcsid"] is None:
-            warnings.warn("No information about the nature of the coordinate ids (wcs/pixel?). **WCS system assumed**")
-            self._properties["wcsid"] = True
-        return self._properties["wcsid"]
-    
-    # -------------
-    # - WCS
-    @property
-    def wcs(self):
-        return self._side_properties['wcs']
-    
-    def has_wcs(self):
-        return self.wcs is not None
-    
-    # -------------
-    # - RefMap
-    @property
-    def refmap(self):
-        return self._side_properties['refmap']
-    
-    def has_refmap(self):
-        return self.refmap is not None
-    
-    # ------------- #
-    # - Derived   - #
-    # ------------- #
-    @property
-    def contours(self):
-        from ..utils import shape
-        return shape.get_contour_polygon(*self.radec.T)
-    
-    @property
-    def contours_pxl(self):
-        """
-        """
-        from ..utils import shape
-        return shape.get_contour_polygon(*self.xy.T)
-    
-    # -------------
-    # - Catalogue
-    @property
-    def catalogue(self):
-        return self._side_properties["catalogue"]
-    
-    def has_catalogue(self):
-        return False if self.catalogue is None\
-          else True
-
-    @property
-    def catmatch(self):
-        """This is the match dictionnary"""
-        if self._derived_properties["catmatch"] is None:
-            self._derived_properties["catmatch"] = {}
-            
-        return self._derived_properties["catmatch"]
-
-    def has_catmatch(self):
-        return False if self.catmatch is None or len(self.catmatch.keys())==0 \
-          else True
