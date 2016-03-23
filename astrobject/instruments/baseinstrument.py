@@ -524,6 +524,11 @@ class Catalogue( BaseObject ):
     # --------------------- #
     # Convertors            #
     # --------------------- #
+
+    
+    # --------------------- #
+    # Convertors            #
+    # --------------------- #
     def idx_to_mask(self,idx, infov=False):
         mask = np.zeros(self.nobjects,dtype=bool) if not infov else np.zeros(self.nobjects_in_fov,dtype=bool)
         for i in idx:
@@ -533,9 +538,8 @@ class Catalogue( BaseObject ):
     # --------------------- #
     # Exclusion             #
     # --------------------- #
-    def exclude_from_fov(self,key,value):
-        """ Exclude from the fov (fovmask will be forced to false for this one) the cases where data[key] == value
-        """
+    def exclude_source(self,key,value):
+        """ Exclude the cases where data[key] == value. Then use the exclusionmask """
         if key not in self.data.keys():
             raise ValueError("the given key (%s) is not known by self.data"%key)
         ids_to_exclude = np.argwhere(self.data[key]==value)
@@ -744,8 +748,7 @@ class Catalogue( BaseObject ):
     def fovmask(self):
         if self._side_properties["fovmask"] is None:
             self._load_default_fovmask_()
-        return self._side_properties["fovmask"] if not self.has_excluded_cases() else\
-          self._side_properties["fovmask"]*~self.idx_to_mask(self.excluded_list,infov=False)
+        return self._side_properties["fovmask"]
     
     def _load_default_fovmask_(self):
         self._side_properties["fovmask"] = np.ones(self.nobjects,dtype=bool)
@@ -765,8 +768,16 @@ class Catalogue( BaseObject ):
     
     def has_excluded_cases(self):
         return len(self.excluded_list)>0
+
+    @property
+    def excludedmask(self):
+        return self._excludedmask[self.fovmask]
     
-    # -- Exclusion
+    @property
+    def _excludedmask(self):
+        return self.idx_to_mask(self.excluded_list,infov=False)
+        
+    # -- Matching
     @property
     def matchedmask(self):
         return self._side_properties["matchedmask"]
