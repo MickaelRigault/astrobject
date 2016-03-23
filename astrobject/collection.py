@@ -994,7 +994,8 @@ class PhotoMap( PhotoPointCollection ):
     #__nature__ = "PhotoMap"
     
     def __init__(self, photopoints=None,coords=None,
-                 filein=None,empty=False,wcs=None,**kwargs):
+                 filein=None,empty=False,wcs=None,catalogue=None,
+                 **kwargs):
         """
         """
         self.__build__()
@@ -1004,7 +1005,7 @@ class PhotoMap( PhotoPointCollection ):
             self.load(filein,**kwargs)
             
         if photopoints is not None:
-            self.create(photopoints,coords,wcs=wcs,**kwargs)
+            self.create(photopoints,coords,wcs=wcs,catalogue=catalogue,**kwargs)
         
             
     def __build__(self):
@@ -1013,6 +1014,7 @@ class PhotoMap( PhotoPointCollection ):
         self._properties_keys = self._properties_keys+["wcsid"]
         self._side_properties_keys = self._side_properties_keys + \
           ["refmap","wcs","catalogue"]
+          
         super(PhotoMap,self).__build__()
 
     def _read_table_comment_(self, comments):
@@ -1033,7 +1035,7 @@ class PhotoMap( PhotoPointCollection ):
     # - SUPER THEM   - #
     # ---------------- #
     def create(self,photopoints,coords, wcs_coords=None,
-               wcs=None,refmaps=None,**kwargs):
+               wcs=None,refmaps=None,catalogue=None,**kwargs):
         """
         wcs_coords means that the coordinate are given in ra,dec.
         
@@ -1043,6 +1045,8 @@ class PhotoMap( PhotoPointCollection ):
             self.set_wcs(wcs)
         if refmaps is not None:
             self.set_refmaps(wcs)
+        if catalogue is not None:
+            self.set_catalogue(catalogue)
         
     def add_photopoint(self,photopoint,coords,refphotopoint=None):
         """
@@ -1101,9 +1105,6 @@ class PhotoMap( PhotoPointCollection ):
         if self.has_refmap() and force_it is False:
             raise AttributeError("'refmap' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
-
-        #if "__nature__" not in dir(photomap) or photomap.__nature__ != "PhotoMap":
-        #    raise TypeError("The given reference map must be a astrobject PhotoMap")
 
         self._side_properties["refmap"] = photomap
 

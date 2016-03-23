@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import warnings 
 from sncosmo import get_bandpass
 from astropy import coordinates,units
 from astropy.table.table import Table,TableColumns
@@ -38,6 +39,7 @@ class Instrument( Image ):
                                            **kwargs)
         flux = self.count_to_flux(count)
         var  = self.count_to_flux(err)**2
+        
         # ------------------
         # - One Photopoint
         if "__iter__" not in dir(flux):
@@ -46,14 +48,18 @@ class Instrument( Image ):
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
         # -----------------------
-        # - Several Photopoints
+        # - Several Photopoints\
         pps = [photopoint(self.lbda,flux_,var_,
                             source="image",mjd=self.mjd_obstime,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
                             for flux_,var_ in zip(flux,var)]
         from ..collection import PhotoMap
-        return PhotoMap(pps,np.asarray([x,y]).T,wcs=self.wcs,wcs_coords=wcs_coords)
+        return PhotoMap(pps,np.asarray([x,y]).T,
+                        wcs=self.wcs,
+                        catalogue=self.catalogue.get_subcatalogue(fovmask=True, catmag_range=[1,30]) \
+                          if self.has_catalogue() else None,
+                        wcs_coords=wcs_coords)
     
     @_autogen_docstring_inheritance(Image.get_target_aperture,
                                     "Image.get_target_aperture")
@@ -129,7 +135,8 @@ class Catalogue( BaseObject ):
     source_name = "_not_defined_"
     
     _properties_keys = ["filename","data","header"]
-    _side_properties_keys = ["wcs","fovcontours","fovmask","matchedmask","lbda"]
+    _side_properties_keys = ["wcs","fovcontours","fovmask","matchedmask","lbda",
+                             "excluded_list"]
     _derived_properties_keys = ["fits","naround","naround_nofovcut","contours"]
 
     
@@ -422,13 +429,18 @@ class Catalogue( BaseObject ):
         return val_ if mask is None else val_[mask]
     
     def get_subcatalogue(self, contours=None, catmag_range=[None,None],
-                         stars_only=False, isolated_only=False,**kwargs):
+                         stars_only=False, isolated_only=False,
+                         fovmask=False,
+                         **kwargs):
         """ Returns a value of a sub fov of the catalogue. Only objects within the contours' fov
         will be contained in the returned catalogue """
 
         mask = self.get_mask(contours=contours, catmag_range=catmag_range,
                             stars_only=stars_only, isolated_only=isolated_only,
                             fovmask=False)
+        if fovmask:
+            mask = mask * self.fovmask
+        
         subcat = self.__class__(empty=True)
         subcat.create(self.data[mask], None, force_it=True,**self._build_properties)
         return subcat
@@ -508,37 +520,36 @@ class Catalogue( BaseObject ):
         _dec = self.dec if infov else self._dec
         return np.asarray([shape.point_in_contours(ra,dec, contours)
                            for ra,dec in zip(_ra,_dec)])
-    
-    def get_photomap(self,idx_only=None,lbda=None):
-        """
-        """
-        from ..collection import PhotoMap
-        # --------------
-        # - Masking
-        
-        mask = self.idx_to_mask(idx_only) if idx_only is not None \
-          else np.ones(self.nobjects,dtype=bool)
-        self.lbda = lbda if lbda is not None else self.lbda
-        if self.lbda is None:
-            raise ValueError("No known 'lbda' and no 'lbda' given")
 
-        flux_fluxerr = self._flux_fluxerr
-        fluxes = flux_fluxerr[0][mask]
-        variances = flux_fluxerr[1][mask]**2
-        ra = self.ra[mask]
-        dec = self.dec[mask]
-        #ppoints = 
-        pmap = PhotoMap(fluxes=fluxes,variances=variances,
-                        coords=zip(ra,dec),lbda=self.lbda,
-                        wcs =self.wcs)
-        return pmap
-    
+    # --------------------- #
+    # Convertors            #
+    # --------------------- #
     def idx_to_mask(self,idx, infov=False):
         mask = np.zeros(self.nobjects,dtype=bool) if not infov else np.zeros(self.nobjects_in_fov,dtype=bool)
         for i in idx:
             mask[i] = True
         return mask
 
+    # --------------------- #
+    # Exclusion             #
+    # --------------------- #
+    def exclude_from_fov(self,key,value):
+        """ Exclude from the fov (fovmask will be forced to false for this one) the cases where data[key] == value
+        """
+        if key not in self.data.keys():
+            raise ValueError("the given key (%s) is not known by self.data"%key)
+        ids_to_exclude = np.argwhere(self.data[key]==value)
+        if len(ids_to_exclude)==0:
+            warnings.warn("WARNING: No value excluded. not match")
+            print "WARNING: No value excluded. not match"
+            return
+        self._side_properties["excluded_list"] = self.excluded_list.tolist()+ids_to_exclude.tolist()
+        
+    def clear_excluded_list(self):
+        """ empty the exclusion list """
+        self._side_properties["excluded_list"] = None
+            
+        
     # --------------------- #
     # PLOT METHODS          #
     # --------------------- #
@@ -733,8 +744,8 @@ class Catalogue( BaseObject ):
     def fovmask(self):
         if self._side_properties["fovmask"] is None:
             self._load_default_fovmask_()
-            
-        return self._side_properties["fovmask"]
+        return self._side_properties["fovmask"] if not self.has_excluded_cases() else\
+          self._side_properties["fovmask"]*~self.idx_to_mask(self.excluded_list,infov=False)
     
     def _load_default_fovmask_(self):
         self._side_properties["fovmask"] = np.ones(self.nobjects,dtype=bool)
@@ -745,7 +756,17 @@ class Catalogue( BaseObject ):
             raise ValueError("the given 'mask' must have the size of 'ra'")
         self._side_properties["fovmask"] = newmask
 
-
+    # -- Exclusion
+    @property
+    def excluded_list(self):
+        if self._side_properties["excluded_list"] is None:
+            self._side_properties["excluded_list"] = []
+        return np.asarray(self._side_properties["excluded_list"])
+    
+    def has_excluded_cases(self):
+        return len(self.excluded_list)>0
+    
+    # -- Exclusion
     @property
     def matchedmask(self):
         return self._side_properties["matchedmask"]
@@ -891,7 +912,9 @@ class Catalogue( BaseObject ):
     def has_starmask(self):
         return False if self.starmask is None \
           else True
-          
+
+
+
     # ------------
     # - Derived
     @property

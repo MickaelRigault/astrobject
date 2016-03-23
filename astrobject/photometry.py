@@ -758,7 +758,6 @@ class Image( BaseObject ):
         if wcs_coords:
             x,y = self.coords_to_pixel(x,y).T 
             
-            
         # -------------
         # - SEP Input 
         gain = None if "_dataunits_to_electron" not in dir(self) else \
@@ -767,7 +766,6 @@ class Image( BaseObject ):
         # -----------------
         # - Variance Trick
         var = kwargs.pop("var",self.var)
-
         # ------------------------
         # - Do the Aperture Photo
         # ----------------------
@@ -2130,8 +2128,7 @@ class SexObjects( BaseObject ):
 
     _properties_keys = ["data"]
     _side_properties_keys = ["catalogue","wcs"]
-    _derived_properties_keys = ["catmatch","starmask","pairdict"]
-    
+    _derived_properties_keys = ["catmatch","starmask"]
     
     def __init__(self,sexoutput=None,wcs=None,empty=False):
         """
@@ -2327,10 +2324,18 @@ class SexObjects( BaseObject ):
         """
         This is defined as 2 * sqrt(ln(2) * (a^2 + b^2))
         """
-        mask = self.get_indexes(isolated_only=isolated_only,
-                                stars_only=stars_only,
-                                catmag_range=catmag_range)
-        return np.median(2 * np.sqrt( np.log(2) * (self.get('a',mask)**2 + self.get('b',mask)**2)))
+        if not self.has_catmatch():
+            warnings.warn("No Catalogue matching loaded. No masking available")
+            warnings.warn("With no catalogue masking, the derived fwhm might not be accurate")
+            print "WARNING - With no cataloguemasking, the derived fwhm might not be accurate"
+            mask = None
+        else:
+            mask = self.get_indexes(isolated_only=isolated_only,
+                                    stars_only=stars_only,
+                                    catmag_range=catmag_range)
+            
+        return np.median(2 * np.sqrt( np.log(2) * (self.get('a',mask)**2 + \
+                                                   self.get('b',mask)**2)))
     
     # -----------------
     # - get ellipse    
@@ -2343,11 +2348,13 @@ class SexObjects( BaseObject ):
         
         Parameters:
         -----------
-        r: [float]                 The scale of the ellipse (r=1 is a typical contours included the
-                                   object ; 2 enables to get the tail of most of the bright sources
+        r: [float]                 The scale of the ellipse (r=1 is a typical
+                                   contours included the object ; 2 enables to
+                                   get the tail of most of the bright sources
 
-        apply_catmask: [bool]      Only mask the detected object associated with the current catalogue.
-                                   If no catalogue loaded, this will be set to False in any case.
+        apply_catmask: [bool]      Only mask the detected object associated with
+                                   the current catalogue. If no catalogue loaded,
+                                   this will be set to False in any case.
 
         Returns:
         -------
@@ -2369,6 +2376,16 @@ class SexObjects( BaseObject ):
                 stars_only=False, isolated_only=False,
                 catmag_range=[None,None]):
         """
+        Get the matplotlib Patches (Ellipse) defining the detected object. You can
+        select the returned ellipses using the apply_catmask, stars_only,
+        isolated_only and catmag_range cuts.
+
+        'scaleup' scale the radius used of the ellipses. 5 means that most of the
+        visible light will be within the inside the returned ellipses.
+
+        Return
+        ------
+        list of patches
         """
         if not self.has_data():
             print "WARNING [Sexobjects] No data to display"
@@ -2494,8 +2511,7 @@ class SexObjects( BaseObject ):
                                           stars_only=stars_only,
                                           isolated_only=isolated_only,
                                           catmag_range=catmag_range)
-        
-        #pl = ax.plot(x,y,**prop)
+
         for ell in ells:
             ell.set_clip_box(ax.bbox)
             ell.set_facecolor("None")
@@ -2503,7 +2519,7 @@ class SexObjects( BaseObject ):
             ax.add_patch(ell)
         if draw:
             ax.figure.canvas.draw()
-        #return pl
+
 
     # - Histograms
     def show_hist(self,toshow="a",ax=None,
@@ -2512,8 +2528,7 @@ class SexObjects( BaseObject ):
                   stars_only=False, isolated_only=False,
                   catmag_range=[None,None],
                   **kwargs):
-        """This methods enable to show the histogram of any given
-        key."""
+        """ Show the histogram of any given key """
         # -- Properties -- #
         if not self.has_catalogue():
             apply_catmask = False
@@ -2636,8 +2651,7 @@ class SexObjects( BaseObject ):
     # Internal Methods            #
     # =========================== #
     def _read_sexoutput_input_(self,sexoutput):
-        """This method enable to parse the input and therefore
-        allow flexible inputs"""
+        """ Parse the input - for flexible inputs"""
 
         # ---------------
         # -- no input
@@ -2651,8 +2665,8 @@ class SexObjects( BaseObject ):
             try:
                 _ = sexoutput["cxx"]
             except :
-                raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+"\n"+\
-                                " It most likely is not a sextrator/sep output ")
+                raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+\
+                                "\n"+" It most likely is not a sextrator/sep output ")
             return Table(sexoutput)
         
         # ---------------
@@ -2665,38 +2679,6 @@ class SexObjects( BaseObject ):
             # -- So this is a sextrator output ?
             return
 
-    def _get_pairing_(self):
-        """
-        This is slow, should be optimized
-        """
-        if not self.has_catmatch():
-            raise AttributeError("no matching performed")
-        
-        idxself,idxcat = self.catmatch["idx"],self.catmatch["idx_catalogue"]
-        pair = {}
-        for i,icat in zip(idxself,idxcat):
-            if i in pair.keys():
-                pair[i]["other_cat_match"].append(icat)
-                continue
-            
-            pair[i] = {"cat_idx":icat,
-                       "cat_mag":self.catalogue.mag[icat],
-                       "cat_magerr":self.catalogue.mag_err[icat],
-                       #"cat_ra":self.catalogue.ra[icat],
-                       #"cat_dec":self.catalogue.dec[icat],
-                       "is_isolated":self.catalogue.isolatedmask[icat] \
-                       if self.catalogue._is_around_defined() else None,
-                       "is_star":self.catalogue.starmask[icat],
-                       #"sep_a":self.get("a")[i],
-                       #"sep_b":self.get("b")[i],
-                       "sep_x":self.get("x")[i],
-                       "sep_y":self.get("y")[i],
-                       #"sep_theta":self.get("theta")[i],
-                       #"sep_flux":self.get("flux")[i],
-                       "other_cat_match":[]
-                       }
-            
-        return pair
     # =========================== #
     # Properties and Settings     #
     # =========================== #
@@ -2751,13 +2733,6 @@ class SexObjects( BaseObject ):
     def has_catalogue(self):
         return False if self.catalogue is None\
           else True
-
-    @property
-    def pairdict(self):
-        if self._derived_properties["pairdict"] is None:
-            self._derived_properties["pairdict"] = self._get_pairing_()
-            
-        return self._derived_properties["pairdict"]
         
     @property
     def catmask(self):

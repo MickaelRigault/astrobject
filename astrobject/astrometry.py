@@ -109,13 +109,13 @@ class _MotherWCS_( object ):
 
     @property
     def image_width(self):
-        return self._image_width if "_image_width" in dir(self) and self._image_width is not None\
-          else self._naxis2
+        return self._image_width if "_image_width" in dir(self) and \
+          self._image_width is not None else self._naxis2
           
     @property
     def image_height(self):
-        return self._image_height if "_image_height" in dir(self) and self._image_height is not None\
-          else self._naxis1
+        return self._image_height if "_image_height" in dir(self) and \
+          self._image_height is not None else self._naxis1
                     
     @property
     def image_offset(self):
