@@ -552,7 +552,6 @@ class Catalogue( BaseObject ):
     def clear_excluded_list(self):
         """ empty the exclusion list """
         self._side_properties["excluded_list"] = None
-            
         
     # --------------------- #
     # PLOT METHODS          #

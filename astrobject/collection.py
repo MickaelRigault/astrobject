@@ -5,7 +5,7 @@
 """This module contain the collection of astrobject"""
 import numpy as np
 import warnings
-from astropy.table import Table
+from astropy import coordinates, units, table
 from astropy.io import fits as pf
 
 from .photometry import photopoint
@@ -786,12 +786,14 @@ class PhotoPointCollection( Collection ):
         Save the PhotoPointCollection following the astropy's Table 'write()' method.
         Such data will be accessible using the 'load()' method of the class.
         """
-        self.data.write(filename,format=format,**kwargs)
+        complet = table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
+          else self.data
+        complet.write(filename,format=format,**kwargs)
         
     def load(self,filename,format="ascii",**kwargs):
         """
         """
-        data = Table.read(filename,format=format)
+        data = table.Table.read(filename,format=format)
         ids,pps = [],[]
         # - This way to be able to call create that might be more
         # generic than add_photopoints
@@ -913,7 +915,7 @@ class PhotoPointCollection( Collection ):
         """
         """
         return self._handler
-    
+        
     # ------------------ #
     # - On flight prop - #
     # ------------------ #
@@ -972,17 +974,27 @@ class PhotoPointCollection( Collection ):
     # - Derived
     @property
     def data(self):
-        """ The builds an astropy table containing the fundatemental parameters of the collection """
+        """ builds an astropy table containing the fundatemental parameters of the collection """
         # - Main
         maindata = [self.list_id,self.fluxes,self.fluxvars,self.lbdas,self.mjds,self.bandnames,
                     self.get("zp"),self.get("zpsys")]
         mainnames= ["id","flux","var","wavelength","mjd","bandname","zp","zpsystem"]
         # - Meta
-        metaname = self.metakeys
-        metadata = [self.get(metak) for metak in metaname]
-        return Table(data=maindata+metadata,
-                     names=mainnames+metaname)
-
+        #metaname = self.metakeys
+        #metadata = [self.get(metak) for metak in metaname]
+        return table.Table(data=maindata,
+                     names=mainnames)
+    @property
+    def meta(self):
+        """  builds an astropy table containing the meta information about the sources of the collection """
+        if len(self.metakeys) == 0:
+            return None
+        metanames = self.metakeys
+        metadata = [self.get(metak) for metak in metanames]
+        return table.Table(data=[self.list_id]+metadata,
+                            names=["id"]+metanames)
+    
+        
 ########################################
 #                                      #
 # Hi Level Classes:  PhotoMap          #
@@ -1013,7 +1025,7 @@ class PhotoMap( PhotoPointCollection ):
         """
         self._properties_keys = self._properties_keys+["wcsid"]
         self._side_properties_keys = self._side_properties_keys + \
-          ["refmap","wcs","catalogue"]
+          ["refmap","wcs","catalogue","catmatch"]
           
         super(PhotoMap,self).__build__()
 
@@ -1083,6 +1095,38 @@ class PhotoMap( PhotoPointCollection ):
     def id_to_coords(self,id):
         return np.asarray(id.split(","),dtype="float")
 
+    def match_catalogue(self,catalogue=None,
+                        force_it=False, arcsec_size=2):
+        """
+        This methods enable to attached a given sexobject entry
+        to a catalog value.
+        You can set a catalogue.
+        """
+        # --------------
+        # - input 
+        if catalogue is not None:
+            self.set_catalogue(catalogue, force_it=force_it)
+
+        if not self.has_catalogue():
+            raise AttributeError("No 'catalogue' defined or given.")
+        
+        if self.has_wcs():
+            # -- matching are made in degree space
+            ra,dec = self.radec.T
+            skyradec = coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
+            idxcatalogue, idxsexobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, arcsec_size*units.arcsec)
+        else:
+            raise NotImplementedError("You currently need a wcs solution in the SexObjects to match a catalogue")
+        # --------------------
+        # - Save the results
+        self._derived_properties["catmatch"] = {
+            "idx_catalogue":idxcatalogue,
+            "idx":idxsexobjects,
+            "angsep":d2d
+            }
+        
+        self.catalogue.set_matchedmask(idxcatalogue)
+        
     # ------------- #
     # - SETTER    - #
     # ------------- #
@@ -1249,16 +1293,6 @@ class PhotoMap( PhotoPointCollection ):
     
     def has_refmap(self):
         return self.refmap is not None
-
-    # -------------
-    # - RefMap
-    @property
-    def catalogue(self):
-        return self._side_properties["catalogue"]
-    
-    def has_catalogue(self):
-        return False if self.catalogue is None\
-          else True
     
     # ------------- #
     # - Derived   - #
@@ -1275,4 +1309,24 @@ class PhotoMap( PhotoPointCollection ):
         from ..utils import shape
         return shape.get_contour_polygon(*self.xy.T)
     
+    # -------------
+    # - Catalogue
+    @property
+    def catalogue(self):
+        return self._side_properties["catalogue"]
+    
+    def has_catalogue(self):
+        return False if self.catalogue is None\
+          else True
 
+    @property
+    def catmatch(self):
+        """This is the match dictionnary"""
+        if self._derived_properties["catmatch"] is None:
+            self._derived_properties["catmatch"] = {}
+            
+        return self._derived_properties["catmatch"]
+
+    def has_catmatch(self):
+        return False if self.catmatch is None or len(self.catmatch.keys())==0 \
+          else True
