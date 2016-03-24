@@ -6,7 +6,7 @@ import numpy as np
 
 from astropy import table, coordinates, units
 from ..collection import PhotoPointCollection
-from ..photometry import photopoint
+from ..photometry import get_photopoint
 from ...utils.tools import kwargs_update
 
 __all__ = ["get_photomap","get_sepobject"]
@@ -59,7 +59,7 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
     if "cxx" not in tsep.keys():
         raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+\
                             "\n"+" It most likely is not a sextrator/sep output ")
-    ppoints = [photopoint(lbda,t_["flux"],None,
+    ppoints = [get_photopoint(lbda,t_["flux"],None,
                           source="sepextract",**kwargs)
                           for t_ in tsep]
     coords = np.asarray([tsep["x"],tsep["y"]]).T
@@ -98,7 +98,6 @@ class PhotoMap( PhotoPointCollection ):
     def __build__(self):
         """
         """
-        self._properties_keys = self._properties_keys+["wcsid"]
         self._side_properties_keys = self._side_properties_keys + \
           ["refmap","wcs","catalogue","catmatch"]
           
@@ -118,16 +117,13 @@ class PhotoMap( PhotoPointCollection ):
     # =============================== #
     # = Building Methods            = #
     # =============================== #
-
     # ---------------- #
     # - SUPER THEM   - #
     # ---------------- #
     def create(self,photopoints,coords, wcs_coords=True,
                wcs=None,refmaps=None,catalogue=None,**kwargs):
-        """
-        wcs_coords means that the coordinate are given in ra,dec.
+        """ wcs_coords means that the coordinate are given in ra,dec """
         
-        """
         super(PhotoMap,self).create(photopoints,ids=coords,**kwargs)
         self._build_properties["wcsid"] = wcs_coords
         
@@ -140,7 +136,7 @@ class PhotoMap( PhotoPointCollection ):
         
     def add_photopoint(self,photopoint,coords,refphotopoint=None):
         """
-        Add a new photopoint to the photomap. If you have set a 
+        Add a new photopoint to the photomap.
         """
         if coords is None:
             raise ValueError("The coordinates of the photopoint are necessary")
@@ -156,7 +152,7 @@ class PhotoMap( PhotoPointCollection ):
         # - Complet the refmap
         if self.has_refmap():
             if refphotopoint is None:
-                refphotopoint = photopoint(empty=True)
+                refphotopoint = get_photopoint(empty=True)
             self.remap.add_photopoint(refphotopoint,coords)
             
     def writeto(self,filename,format="ascii.commented_header",**kwargs):
@@ -352,8 +348,7 @@ class PhotoMap( PhotoPointCollection ):
                                                   stars_only=stars_only,
                                                   catmag_range=catmag_range
                                                   )])
-
-
+    
     # ------------- #
     # - PLOTTER   - #
     # ------------- #
@@ -410,8 +405,9 @@ class PhotoMap( PhotoPointCollection ):
     
     @property
     def _coords(self):
-        """ """
+        """ given id that are coordinates for PhotoMaps. see self.radec and self.xy """
         return np.asarray([self.id_to_coords(id_) for id_ in self.list_id])
+    
     @property
     def _wcsid(self):
         if self._build_properties["wcsid"] is None:
@@ -447,8 +443,6 @@ class PhotoMap( PhotoPointCollection ):
     
     @property
     def contours_pxl(self):
-        """
-        """
         from ...utils import shape
         return shape.get_contour_polygon(*self.xy.T)
     
@@ -474,18 +468,14 @@ class PhotoMap( PhotoPointCollection ):
         return False if self.catmatch is None or len(self.catmatch.keys())==0 \
           else True
 
-
-
+          
 ######################################
 #                                    #
 # Sextractor Output                  #
 #                                    #
 ######################################
-
 class SexObject( PhotoMap ):
-    """
-    """
-
+    """ Child of PhotoMap that make uses of all the meta keys that are sextractor output """
     # -------------------------- #
     # -  Plotting tools        - #
     # -------------------------- #
@@ -506,50 +496,6 @@ class SexObject( PhotoMap ):
         if draw:
             ax.figure.canvas.draw()
 
-    def show_hist(self,toshow="a",ax=None,
-                  savefile=None,show=True,
-                  apply_catmask=True,
-                  stars_only=False, isolated_only=False,
-                  catmag_range=[None,None],
-                  **kwargs):
-        """This methods enable to show the histogram of any given
-        key."""
-        # -- Properties -- #
-        if not self.has_catalogue():
-            apply_catmask = False
-            
-        mask = None if not apply_catmask else\
-          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                        catmag_range=catmag_range)
-        
-        v = self.get(toshow,mask=mask)
-
-        # -- Setting -- #
-        from ...utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        
-        if ax is None:
-            fig = mpl.figure(figsize=[8,6])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "hist" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-
-        # -- Properties -- #
-        default_prop = dict(histtype="step",fill=True,
-                            fc=mpl.cm.Blues(0.7,0.5),ec="k",lw=2)
-        prop = kwargs_update(default_prop,**kwargs)
-
-        out = ax.hist(v,**prop)
-
-        self._plot['ax'] = ax
-        self._plot['fig'] = fig
-        self._plot['hist'] = out
-        self._plot['prop'] = kwargs
-        fig.figout(savefile=savefile,show=show)
 
     # - Ellipse
     def show_ellipses(self,ax=None,
@@ -557,8 +503,7 @@ class SexObject( PhotoMap ):
                       apply_catmask=True,stars_only=False,
                       isolated_only=False,catmag_range=[None,None],
                       **kwargs):
-        """
-        """
+        """ Display ellipses of the extracted sources (see masking options) """
         if not self.has_data():
             print "WARNING [Sexobjects] No data to display"
             return
@@ -638,7 +583,8 @@ class SexObject( PhotoMap ):
     def get_fwhm_pxl(self,stars_only=True,isolated_only=True,
                     catmag_range=[None,None], default_around=10*units.arcsec):
         """
-        This is defined as 2 * sqrt(ln(2) * (a^2 + b^2))
+        FWHM estimated defined as the median of 2 * sqrt(ln(2) * (a^2 + b^2))
+        in units of a/b ; must be pixels
         """
         if isolated_only and self.has_catalogue() and not self.catalogue._is_around_defined():
             warnings.warn("No isolation defined. default value set: %s"%default_around)
@@ -651,7 +597,7 @@ class SexObject( PhotoMap ):
 
     def get_median_ellipse(self,mask=None,clipping=[3,3]):
         
-        """This methods look for the stars and return the mean ellipse parameters"""
+        """ This methods look for the stars and return the mean ellipse parameters """
         from scipy.stats import sigmaclip
         if not self.has_catalogue():
             warnings.warn("No catalogue loaded, not catalogue masking avialable")
@@ -691,7 +637,7 @@ class SexObject( PhotoMap ):
             
         mask = None if not apply_catmask else\
           self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                        catmag_range=catmag_range)
+                            catmag_range=catmag_range)
             
         # -------------
         # - Properties

@@ -17,9 +17,14 @@ from . import astrometry
 from .baseobject   import BaseObject 
 from ..utils.tools import kwargs_update,flux_to_mag
 
-__all__ = ["image","photopoint"]
+__all__ = ["get_image","get_photopoint"]+ ["image","photopoint"] # should be removed
 
 def image(filename=None,astrotarget=None,**kwargs):
+    print "DECREPATED: image->get_image"
+    return get_image(filename=filename,astrotarget=astrotarget,**kwargs)
+
+
+def get_image(filename=None,astrotarget=None,**kwargs):
     """
     Initalize the image by giving its filelocation (*filename*). This
     will load it using the load() method.
@@ -43,12 +48,23 @@ def image(filename=None,astrotarget=None,**kwargs):
     Image
     """
     return Image(filename,astrotarget=astrotarget,
-                 **kwargs)#.copy()
-
+                 **kwargs)
+                 
 def photopoint(lbda=None,flux=None,var=None,
                zp=None,bandname=None,
                mjd=None,source=None,
                instrument_name=None,**kwargs):
+    
+    print "DECREPATED: photopoint->get_photopoint"
+    return get_photopoint(lbda=lbda,flux=flux,var=var,
+                          zp=zp,bandname=bandname,
+                          mjd=mjd,source=source,
+                          instrument_name=instrument_name,**kwargs)
+
+def get_photopoint(lbda=None,flux=None,var=None,
+                   zp=None,bandname=None,
+                   mjd=None,source=None,
+                   instrument_name=None,**kwargs):
     """
     Get the basic object containing  photometric point information
     
@@ -546,12 +562,12 @@ class Image( BaseObject ):
         ------
         Void (or the Catalogue if set_it is False)
         """
-        from .instruments import instrument
+        from .instruments.instrument import fetch_catalogue
         radec = "%s %s"%(self.wcs._central_coords_nooffset[0],
                          self.wcs._central_coords_nooffset[1])
         radius = self.wcs.diag_size/1.8 # not 2 to have some room around
-        cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
-                                    **kwargs)
+        cat = fetch_catalogue(source=source,radec=radec,radius="%sd"%radius,
+                              **kwargs)
         if not set_it:
             return cat
         self.set_catalogue(cat,force_it=force_it)

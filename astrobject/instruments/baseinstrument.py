@@ -200,8 +200,11 @@ class Catalogue( BaseObject ):
                 except:
                     print "WARNING Convertion of 'data' into astropy TableColumns failed"
         else:
-            raise TypeError("the given catalogue_file must be a .fits or.pkl")
-
+            fits   = None
+            header = None
+            format_ = kwargs.pop("format","ascii")
+            data   = Table.read(catalogue_file,format=format_,**kwargs)
+            
         # ---------------------
         # - Calling Creates
         self.create(data,header,**kwargs)
@@ -231,6 +234,7 @@ class Catalogue( BaseObject ):
         self._properties["data"] = Table(data)
         self._properties["header"] = header if header is not None \
           else pf.Header()
+        self.set_starsid(build.pop("key_class",None),build.pop("value_star",None))
         self._build_properties = kwargs_update(self._build_properties,**build)
         # -------------------------------
         # - Try to get the fundamentals
@@ -242,7 +246,18 @@ class Catalogue( BaseObject ):
     
         self._update_contours_()
 
-
+    def set_starsid(self,key, value, testkey=True):
+        """
+        """
+        
+        if self.has_data() and key is not None and key not in self.data.keys() and testkey:
+            raise ValueError("%s is not a known data entry. Set testkey to avoid the test"%key)
+        if key is not None and value is None:
+            warnings.warn("No star value set (star_value = None)")
+            
+        self._build_properties['key_class'] = key
+        self._build_properties['value_star'] = value
+        
     def extract(self,contours):
         """
         This method enables to get a (potential) sub part of the existing catalogue
@@ -290,15 +305,19 @@ class Catalogue( BaseObject ):
         self._derived_properties["contours"] = self.contours.union(catalogue_.contours)
         
             
-    def writeto(self,savefile,force_it=True):
+    def writeto(self,savefile,format="ascii",force_it=True,**kwargs):
         """
         The catalogue will be saved as pkl or fits files. The fits wil be used if this
         has a header, the pkl otherwise
         """
-        if self.header is None or len(self.header.keys())==0:
-            self._writeto_pkl_(savefile)
+        # -- First file
+        if not self.header is None and len(self.header.keys())>0 and format=="fits":
+            self._writeto_fits_(savefile,force_it=force_it,**kwargs)
+        # -- pkl file
+        elif savefile.endswith(".pkl") and format=="pkl":
+            self._writeto_pkl_(savefile,force_it=force_it,**kwargs)
         else:
-            self._writeto_fits_(savefile,force_it=force_it)
+            self.data.write(savefile,format=format,**kwargs)
 
     # --------------------- #
     # Unset Methods         #
@@ -895,7 +914,7 @@ class Catalogue( BaseObject ):
         if "key_class" not in self._build_properties.keys():
             raise AttributeError("no 'key_class' provided in the _build_properties.")
         
-        return self.data[self._build_properties["key_class"]]
+        return np.asarray(self.data[self._build_properties["key_class"]])
     
     @property
     def starmask(self, infov=True):
@@ -905,8 +924,7 @@ class Catalogue( BaseObject ):
         """
         if "value_star" not in self._build_properties.keys():
             return None
-        flag = (self.objecttype == self._build_properties["value_star"])
-        return flag.data  #not self.fovmask already in objecttype
+        return (self.objecttype == self._build_properties["value_star"])
 
     @property
     def _starmask(self):
@@ -916,8 +934,7 @@ class Catalogue( BaseObject ):
         """
         if "value_star" not in self._build_properties.keys():
             return None
-        flag = (self._objecttype == self._build_properties["value_star"])
-        return flag.data  #not self.fovmask already in objecttype
+        return (self._objecttype == self._build_properties["value_star"])
         
     def has_starmask(self):
         return False if self.starmask is None \

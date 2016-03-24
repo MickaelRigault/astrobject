@@ -866,7 +866,41 @@ class PhotoPointCollection( Collection ):
             kwargs["function_of_time"] = True
             return self._show_(savefile=savefile,toshow=toshow,ax=ax,
                         cmap=cmap,show=show,**kwargs)
+
+    def show_hist(self,ax=None,toshow="a",mask=None,
+                  **kwargs):
+        """This methods enable to show the histogram of any given
+        key."""
+        # -- Properties -- #
         
+        v = self.get(toshow,mask=mask)
+
+        # -- Setting -- #
+        from ...utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if ax is None:
+            fig = mpl.figure(figsize=[8,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        # -- Properties -- #
+        default_prop = dict(histtype="step",fill=True,
+                            fc=mpl.cm.Blues(0.7,0.5),ec="k",lw=2)
+        prop = kwargs_update(default_prop,**kwargs)
+
+        out = ax.hist(v,**prop)
+
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['hist'] = out
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
     # ========================== #
     # = Internal Stufff        = #
     # ========================== #
