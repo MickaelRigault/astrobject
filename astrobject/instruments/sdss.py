@@ -125,8 +125,8 @@ class SDSS( Instrument ):
         self._derived_properties_keys.append("skyparam")
         super(SDSS,self).__build__(data_index=data_index)
 
-    @_autogen_docstring_inheritance(Instrument.set_catalogue,"Instrument.set_catalogue")
-    def set_catalogue(self,catalogue,force_it=True,**kwargs):
+    @_autogen_docstring_inheritance(Instrument.set_catalogue,"Image.set_catalogue")
+    def set_catalogue(self,catalogue,**kwargs):
         #
         # - Add the bandname key_mag setting
         #
@@ -137,7 +137,7 @@ class SDSS( Instrument ):
                 print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
             catalogue.set_mag_keys(key_mag,key_magerr)
             
-        super(SDSS,self).set_catalogue(catalogue,force_it=force_it,**kwargs)
+        super(SDSS,self).set_catalogue(catalogue,**kwargs)
         
     # =========================== #
     # = Properties and Settings = #
@@ -169,7 +169,7 @@ class SDSS( Instrument ):
         return "sdss"+self.header["FILTER"]
 
     @property
-    def mjd_obstime(self):
+    def mjd(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
         from astropy import time

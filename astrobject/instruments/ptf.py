@@ -130,7 +130,7 @@ class PTF( Instrument ):
     # --------------
     # - Times
     @property
-    def mjd_obstime(self):
+    def mjd(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
         return self.header["OBSMJD"]

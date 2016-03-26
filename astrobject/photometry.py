@@ -471,7 +471,7 @@ class Image( BaseObject ):
             
             # -- Lets save the pixel values
             if self.has_sepobjects():
-                self.sepobjects.set_catalogue(catalogue,force_it=True)
+                self.sepobjects.set_catalogue(catalogue,force_it=True,reset=False)
                 self.sepobjects.match_catalogue()
             
                 
@@ -881,7 +881,12 @@ class Image( BaseObject ):
             thresh = self._get_sep_extract_threshold_()
             
         o = extract(self.data,thresh,**kwargs)
-        self._derived_properties["sepobjects"] = get_sepobject(o) 
+        # -- If this is an instrument and not an image
+        instrument_prop = {'lbda':self.lbda,"mjd":self.mjd,
+                           "bandname":self.bandname} if "lbda" in dir(self) else\
+                           {}
+        self._derived_properties["sepobjects"] = \
+          get_sepobject(o,ppointkwargs=instrument_prop) 
 
         if self.has_wcs():
             self.sepobjects.set_wcs(self.wcs)
@@ -1768,7 +1773,15 @@ class PhotoPoint( BaseObject ):
     # =========================== #
     @property
     def lbda(self):
-        return self._properties["lbda"]
+        if self._properties['lbda'] is None and self.bandname is not None:
+            try:
+                lbda = self.bandpass.wave_eff
+                warnings.warn("No wavelength provided. Effective wavelength from bandpass used.")
+                self._properties['lbda'] = self.bandpass.wave_eff
+            except:
+                warnings.warn("No wavelength provided and unknown (by sncosmo) `bandname`")
+            
+        return self._properties['lbda']
 
     @property
     def flux(self):
@@ -1891,200 +1904,3 @@ class PhotoPoint( BaseObject ):
         return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
 
 
-
-#######################################
-#                                     #
-# Base Object Classes: LightCurve     #
-#                                     #
-#######################################
-class LightCurve( BaseObject ):
-    """This object gather several PhotoPoint and there corresponding time
-    to forme a lightcurve"""
-    
-    __nature__ = "LightCurve"
-
-    _properties_keys = ["photopoints","times"]
-    _side_properties_keys = []
-    _derived_properties_keys = ["lbda"]
-    
-    # =========================== #
-    # = Constructor             = #
-    # =========================== #
-    def __init__(self,photopoints=None,
-                 times=None,empty=False):
-        """
-        """
-        print "Decrepated... To be moved to PhotoPointCollection'"
-        self.__build__()
-        if empty:
-            return
-        
-        if photopoints is not None or times is not None:
-            self.create(photopoints, times)
-            
-    # =========================== #
-    # = Main Methods            = #
-    # =========================== #
-    def create(self, photopoints, times):
-        """
-        """
-        if len(photopoints) != len(times):
-            raise ValueError("photopoints and times must have the same length")
-        
-        # ********************* #
-        # * Create the Object * #
-        # ********************* #
-        for p,t in zip(photopoints,times):
-            self.add_photopoint(p,t)
-            
-
-    # ------------------ #
-    # - Get Method     - #
-    # ------------------ #
-    def get_data(self):
-        """
-        This will be an SN cosmo like data. This is based on astropy table
-        """
-        from astropy.table.table import Table
-        return Table(data=[self.times, self.bandnames,
-                           self.fluxes,np.sqrt(self.fluxesvar),
-                           self.zps,[p.zpsys for p in self.photopoints]
-                           ],
-                    names=["time","band","flux","fluxerr","zp","zpsys"])
-    
-    # ------------------ #
-    # - I/O Photopoint - #
-    # ------------------ #
-    def create_new_photopoint(self,flux,var,lbda,time,
-                              **kwargs):
-        """
-        """
-        new_photopoint = photopoint(lbda,flux,var,**kwargs)
-        self.add_photopoint(new_photopoint,time)
-        
-        
-    def add_photopoint(self,photopoint,time):
-        """
-        """
-        # ----------------------- #
-        # - Test the bands      - #
-        # ----------------------- #
-        if "__nature__" not in dir(photopoint) or \
-          photopoint.__nature__ != "PhotoPoint":
-            raise TypeError("'photopoint' must be a list of astrobject PhotoPoint")
-        
-        self._test_lbda_(photopoint)
-        
-        if self.lbda is None:
-            self._derived_properties['lbda'] = photopoint.lbda
-            
-        if self._properties['photopoints'] is None:
-            self._properties['photopoints'] = []
-            self._properties['times'] = []
-            
-            
-        self._properties['photopoints'].append(photopoint)
-        self._properties['times'].append(time)
-
-
-    # ------------------ #
-    # - Show           - #
-    # ------------------ #
-    def show(self,savefile=None,ax=None,
-             inmag=False,show=True,**kwargs):
-        """
-        """
-        # -- Setting -- #
-        from ..utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        
-        if ax is None:
-            fig = mpl.figure(figsize=[8,8])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "imshow" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-
-        pl = self.display(ax,inmag=inmag,**kwargs)
-        self._plot['ax'] = ax
-        self._plot['fig'] = fig
-        self._plot['plot'] = pl
-        self._plot['prop'] = kwargs
-        fig.figout(savefile=savefile,show=show)
-        
-    def display(self,ax,inmag=False,**kwargs):
-        """
-        """
-        if inmag:
-            y,dy = self.mags,self.magsvar
-        else:
-            y,dy = self.fluxes,self.fluxesvar
-
-        default_prop = dict(marker="o",ms=15,mec="k",mfc="b",
-                            alpha=0.8,ecolor="0.7")
-        prop = kwargs_update(default_prop,**kwargs)
-        
-        pl = ax.errorbar(self.times,y,yerr=dy,**prop)
-        return pl
-    
-    # =========================== #
-    # = Internal Methods        = #
-    # =========================== #
-    def _test_lbda_(self,photopoint):
-        """This module check that the lbda in the given
-        photopoint is the same as the other ones.
-        Remark that is None won't be penalized. 
-        """
-        if self.lbda is None or photopoint.lbda is None:
-            return
-        if self.lbda != photopoint.lbda:
-            raise ValueError("the given 'photopoint' does not share the other's lbda")
-        
-    # =========================== #
-    # = Properties and Settings = #
-    # =========================== #
-    @property
-    def npoints(self):
-        return len(self.photopoints)
-    @property
-    def photopoints(self):
-        return self._properties['photopoints']
-    
-    @property
-    def times(self):
-        return self._properties['times']
-    
-    @property
-    def lbda(self):
-        return self._derived_properties['lbda']
-
-    # -------------
-    # - On the flight
-    @property
-    def fluxes(self):
-        return [p.flux for p in self.photopoints]
-    
-    @property
-    def fluxesvar(self):
-        return [p.var for p in self.photopoints]
-
-    @property
-    def mags(self):
-        return [p.mag for p in self.photopoints]
-    
-    @property
-    def magsvar(self):
-        return [p.magvar for p in self.photopoints]
-    
-    @property
-    def bandnames(self):
-        # - a unique lbda is tested while loading so this should be always the same
-        return [p.bandname for p in self.photopoints]
-
-    @property
-    def zps(self):
-        # - a unique lbda is tested while loading so this should be always the same
-        return [p.zp for p in self.photopoints]

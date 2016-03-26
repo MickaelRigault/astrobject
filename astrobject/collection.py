@@ -7,7 +7,7 @@ import numpy as np
 import warnings
 from astropy import coordinates, table
 
-from .photometry import photopoint
+from .photometry import get_photopoint
 from .baseobject import BaseObject
 from .instruments import instrument as inst
 from ..utils.tools import kwargs_update
@@ -801,7 +801,7 @@ class PhotoPointCollection( Collection ):
             for i,k in enumerate(data.keys()):
                 d[k] = pp[i]
             ids.append(d.pop("id"))
-            pps.append(photopoint(**d))
+            pps.append(get_photopoint(**d))
             
         self.create(pps,ids,**kwargs)
         if "comments" in data.meta.keys():
@@ -816,8 +816,8 @@ class PhotoPointCollection( Collection ):
     # - Getter          - #
     # ------------------- #
     def get(self,param, mask=None, safeexit=True):
-        """Loop over the photopoints (following the list_id sorting) to get the parameters
-        using the photopoint.get() method.
+        """Loop over the photopoints (following the list_id sorting) to get the
+         parameters using the photopoint.get() method.
 
         If safeexit is True NaN will be set to cases where the get(key) does not exist.
         Otherwise this raises a ValueError.
@@ -835,8 +835,11 @@ class PhotoPointCollection( Collection ):
     # ------------------- #
     def set_meta(self,key,values):
         """
-        Assign to all photopoints of the instance a 'value' registered as 'key' in their meta dict.
-        If the 'values' could either be a constant or an N-array where N is the number of photopoints
+        Assign to all photopoints of the instance a 'value' registered
+        as 'key' in their meta dict. The 'values' could either be a
+        constant (all photopoint will then have the same) or an N-array
+        where N is the number of photopoints.
+        The set meta 'values' would then be accessible using the 'get()' method.
 
         Returns:
         --------
@@ -867,7 +870,8 @@ class PhotoPointCollection( Collection ):
             return self._show_(savefile=savefile,toshow=toshow,ax=ax,
                         cmap=cmap,show=show,**kwargs)
 
-    def show_hist(self,ax=None,toshow="a",mask=None,
+    def show_hist(self,toshow="a",ax=None,mask=None,
+                  savefile=None,show=True,
                   **kwargs):
         """This methods enable to show the histogram of any given
         key."""
@@ -876,7 +880,7 @@ class PhotoPointCollection( Collection ):
         v = self.get(toshow,mask=mask)
 
         # -- Setting -- #
-        from ...utils.mpladdon import figout
+        from ..utils.mpladdon import figout
         import matplotlib.pyplot as mpl
         self._plot = {}
         
@@ -1012,7 +1016,7 @@ class PhotoPointCollection( Collection ):
         # - Main
         maindata = [self.list_id,self.fluxes,self.fluxvars,self.lbdas,self.mjds,self.bandnames,
                     self.get("zp"),self.get("zpsys")]
-        mainnames= ["id","flux","var","wavelength","mjd","bandname","zp","zpsystem"]
+        mainnames= ["id","flux","var","lbda","mjd","bandname","zp","zpsys"]
         # - Meta
         #metaname = self.metakeys
         #metadata = [self.get(metak) for metak in metaname]

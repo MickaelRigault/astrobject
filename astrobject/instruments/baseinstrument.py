@@ -13,7 +13,7 @@ from ...utils.tools import kwargs_update,mag_to_flux,load_pkl,dump_pkl
 from ...utils import shape
 
 from .. import astrometry
-from ...astrobject.photometry import Image,photopoint
+from ...astrobject.photometry import Image,get_photopoint
 from ..baseobject import BaseObject,astrotarget
 __all__ = ["Instrument"]
 
@@ -43,14 +43,14 @@ class Instrument( Image ):
         # ------------------
         # - One Photopoint
         if "__iter__" not in dir(flux):
-            return photopoint(self.lbda,flux,var,
-                            source="image",mjd=self.mjd_obstime,
+            return get_photopoint(self.lbda,flux,var,
+                            source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
         # -----------------------
         # - Several Photopoints\
-        pps = [photopoint(self.lbda,flux_,var_,
-                            source="image",mjd=self.mjd_obstime,
+        pps = [get_photopoint(self.lbda,flux_,var_,
+                            source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
                             for flux_,var_ in zip(flux,var)]
@@ -119,8 +119,8 @@ class Instrument( Image ):
         return self._gain * self.exposuretime
     
     @property
-    def mjd_obstime(self):
-        raise NotImplementedError("'obstime' must be implemented")
+    def mjd(self):
+        raise NotImplementedError("'mjd' (Modified Julian Date) must be implemented")
 
 ############################################
 #                                          #

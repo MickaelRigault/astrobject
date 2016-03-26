@@ -99,8 +99,9 @@ class PhotoMap( PhotoPointCollection ):
         """
         """
         self._side_properties_keys = self._side_properties_keys + \
-          ["refmap","wcs","catalogue","catmatch"]
-          
+          ["refmap","wcs","catalogue"]
+        self._derived_properties_keys = self._side_properties_keys +\
+          ["catmatch"]
         super(PhotoMap,self).__build__()
         
 
@@ -353,6 +354,7 @@ class PhotoMap( PhotoPointCollection ):
     # - PLOTTER   - #
     # ------------- #
     def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,
+                        mask=None,
                         show_nods=False,**kwargs):
         """
         Show a Voronoy cell map colored as a function of the given 'toshow'.
@@ -372,10 +374,11 @@ class PhotoMap( PhotoPointCollection ):
         from ...utils.mpladdon import voronoi_patchs
         # -----------------
         # - The plot itself
-        out = ax.voronoi_patchs(self.radec if wcs_coords else self.xy,
-                                self.get(toshow),**kwargs)
+        xy = self.radec if wcs_coords else self.xy
+        out = ax.voronoi_patchs(xy if mask is None else xy[mask],
+                                self.get(toshow,mask=mask),**kwargs)
         if show_nods:
-            x,y = self.radec.T if wcs_coords else self.xy.T
+            x,y = xy.T if mask is None else xy[mask].T
             ax.plot(x,y,marker=".",ls="None",color="k",
                     scalex=False,scaley=False,
                     alpha=kwargs.pop("alpha",0.8),zorder=kwargs.pop("zorder",3)+1)
@@ -453,8 +456,7 @@ class PhotoMap( PhotoPointCollection ):
         return self._side_properties["catalogue"]
     
     def has_catalogue(self):
-        return False if self.catalogue is None\
-          else True
+        return self.catalogue is not None
 
     @property
     def catmatch(self):
@@ -465,8 +467,7 @@ class PhotoMap( PhotoPointCollection ):
         return self._derived_properties["catmatch"]
 
     def has_catmatch(self):
-        return False if self.catmatch is None or len(self.catmatch.keys())==0 \
-          else True
+        return (self.catmatch is not None and len(self.catmatch.keys())>0)
 
           
 ######################################
@@ -475,7 +476,8 @@ class PhotoMap( PhotoPointCollection ):
 #                                    #
 ######################################
 class SexObject( PhotoMap ):
-    """ Child of PhotoMap that make uses of all the meta keys that are sextractor output """
+    """ Child of PhotoMap that make uses of all the meta keys that are sextractor
+    output """
     # -------------------------- #
     # -  Plotting tools        - #
     # -------------------------- #
