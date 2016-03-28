@@ -28,7 +28,7 @@ def get_sepobject(sepoutput, wcs_coords=False,ppointkwargs={},
     """
     if is_sepoutput(sepoutput):
         inputphotomap = parse_sepoutput(sepoutput,**ppointkwargs)
-        pmap = SexObject(photopoints=inputphotomap["ppoints"],
+        pmap = SepObject(photopoints=inputphotomap["ppoints"],
                          coords=inputphotomap["coords"],
                          wcs_coords=wcs_coords, **kwargs)
         [pmap.set_meta(k,inputphotomap["meta"][k].data) for k in inputphotomap["meta"].keys()]
@@ -168,12 +168,13 @@ class PhotoMap( PhotoPointCollection ):
         return "%.8f,%.8f"%(x,y)
     
     def id_to_coords(self,id):
+        """ convert photopoint's id into coordinates. Only reading here, see radec, xy """
         return np.asarray(id.split(","),dtype="float")
 
     def match_catalogue(self,catalogue=None,
-                        force_it=False, arcsec_size=2):
+                        force_it=False, deltadist=1*units.arcsec):
         """
-        This methods enable to attached a given sexobject entry
+        This methods enable to attached a given sepobject entry
         to a catalog value.
         You can set a catalogue.
         """
@@ -189,14 +190,14 @@ class PhotoMap( PhotoPointCollection ):
             # -- matching are made in degree space
             ra,dec = self.radec.T
             skyradec = coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
-            idxcatalogue, idxsexobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, arcsec_size*units.arcsec)
+            idxcatalogue, idxsepobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, deltadist)
         else:
-            raise NotImplementedError("You currently need a wcs solution in the SexObjects to match a catalogue")
+            raise NotImplementedError("You currently need a wcs solution in the SepObject to match a catalogue")
         # --------------------
         # - Save the results
         self._derived_properties["catmatch"] = {
             "idx_catalogue":idxcatalogue,
-            "idx":idxsexobjects,
+            "idx":idxsepobjects,
             "angsep":d2d
             }
         
@@ -475,7 +476,7 @@ class PhotoMap( PhotoPointCollection ):
 # Sextractor Output                  #
 #                                    #
 ######################################
-class SexObject( PhotoMap ):
+class SepObject( PhotoMap ):
     """ Child of PhotoMap that make uses of all the meta keys that are sextractor
     output """
     # -------------------------- #
@@ -507,7 +508,7 @@ class SexObject( PhotoMap ):
                       **kwargs):
         """ Display ellipses of the extracted sources (see masking options) """
         if not self.has_data():
-            print "WARNING [Sexobjects] No data to display"
+            print "WARNING [Sepobjects] No data to display"
             return
         
         from matplotlib.patches import Ellipse,Polygon
@@ -635,12 +636,13 @@ class SexObject( PhotoMap ):
         
         # -- maskout non matched one if requested
         if not self.has_catalogue():
+            print "no catalogue mask applied"
             apply_catmask = False
             
         mask = None if not apply_catmask else\
           self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                            catmag_range=catmag_range)
-            
+                            catmag_range=catmag_range, cat_indexes=False)
+        print mask
         # -------------
         # - Properties
         return [Ellipse([x,y],a*scaleup,b*scaleup,

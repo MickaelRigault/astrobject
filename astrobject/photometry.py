@@ -198,7 +198,7 @@ class Image( BaseObject ):
     # =========================== #
     def __init__(self,filename=None,
                  astrotarget=None,data_index=0,
-                 dataslice0=[0,-1],dataslice1=[0,-1],
+                 dataslice0=[0,None],dataslice1=[0,None],
                  empty=False,**kwargs):
         """
         Initalize the image by giving its filelocation (*filename*). This
@@ -241,7 +241,8 @@ class Image( BaseObject ):
                 data_index = data_index,
                 header_exptime = "EXPTIME",
                 dataslice0="undefined",
-                dataslice1="undefined"
+                dataslice1="undefined",
+               bkgdbox={"bh":100,"bw":100,"fh":3,"fw":3},
                 )
 
     # =========================== #
@@ -252,7 +253,7 @@ class Image( BaseObject ):
     # ------------------- #
     def load(self,filename,index=None,
              force_it=False,
-             dataslice0=[0,-1],dataslice1=[0,-1]):
+             dataslice0=[0,None],dataslice1=[0,None]):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
@@ -268,6 +269,7 @@ class Image( BaseObject ):
         dataslice0/1 [2D-array]    load only the data within the given boundaries.
                                    The 0-offset will be accessible in self._dataoffset
                                    and will be passed to the wcs solution.
+                                   None means no limits
         
         index: [int]               The fits entry that contains the data
                                    If None, this will fetch it in the build_properties
@@ -303,6 +305,7 @@ class Image( BaseObject ):
         # ---------- #
         # - Data   - #
         # ---------- #
+        print dataslice0,dataslice1
         data = fits[index].data[dataslice0[0]:dataslice0[1],
                                 dataslice1[0]:dataslice1[1]]
         self._build_properties["dataslice0"] = dataslice0
@@ -362,7 +365,6 @@ class Image( BaseObject ):
         """ Change the slicing of the data.
         This will update the background, variance and the wcs solution's offset.
         If you had an sepobjects loaded, this will update it."""
-        
         rawdata = self.fits[self._build_properties["data_index"]].data[
             dataslice0[0]:dataslice0[1],
             dataslice1[0]:dataslice1[1]]
@@ -370,12 +372,13 @@ class Image( BaseObject ):
         reload_sep = self.has_sepobjects()
 
         self._derived_properties["sepobjects"] = None
+        self._build_properties["dataslice0"] = dataslice0
+        self._build_properties["dataslice1"] = dataslice1
+
         self._set_data_(rawdata,mask=mask,
                         variance=variance,
                         background=background)
-        
-        self._build_properties["dataslice0"] = dataslice0
-        self._build_properties["dataslice1"] = dataslice1
+
         if self.has_wcs():
             self.wcs.set_offset(*self._dataslicing)
             if self.has_catalogue():
@@ -480,7 +483,7 @@ class Image( BaseObject ):
         self._side_properties["catalogue"] = catalogue
         
     def set_background(self,background,
-                       force_it=False,check=True):
+                       force_it=False,check=True, update=True):
         """
         This is a method that might strongly depend on the instrument.
         As a default (background = None) this uses Sextractor background
@@ -525,7 +528,8 @@ class Image( BaseObject ):
             raise ValueError("The given background must have rawdata's shape")
         # -- Looks good
         self._properties['background'] = np.asarray(background)
-        self._update_data_(update_background=False)
+        if update:
+            self._update_data_(update_background=False)
         
     def set_fwhm(self,value,force_it=True):
         """
@@ -718,7 +722,8 @@ class Image( BaseObject ):
         r_pixels = radius*self.units_to_pixels(runits)
         # - position
         if wcs_coords and not self.has_wcs():
-            raise AttributeError("you cannot provide ra,dec coordinate without a wcs solution. cannot convert them into pixel coords")
+            raise AttributeError("you cannot provide ra,dec coordinate without a wcs solution:"+\
+                                 " cannot convert them into pixel coords")
         if wcs_coords:
             x,y = self.coords_to_pixel(x,y).T 
             
@@ -829,8 +834,8 @@ class Image( BaseObject ):
             del self._rmsep
             
             return self._sepbackground.back()
-        
-        self.set_background(self._sepbackground.back(),force_it=True)
+        if update_background:
+            self.set_background(self._sepbackground.back(),force_it=True)
         self.sep_extract(match_catalogue= not cleaning_sep)
         self._rmsep=cleaning_sep
         return self.get_sep_background(update_background=True)
@@ -877,10 +882,14 @@ class Image( BaseObject ):
         """
         from sep import extract
         from collections import get_sepobject
+
+        
         if thresh is None:
-            thresh = self._get_sep_extract_threshold_()
-            
+            thresh = self._get_sep_extract_threshold_() if self.var is None\
+              else np.sqrt(self.var).mean()*1.5
+              
         o = extract(self.data,thresh,**kwargs)
+        
         # -- If this is an instrument and not an image
         instrument_prop = {'lbda':self.lbda,"mjd":self.mjd,
                            "bandname":self.bandname} if "lbda" in dir(self) else\
@@ -904,8 +913,9 @@ class Image( BaseObject ):
         
     def _get_sep_extract_threshold_(self):
         """this will be used as a default threshold for sep_extract"""
+        print "_get_sep_extract_threshold_ called"
         if "_sepbackground" not in dir(self):
-                _ = self.get_sep_background()
+                _ = self.get_sep_background(update_background=False)
         return self._sepbackground.globalrms*1.5
     
 
@@ -1316,9 +1326,19 @@ class Image( BaseObject ):
             offset1 = [0,-1]
         else:
             offset1=self._build_properties["dataslice1"]
-
-        if offset0[1] <0: offset0[1] = self.height+offset0[1]+2
-        if offset1[1] <0: offset1[1] = self.width +offset1[1]+2
+        
+        if offset0[1] is None:
+            offset0[1] = self.header["NAXIS2"]
+            
+        if offset0[1] <0:
+            offset0[1] = self.height+offset0[1]+1
+            
+        if offset1[1] is None:
+            offset1[1] = self.header["NAXIS1"]
+            
+        if offset1[1] <0:
+            offset1[1] = self.width +offset1[1]+1
+            
         return offset0[0],offset1[0],offset0[1]-offset0[0],offset1[1]-offset1[0]
     
     @property
@@ -1477,7 +1497,7 @@ class Image( BaseObject ):
     # =========================== #
     def _set_data_(self,rawdata,mask=None,
                    variance=None,
-                   background=None):
+                   background=None, update=True):
         """ Change the instance fondamental: the rawdata """
         
         self._properties["rawdata"]       = self._read_rawdata_(rawdata)
@@ -1489,10 +1509,11 @@ class Image( BaseObject ):
         self._properties["var"]          = variance
         if self.has_datamask() and self.has_var():
             self._properties["var"][self.datamask] = np.NaN
-        # BACKGROUND   
-        self.set_background(background, force_it=True)
+        # BACKGROUND
+        self.set_background(background, force_it=True, update=False)
         # --> update
-        self._update_(update_background=False)
+        if update:
+            self._update_(update_background=False)
     
     def _read_rawdata_(self,rawdata):
         return np.asarray(rawdata,dtype="float")
@@ -1533,8 +1554,16 @@ class Image( BaseObject ):
         # ---------------
         # - masking sign tested
         self._derived_properties["backgroundmask"] = mask
-        self._sepbackground_prop = kwargs_update({"mask":self.backgroundmask ,
-                                                  "bw":100,"bh":100},
+        
+        if self._build_properties["bkgdbox"]['bh'] == "max":
+             self._build_properties["bkgdbox"]['bh'] = self.height-1
+        if self._build_properties["bkgdbox"]['bw'] == "max":
+             self._build_properties["bkgdbox"]['bw'] = self.width-1
+
+        build_prop = kwargs_update(self._build_properties["bkgdbox"],
+                                   **{"mask":self.backgroundmask})
+        
+        self._sepbackground_prop = kwargs_update(build_prop,
                                                   **kwargs)
         
         self._sepbackground = Background(self.rawdata,
