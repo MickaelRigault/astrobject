@@ -45,7 +45,7 @@ def which_band_is_file(filename):
 # -------------------- #
 def get_darkvariance(camcol,band,run=None):
     """
-    http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
+    data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
     """
     DARK_VAR_CCD = {
             0:{"u":9.61,   "g":15.6025,"r":1.8225,
@@ -76,7 +76,7 @@ def get_darkvariance(camcol,band,run=None):
     
 def get_gain(camcol,band,run=None):
     """
-    http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
+    data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
     """
     GAIN_CCD = {
             0:{"u":1.62, "g":3.32, "r":4.71,
@@ -126,37 +126,40 @@ class SDSS( Instrument ):
 
     fits composition:
     -----------------
-    (info: http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html)
+    (data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html)
+
     
     ..hdu-0: the corrected frame, what is normally in the "fpC" files
-    The "image", a 2048x1489 array of floating point values, the calibrated and
-    sky-subtracted version of the fpC "corrected frame" files produced by photo.
-    Units are in nanomaggies.
-    The header has additional WCS information.
-    These have been altered from the fpC versions to correct for any offsets
-    from the astrom solutions found in the asTrans files.
+        The "image", a 2048x1489 array of floating point values, the calibrated and
+        sky-subtracted version of the fpC "corrected frame" files produced by photo.
+        Units are in nanomaggies.
+        The header has additional WCS information.
+        These have been altered from the fpC versions to correct for any offsets
+        from the astrom solutions found in the asTrans files.
     
     ..hdu-1: the flat-field and calibration vector
-    The "calibvec", a 2048-element array of "float32" values, encompassing
-    the flat-field correction to apply, multiplied by the calibration.
-    Translates the counts in the original image into nanomaggies.
-    The calibrations have ALREADY been applied to the HDU0, so this calibration
-    vector is only to be used to decalibrate an image back into counts.
+        The "calibvec", a 2048-element array of "float32" values, encompassing
+        the flat-field correction to apply, multiplied by the calibration.
+        Translates the counts in the original image into nanomaggies.
+        The calibrations have ALREADY been applied to the HDU0, so this calibration
+        vector is only to be used to decalibrate an image back into counts.
      
     ..hdu2: the sky image
-    The "sky", an approximately 256x192 array of "float32" values (there are some
-    variations around the y-size of the array), with information about how to
-    interpolate it to the full image size.
-    These sky values are determined from the global sky fits across the run (not photo)
-    There are cases at the end of runs where the y-size of ALLSKY is less than 186,
-    which requires one to extrapolate off the end of the ALLSKY image in the y-direction
-    when using XINTERP and YINTERP. This extrapolation should be a constant extrapolation (not linear).
-    The sky values have ALREADY been subtracted from HDU0, so this sky estimate is
-    only to be used to return an image to its (near) original set of values.
+        The "sky", an approximately 256x192 array of "float32" values (there are some
+        variations around the y-size of the array), with information about how to
+        interpolate it to the full image size.
+        These sky values are determined from the global sky fits across the run
+        (not photo). There are cases at the end of runs where the y-size of ALLSKY
+        is less than 186, which requires one to extrapolate off the end of the ALLSKY
+        image in the y-direction when using XINTERP and YINTERP.
+        This extrapolation should be a constant extrapolation (not linear).
+        The sky values have ALREADY been subtracted from HDU0, so this sky estimate is
+        only to be used to return an image to its (near) original set of values.
 
     ..hdu3:  the asTrans structure
-    Detailed astrometric information for the field. Basically the asTrans structure as found in the asTrans files.
-    (http://data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/astrom/asTrans.html)
+        Detailed astrometric information for the field. Basically the asTrans
+        structure as found in the asTrans files.
+        (data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/astrom/asTrans.html)
     
     """
     instrument_name = "SDSS"
@@ -204,13 +207,11 @@ class SDSS( Instrument ):
             self._update_var_()
         return self._derived_properties["var"]
         
-
     @property
     def _dataunits_to_electron(self):
         """ No _dataunits_to_electron for sep sum_circle ; the accurate variance is provided """
         return None
     
-
     # --------------------
     # - Band Information
     @property
@@ -263,19 +264,21 @@ class SDSS( Instrument ):
             raise AttributeError("no header loaded ")
         return get_darkvariance(self.header["CAMCOL"],self.bandname[-1],
                                 self.header["RUN"])
+
     # =========================== #
     # = Internal Tools          = #
     # =========================== #
+    # -----------------
+    # - Update hacking
     def _update_(self,*args,**kwargs):
         if self.fits is not None:
             self._update_sky_()
         super(SDSS,self)._update_(*args,**kwargs)
-        
+    
     def _update_data_(self,*args,**kwargs):
         super(SDSS,self)._update_data_(*args,**kwargs)
         self._update_var_()
 
-    # -- Advanced updates
     def _update_sky_(self):
         self._derived_properties["sky"] = \
           hdu2_to_sky(self.fits[2])[self._build_properties['dataslice0'][0]:self._build_properties['dataslice0'][1],
@@ -289,40 +292,9 @@ class SDSS( Instrument ):
         """
         self._derived_properties["var"] = \
           dn_err = ((self.rawdata / self._cimg + self.sky) / self._gain  + self._darkvariance)* self._cimg**2
-            
+
+    # -------------------
+    # - Background hacking
     def _get_default_background_(self,*args,**kwargs):
         return np.zeros(np.shape(self.rawdata))
-    
-    # -----------------
-    # - Sky Background
-    def _get_brightsource_mask_(self,stellar_uppermag=15,gal_uppermag=15,**kwargs):
-        """
-        """
-        if not self.has_catalogue():
-            self.download_catalogue(column_filters=\
-                                    {"%smag"%self.sdss.bandname[-1]:"12..20"},
-                                    )
-        brightstars_coords = [self.catalogue.ra[(self.catalogue.mag>stellar_uppermag)\
-                                                & self.catalogue.starmask],
-                             self.catalogue.dec[(self.catalogue.mag>stellar_uppermag)\
-                                                 & self.catalogue.starmask],
-                             self.catalogue.mag[(self.catalogue.mag>stellar_uppermag)\
-                                                 & self.catalogue.starmask],
-                                                 ]
-        brightgal_coords  = [self.catalogue.ra[(self.catalogue.mag>gal_uppermag)\
-                                                & ~self.catalogue.starmask],
-                              self.catalogue.dec[(self.catalogue.mag>gal_uppermag)\
-                                                 & ~self.catalogue.starmask],
-                            self.catalogue.mag[(self.catalogue.mag>gal_uppermag)\
-                                                 & ~self.catalogue.starmask],
-                                                 ]
-        def _mag_to_pixel_mask_(self,mag):
-            """
-            based on the 15mag->32pixels 12->1600 pixel from
-            http://adsabs.harvard.edu/cgi-bin/bib_query?arXiv:1105.1960
-            """
-            return 0 if mag>15 else  int(1600 - (mag - 12)*522)
-            
-        return [[ra,dec,self._mag_to_pixel_mask_(mag)]
-                for ra,dec,mag in np.asarray(brightstars_coords).T if mag<15]
     

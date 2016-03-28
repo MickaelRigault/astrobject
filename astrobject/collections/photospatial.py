@@ -270,7 +270,7 @@ class PhotoMap( PhotoPointCollection ):
     # ------------- #
     # - GETTER    - #
     # ------------- #
-    def get_ids_around(self, ra, dec, radius):
+    def get_idx_around(self, ra, dec, radius, catalogue_idx=False):
         """
         Parameters:
         ----------
@@ -280,11 +280,21 @@ class PhotoMap( PhotoPointCollection ):
 
         Return
         ------
-        (SkyCoords.search_around_sky output)
+        2d-array (index, angular separation)
         """
+        if "__iter__" not in dir(ra):
+            ra = [ra]
+            dec = [dec]
+            
         sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
-        ra_,dec_ = self.coords.T
-        return coordinates.SkyCoord(ra=ra_*units.degree,dec=dec_*units.degree).search_around_sky(sky, radius)
+        if not catalogue_idx:
+            ra_,dec_ = self.radec.T
+            return coordinates.SkyCoord(ra=ra_*units.degree,dec=dec_*units.degree).search_around_sky(sky, radius)[1:3]
+        if not self.has_catalogue():
+            raise ValueError("no catalogue loaded, do not set catalogue_idx to True.")
+            
+        return self.catalogue.get_idx_around(ra, dec, radius.value, runits=radius.unit.name,
+                                             wcs_coords=True)
 
 
     def get_mask(self,stars_only=False,isolated_only=False,
@@ -301,10 +311,10 @@ class PhotoMap( PhotoPointCollection ):
             raise AttributeError("No catalogue matching performed. Run match_catalogue()")
 
         if catmag_range[0] is None:
-            warnings.warn("No lower catalogue magnitude limit given. 13mag set.")
-            catmag_range[0] = 13
+            warnings.warn("No lower catalogue magnitude limit given. 10mag set.")
+            catmag_range[0] = 10
             
-        mask = np.asarray(self.get_catmag_mask(*catmag_range))
+        mask = np.asarray(self._get_catmag_mask_(*catmag_range))
         
         if isolated_only :
             mask = mask & self.catalogue.isolatedmask[ self.catmatch["idx_catalogue"]]
@@ -314,7 +324,7 @@ class PhotoMap( PhotoPointCollection ):
         
         return mask
 
-    def get_catmag_mask(self,magmin,magmax):
+    def _get_catmag_mask_(self,magmin,magmax):
         """
         return the boolen mask of which matched point
         belong to the given magnitude range.

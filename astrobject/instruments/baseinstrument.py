@@ -524,8 +524,10 @@ class Catalogue( BaseObject ):
             raise AttributeError("Needs a wcs solution to get pixel coordinates")
         if not wcs_coords:
             ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
-
-        skytarget = coordinates.SkyCoord([ra*units.degree],[dec*units.degree])
+        if "__iter__" not in dir(ra):
+            ra = [ra]
+            dec = [dec]
+        skytarget = coordinates.SkyCoord(ra*units.degree,dec*units.degree)
         catsky = self.sky_radec if infov else self._sky_radec
         return catsky.search_around_sky(skytarget,
                                         radius*units.Unit(runits))[1:3]
