@@ -17,21 +17,23 @@ COSMO_DEFAULT = cosmology.Planck13
 from sncosmo import SFD98Map
 
 __version__ = 0.1
-__all__     = ["astrotarget"]
+__all__     = ["get_target"]+["astrotarget"] # to be removed
 
 
 def astrotarget(name=None,zcmb=None, ra=None, dec=None,
+               type_=None,mwebmv=None,**kwargs):
+    
+    print "DECREPATED: astrotarget->get_target"
+    return get_target(name=name,zcmb=zcmb, ra=ra, dec=dec,
+                    type_=type_,mwebmv=mwebmv,**kwargs)
+
+def get_target(name=None,zcmb=None, ra=None, dec=None,
                type_=None,mwebmv=None,**kwargs):
     """
     = Initialize the AstroTarget Function =
 
     Parameters
     ----------
-       ** You have 2 way to initialize the object **
-       1) By giving the following parameters
-       2) By setting datasource as dict having these parameters
-
-    ..Method 1:
         
     name: [string]             name of the astro-object
 
@@ -55,11 +57,6 @@ def astrotarget(name=None,zcmb=None, ra=None, dec=None,
                                extinction depend on the object *radec*.
                                ->Use this use Caution<-
 
-    ..Method 2:
-
-    datasource: [dict]         Dictionnary having {name,ra,dec,...} values in the
-                               above parameter will be used if key not found.
-
     - kwargs options, potentially non-exhaustive ; kwargs goes to AstroTarget -
         
     cosmo:[astropy.cosmology]  the cosmology used to derive the distances and so on.
@@ -70,17 +67,6 @@ def astrotarget(name=None,zcmb=None, ra=None, dec=None,
     empty: [bool]              Does not do anything, just loads an empty object.
                               (Careful with that)
                               
-    Code
-    ----
-    return AstroTarget(name=datasource.pop("name",name),
-                       zcmb=datasource.pop("zcmb",zcmb),
-                       ra=datasource.pop("ra",ra),
-                       dec=datasource.pop("dec",dec),
-                       type_=datasource.pop("type",type_),
-                       forced_mwebmv=datasource.pop("forced_mwebmv",forced_mwebmv),
-                       **kwargs).copy()
-
-                       
     Returns
     -------
     AstroTarget
@@ -97,7 +83,7 @@ def astrotarget(name=None,zcmb=None, ra=None, dec=None,
     return AstroTarget(name=name,zcmb=zcmb,ra=ra,dec=dec,
                        type_=type_,
                        forced_mwebmv=forced_mwebmv,
-                       empty=empty).copy() # dont forget the copy
+                       empty=empty).copy()
 
 #######################################
 #                                     #

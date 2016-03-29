@@ -10,18 +10,23 @@ import hst
 import stella
 import ptf
 
-__all__ = ["instrument","catalogue"]
+__all__ = ["get_instrument","get_catalogue","fetch_catalogue"]+["instrument","catalogue"] # To be removed
 
 KNOWN_INSTRUMENTS = ["sdss","hst","stella","ptf"]
 
 def catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
+    print "DECREPATED: catalogue->fetch_catalogue"
+    return get_catalogue(source,radec,radius,extracolums=extracolums,
+                         column_filters=column_filters,**kwargs)
+
+def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
     """
     """
-    if source == "sdss":
+    if source.lower() == "sdss":
         return catalogues.fetch_sdss_catalogue(radec,radius,
                                     extracolums=extracolums,
                                     column_filters=column_filters,**kwargs)
-    if source == "2mass":
+    if source.lower() in ["2mass","mass"]:
         return catalogues.fetch_2mass_catalogue(radec,radius,
                                     extracolums=extracolums,
                                     column_filters=column_filters,**kwargs)
@@ -32,7 +37,26 @@ def catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"}
     
     raise NotImplementedError("Only the SDSS, 2MASS source catalogues implemented")
 
+def get_catalogue(filename, source,**kwargs):
+    """
+    """
+    if source == "sdss":
+        return catalogues.SDSSCatalogue(filename,**kwargs)
+    
+    if source == "2mass":
+        return catalogues.MASSCatalogue(filename,**kwargs)
+    
+    if source.lower() == "wise":
+        return catalogues.WISECatalogue(filename,**kwargs)
+    
+    raise NotImplementedError("Only the SDSS, 2MASS source catalogues implemented")
+
 def instrument(filename,astrotarget=None,**kwargs):
+    print "DECREPATED: instrument->get_instrument"
+    return get_instrument(filename,astrotarget=astrotarget,
+                          **kwargs)
+
+def get_instrument(filename,astrotarget=None,**kwargs):
     """This method parse the input file to know to which
     instrument this filename is associated to.
     This methods will return the corresponding object"""

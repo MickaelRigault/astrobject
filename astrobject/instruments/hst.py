@@ -172,7 +172,7 @@ class HST( Instrument ):
     # --------------------
     # - Band Information
     @property
-    def mjd_obstime(self):
+    def mjd(self):
         """This is the Modify Julien Date at the start of the Exposure"""
         return self.fits[0].header["EXPSTART"]
 

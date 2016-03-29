@@ -5,10 +5,9 @@
 """This module contain the collection of astrobject"""
 import numpy as np
 import warnings
-from astropy.table import Table
+from astropy import coordinates, table
 
-
-from .photometry import photopoint
+from .photometry import get_photopoint
 from .baseobject import BaseObject
 from .instruments import instrument as inst
 from ..utils.tools import kwargs_update
@@ -120,7 +119,7 @@ class Collection( BaseCollection ):
         """
         self._side_properties_keys.append("target")
         super(Collection,self).__build__(*args,**kwargs)
-        
+        self._build_properties = {}
     # ----------------- #
     # - Setter        - #
     # ----------------- #
@@ -280,18 +279,33 @@ class ImageCollection( Collection ):
     # ========================== #
     # = Get                    = #
     # ========================== #
-    def get_image(self,id,load_catalogue=True):
+    def get_image(self,id,load_catalogue=True,
+                  dataslice0=[0,-1],dataslice1=[0,-1],
+                  **kwargs):
         """
+
+        **kwargs goes to instrument's init if the image is loaded for the first time
+        and to reload_data() if not and dataslicing differ from what have been loaded before.
+        
         """
         self._test_id_(id)
         # --------------------
         # - image already exist
         if self.images[id]["image"] is None:
-            self._load_image_(id)
-            return self.get_image(id)
-        
+            self._load_image_(id,dataslice0=dataslice0,
+                                 dataslice1=dataslice1,
+                              **kwargs)
+            return self.get_image(id,dataslice0=dataslice0,
+                                    dataslice1=dataslice1)
+
         im = self.images[id]["image"]
-        
+        # ------------------
+        # - Check if slicing ok
+        if dataslice0 != im._build_properties["dataslice0"] or \
+          dataslice1 != im._build_properties["dataslice1"]:
+            # -- Remark: This update the self.images[id]["image"]
+            im.reload_data(dataslice0, dataslice1,**kwargs)
+            
         # ---------------
         # Target
         if not im.has_target() and self.has_target():
@@ -329,6 +343,40 @@ class ImageCollection( Collection ):
                                                isolated_only=isolated_only,
                                                stars_only=stars_only,
                                                catmag_range=catmag_range)
+
+    def get_pixels_slicing(self,central_coords, radius, runits="arcmin", id_=None,
+                           wcs_coords=True, clean=True):
+        """
+        The dataslice0,dataslice1 for the given 'central_coords' with a +/- 'radius' 'runits' value.
+        This slicing will be cleaned (pixels within the image FoV) except if clean is False
+        """
+        # ---------------
+        # - one id_
+        if id_ is not None:
+            self._test_id_(id_)
+            radec = np.asarray(central_coords) if not wcs_coords else\
+              np.asarray(self.images[id_]["wcs"].world2pix(*central_coords))
+            pixels   = radius*self.images[id_]["wcs"].units_to_pixels(runits).value
+            dataslice0,dataslice1 = [[radec_-pixels,radec_+pixels] for radec_ in radec[::-1]]
+            if clean:
+                # -- cleaning
+                max0 = self.images[id_]["wcs"]._naxis1
+                max1 = self.images[id_]["wcs"]._naxis2
+                if dataslice0[0] <0    : dataslice0[0] = 0
+                if dataslice1[0] <0    : dataslice1[0] = 0
+                if dataslice0[1] >max0 : dataslice0[1] = max0
+                if dataslice1[1] >max1 : dataslice1[1] = max1
+            return {"dataslice0":np.asarray(dataslice0,dtype=int).tolist(),
+                    "dataslice1":np.asarray(dataslice1,dtype=int).tolist()}
+        
+        # ---------------
+        # - get all id_
+        if id_ is None:
+            out = {}
+            for id_ in self.list_id:
+                out[id_] = self.get_pixels_slicing(central_coords, radius, runits="arcmin", id_=id_)
+            return out
+        
     # --------------------- #
     # - Get Extraction    - #
     # --------------------- #
@@ -338,8 +386,8 @@ class ImageCollection( Collection ):
         """
         idused = self.list_id if ids is None else\
           [ids] if "__iter__" not in dir(ids) else ids
+            
           
-        print "ToBeDone"
     # --------------------- #
     # - Get Target        - #
     # --------------------- #
@@ -604,10 +652,10 @@ class ImageCollection( Collection ):
             }
         return ID
         
-    def _load_image_(self,id):
+    def _load_image_(self,id,**kwargs):
         """
         """
-        self.images[id]["image"] = inst.instrument(self.images[id]["file"])
+        self.images[id]["image"] = inst.instrument(self.images[id]["file"],**kwargs)
         
     # ========================== #
     # = Properties             = #
@@ -737,12 +785,14 @@ class PhotoPointCollection( Collection ):
         Save the PhotoPointCollection following the astropy's Table 'write()' method.
         Such data will be accessible using the 'load()' method of the class.
         """
-        self.data.write(filename,format=format,**kwargs)
+        complet = table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
+          else self.data
+        complet.write(filename,format=format,**kwargs)
         
     def load(self,filename,format="ascii",**kwargs):
         """
         """
-        data = Table.read(filename,format=format)
+        data = table.Table.read(filename,format=format)
         ids,pps = [],[]
         # - This way to be able to call create that might be more
         # generic than add_photopoints
@@ -751,7 +801,7 @@ class PhotoPointCollection( Collection ):
             for i,k in enumerate(data.keys()):
                 d[k] = pp[i]
             ids.append(d.pop("id"))
-            pps.append(photopoint(**d))
+            pps.append(get_photopoint(**d))
             
         self.create(pps,ids,**kwargs)
         if "comments" in data.meta.keys():
@@ -765,9 +815,9 @@ class PhotoPointCollection( Collection ):
     # ------------------- #
     # - Getter          - #
     # ------------------- #
-    def get(self,param,safeexit=True):
-        """Loop over the photopoints (following the list_id sorting) to get the parameters
-        using the photopoint.get() method.
+    def get(self,param, mask=None, safeexit=True):
+        """Loop over the photopoints (following the list_id sorting) to get the
+         parameters using the photopoint.get() method.
 
         If safeexit is True NaN will be set to cases where the get(key) does not exist.
         Otherwise this raises a ValueError.
@@ -776,22 +826,26 @@ class PhotoPointCollection( Collection ):
         -------
         list
         """
-        return [self.photopoints[id_].get(param,safeexit=safeexit)
-                for id_ in self.list_id]
+        ids = self.list_id if mask is None else np.asarray(self.list_id)[mask]
+        return np.asarray([self.photopoints[id_].get(param,safeexit=safeexit)
+                            for id_ in ids])
 
     # ------------------- #
     # - Setter          - #
     # ------------------- #
     def set_meta(self,key,values):
         """
-        Assign to all photopoints of the instance a 'value' registered as 'key' in their meta dict.
-        If the 'values' could either be a constant or an N-array where N is the number of photopoints
+        Assign to all photopoints of the instance a 'value' registered
+        as 'key' in their meta dict. The 'values' could either be a
+        constant (all photopoint will then have the same) or an N-array
+        where N is the number of photopoints.
+        The set meta 'values' would then be accessible using the 'get()' method.
 
         Returns:
         --------
         Void
         """
-        if "__iter__" not in values:
+        if "__iter__" not in dir(values):
             values = [values]*self.nsources
         elif len(values)==1:
             values = [values[0]]*self.nsources
@@ -815,7 +869,42 @@ class PhotoPointCollection( Collection ):
             kwargs["function_of_time"] = True
             return self._show_(savefile=savefile,toshow=toshow,ax=ax,
                         cmap=cmap,show=show,**kwargs)
+
+    def show_hist(self,toshow="a",ax=None,mask=None,
+                  savefile=None,show=True,
+                  **kwargs):
+        """This methods enable to show the histogram of any given
+        key."""
+        # -- Properties -- #
         
+        v = self.get(toshow,mask=mask)
+
+        # -- Setting -- #
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if ax is None:
+            fig = mpl.figure(figsize=[8,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+        elif "hist" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+
+        # -- Properties -- #
+        default_prop = dict(histtype="step",fill=True,
+                            fc=mpl.cm.Blues(0.7,0.5),ec="k",lw=2)
+        prop = kwargs_update(default_prop,**kwargs)
+
+        out = ax.hist(v,**prop)
+
+        self._plot['ax'] = ax
+        self._plot['fig'] = fig
+        self._plot['hist'] = out
+        self._plot['prop'] = kwargs
+        fig.figout(savefile=savefile,show=show)
     # ========================== #
     # = Internal Stufff        = #
     # ========================== #
@@ -864,7 +953,7 @@ class PhotoPointCollection( Collection ):
         """
         """
         return self._handler
-    
+        
     # ------------------ #
     # - On flight prop - #
     # ------------------ #
@@ -923,306 +1012,23 @@ class PhotoPointCollection( Collection ):
     # - Derived
     @property
     def data(self):
-        """ The builds an astropy table containing the fundatemental parameters of the collection """
+        """ builds an astropy table containing the fundatemental parameters of the collection """
         # - Main
         maindata = [self.list_id,self.fluxes,self.fluxvars,self.lbdas,self.mjds,self.bandnames,
                     self.get("zp"),self.get("zpsys")]
-        mainnames= ["id","flux","var","wavelength","mjd","bandname","zp","zpsystem"]
+        mainnames= ["id","flux","var","lbda","mjd","bandname","zp","zpsys"]
         # - Meta
-        metaname = self.metakeys
-        metadata = [self.get(metak) for metak in metaname]
-        return Table(data=maindata+metadata,
-                     names=mainnames+metaname)
-
-########################################
-#                                      #
-# Hi Level Classes:  PhotoMap          #
-#                                      #
-########################################
-class PhotoMap( PhotoPointCollection ):
-    """
-    """
-    #__nature__ = "PhotoMap"
-    
-    def __init__(self, photopoints=None,coords=None,
-                 filein=None,empty=False,wcs=None,**kwargs):
-        """
-        """
-        self.__build__()
-        if empty:
-            return
-        if filein is not None:
-            self.load(filein,**kwargs)
-            
-        if photopoints is not None:
-            self.create(photopoints,coords,wcs=wcs,**kwargs)
-        
-            
-    def __build__(self):
-        """
-        """
-        self._properties_keys = self._properties_keys+["wcsid"]
-        self._side_properties_keys = self._side_properties_keys + \
-          ["refmap","wcs","catalogue"]
-        super(PhotoMap,self).__build__()
-
-    def _read_table_comment_(self, comments):
-        """
-        """
-        for c in comments:
-            key,value = c.split()
-            if key == "wcsid":
-                self._properties["wcsid"]=bool(value)
-            else:
-                print "comment not saved: ", c
-                
-    # =============================== #
-    # = Building Methods            = #
-    # =============================== #
-
-    # ---------------- #
-    # - SUPER THEM   - #
-    # ---------------- #
-    def create(self,photopoints,coords, wcs_coords=None,
-               wcs=None,refmaps=None,**kwargs):
-        """
-        wcs_coords means that the coordinate are given in ra,dec.
-        
-        """
-        super(PhotoMap,self).create(photopoints,ids=coords,**kwargs)
-        if wcs is not None:
-            self.set_wcs(wcs)
-        if refmaps is not None:
-            self.set_refmaps(wcs)
-        
-    def add_photopoint(self,photopoint,coords,refphotopoint=None):
-        """
-        Add a new photopoint to the photomap. If you have set a 
-        """
-        if coords is None:
-            raise ValueError("The coordinates of the photopoint are necessary")
-        
-        if type(coords) is str or type(coords) is np.string_:
-            # -- If this failse, the coordinate format is not correct
-            coords = self.id_to_coords(coords)
-        elif np.shape(coords) != (2,):
-            raise TypeError("the given coordinate must be a 2d array (x,y)/(ra,dec)")
-        
-        super(PhotoMap,self).add_photopoint(photopoint,self.coords_to_id(*coords))
-        # -----------------------
-        # - Complet the refmap
-        if self.has_refmap():
-            if refphotopoint is None:
-                refphotopoint = photopoint(empty=True)
-            self.remap.add_photopoint(refphotopoint,coords)
-            
-    def writeto(self,filename,format="ascii.commented_header",**kwargs):
-        comments = "".join(["# %s %s \n "%(key, value) for key,value in [["wcsid",self._wcsid]]])
-        super(PhotoMap,self).writeto(filename,format,comment=comments,**kwargs)
-        
-    # =============================== #
-    # = Main Methods                = #
-    # =============================== #
-    def coords_to_id(self,x,y):
-        """ this enables to have consistent coordinate/id mapping """
-        return "%.8f,%.8f"%(x,y)
-    
-    def id_to_coords(self,id):
-        return np.asarray(id.split(","),dtype="float")
-
-    # ------------- #
-    # - SETTER    - #
-    # ------------- #
-    def set_wcs(self,wcs,force_it=False):
-        """
-        """
-        if self.has_wcs() and force_it is False:
-            raise AttributeError("'wcs' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-                    
-        from .astrometry import get_wcs
-        self._side_properties["wcs"] = get_wcs(wcs,verbose=True)
-
-    def set_refmap(self, photomap,force_it=False):
-        """
-        Set here the reference map associated to the current one.
-        The ordering of the point must be consistant with that of the current
-        photomap. 
-        """
-        if self.has_refmap() and force_it is False:
-            raise AttributeError("'refmap' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        #if "__nature__" not in dir(photomap) or photomap.__nature__ != "PhotoMap":
-        #    raise TypeError("The given reference map must be a astrobject PhotoMap")
-
-        self._side_properties["refmap"] = photomap
-
-    def set_catalogue(self,catalogue,force_it=True):
-        """
-        Attach to this instance a catalogue.
-        
-        Parameters
-        ---------
-        Return
-        ------
-        Voids
-        """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-
-        # ----------------------
-        # - Clean the catalogue 
-        catalogue.reset()
-        
-        # -------------------------
-        # - Add the world_2_pixel            
-        if self.has_wcs():
-            if catalogue.has_wcs():
-                warnings.warn("WARNING the given 'catalogue' already has a wcs solution. This did not overwrite it.")
-            else:
-                catalogue.set_wcs(self.wcs)
-                
-        # ---------------------
-        # - Test consistancy
-        if catalogue.nobjects_in_fov < 1:
-            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
-            return
-        
-        # ---------------------
-        # - Good To Go
-        self._side_properties["catalogue"] = catalogue
-        
-    # ------------- #
-    # - GETTER    - #
-    # ------------- #
-    def get_ids_around(self, ra, dec, radius):
-        """
-        Parameters:
-        ----------
-        ra, dec : [float]          Position in the sky *in degree*
-
-        radius: [astropy.Quantity] distance of search, using astropy.units
-
-        Return
-        ------
-        (SkyCoords.search_around_sky output)
-        """
-        from astropy import coordinates
-        sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
-        ra_,dec_ = self.coords.T
-        return coordinates.SkyCoord(ra=ra_*units.degree,dec=dec_*units.degree).search_around_sky(sky, radius)
-
-    # ------------- #
-    # - PLOTTER   - #
-    # ------------- #
-    def display_voronoy(self,ax=None,toshow="flux",wcs_coords=False,
-                        show_nods=False,**kwargs):
-        """
-        Show a Voronoy cell map colored as a function of the given 'toshow'.
-        You can see the nods used to define the cells setting show_nods to True.    
-        """
-        if ax is None:
-            fig = mpl.figure(figsize=[8,8])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-            ax.set_xlabel("x" if not wcs_coords else "Ra",fontsize = "x-large")
-            ax.set_ylabel("y" if not wcs_coords else "Dec",fontsize = "x-large")
-        elif "imshow" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-
-        from ..utils.mpladdon import voronoi_patchs
-        # -----------------
-        # - The plot itself
-        out = ax.voronoi_patchs(self.radec if wcs_coords else self.xy,
-                                self.get(toshow),**kwargs)
-        if show_nods:
-            x,y = self.radec.T if wcs_coords else self.xy.T
-            ax.plot(x,y,marker=".",ls="None",color="k",
-                    scalex=False,scaley=False,
-                    alpha=kwargs.pop("alpha",0.8),zorder=kwargs.pop("zorder",3)+1)
-        ax.figure.canvas.draw()
-        return out
-        
-    # =============================== #
-    # = properties                  = #
-    # =============================== #
+        #metaname = self.metakeys
+        #metadata = [self.get(metak) for metak in metaname]
+        return table.Table(data=maindata,
+                     names=mainnames)
     @property
-    def radec(self):
-        """ """
-        if self._wcsid:
-            return self._coords
-        if not self.has_wcs():
-            raise AttributeError("You need a wcs solution to convert radec to pixels. None set.")
-        return self.wcs.pix2world(*self._coords.T)
+    def meta(self):
+        """  builds an astropy table containing the meta information about the sources of the collection """
+        if len(self.metakeys) == 0:
+            return None
+        metanames = self.metakeys
+        metadata = [self.get(metak) for metak in metanames]
+        return table.Table(data=[self.list_id]+metadata,
+                            names=["id"]+metanames)
     
-    @property
-    def xy(self):
-        """ """
-        if not self._wcsid:
-            return self._coords
-        if not self.has_wcs():
-            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
-        return self.wcs.world2pix(*self._coords.T)
-    
-    @property
-    def _coords(self):
-        """ """
-        return np.asarray([self.id_to_coords(id_) for id_ in self.list_id])
-    @property
-    def _wcsid(self):
-        if self._properties["wcsid"] is None:
-            warnings.warn("No information about the nature of the coordinate ids (wcs/pixel?). **WCS system assumed**")
-            self._properties["wcsid"] = True
-        return self._properties["wcsid"]
-    
-    # -------------
-    # - WCS
-    @property
-    def wcs(self):
-        return self._side_properties['wcs']
-    
-    def has_wcs(self):
-        return self.wcs is not None
-    
-    # -------------
-    # - RefMap
-    @property
-    def refmap(self):
-        return self._side_properties['refmap']
-    
-    def has_refmap(self):
-        return self.refmap is not None
-
-    # -------------
-    # - RefMap
-    @property
-    def catalogue(self):
-        return self._side_properties["catalogue"]
-    
-    def has_catalogue(self):
-        return False if self.catalogue is None\
-          else True
-    
-    # ------------- #
-    # - Derived   - #
-    # ------------- #
-    @property
-    def contours(self):
-        from ..utils import shape
-        return shape.get_contour_polygon(*self.radec.T)
-    
-    @property
-    def contours_pxl(self):
-        """
-        """
-        from ..utils import shape
-        return shape.get_contour_polygon(*self.xy.T)
-    
-

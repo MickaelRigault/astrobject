@@ -35,12 +35,12 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5.
         columns.append("e_%smag"%band)
     
     columns = columns+extracolums
-    column_quality = {"mode":"1","q_mode":"+","Q":"2.3"}
+    column_quality = {"mode":"1","Q":"2.3"}
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
     c = vizier.Vizier(catalog="V/139", columns=columns,
                       column_filters=kwargs_update(column_quality,**column_filters))
     c.ROW_LIMIT = 100000
-    
+    print column_filters
     #try:
     t = c.query_region(center,radius=radius).values()[0]
     #except :
@@ -61,7 +61,8 @@ class SDSSCatalogue( Catalogue ):
     source_name = "SDSS"
     
     def __init__(self, catalogue_file=None,empty=False,
-                 key_mag=None,key_magerr=None,key_ra=None,key_dec=None):
+                 value_star=6,key_mag=None,key_magerr=None,
+                 key_ra=None,key_dec=None,**kwargs):
         """
         """
         self.__build__(data_index=2,key_mag=key_mag,
@@ -70,7 +71,8 @@ class SDSSCatalogue( Catalogue ):
         if empty:
             return
         
-        self.load(catalogue_file)        
+        self.load(catalogue_file,**kwargs)
+        self.set_starsid("cl",6)
     
     @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
@@ -129,7 +131,7 @@ class MASSCatalogue( Catalogue ):
     source_name = "2MASS"
     
     def __init__(self, catalogue_file=None,empty=False,
-                 key_mag=None,key_magerr=None,key_ra=None,key_dec=None):
+                 key_mag=None,key_magerr=None,key_ra=None,key_dec=None,**kwargs):
         """
         """
         self.__build__(data_index=2,key_mag=key_mag,
@@ -138,7 +140,7 @@ class MASSCatalogue( Catalogue ):
         if empty:
             return
         
-        self.load(catalogue_file)        
+        self.load(catalogue_file,**kwargs)        
     
     @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
@@ -217,7 +219,7 @@ def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5.
     
     cat = WISECatalogue(empty=True)
     cat.create(t.columns,None,
-               key_class="ToBeDone",value_star=6,
+               key_class="ToBeDone",value_star=None,
                key_ra="RAJ2000",key_dec="DEJ2000")
     return cat
 
@@ -230,7 +232,7 @@ class WISECatalogue( Catalogue ):
     source_name = "WISE"
     
     def __init__(self, catalogue_file=None,empty=False,
-                 key_mag=None,key_magerr=None,key_ra=None,key_dec=None):
+                 key_mag=None,key_magerr=None,key_ra=None,key_dec=None,**kwargs):
         """
         """
         
@@ -242,7 +244,7 @@ class WISECatalogue( Catalogue ):
         if empty:
             return
         
-        self.load(catalogue_file)        
+        self.load(catalogue_file,**kwargs)  
     
     @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):

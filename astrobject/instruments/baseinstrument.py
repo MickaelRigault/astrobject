@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import warnings 
 from sncosmo import get_bandpass
 from astropy import coordinates,units
 from astropy.table.table import Table,TableColumns
@@ -12,7 +13,7 @@ from ...utils.tools import kwargs_update,mag_to_flux,load_pkl,dump_pkl
 from ...utils import shape
 
 from .. import astrometry
-from ...astrobject.photometry import Image,photopoint
+from ...astrobject.photometry import Image,get_photopoint
 from ..baseobject import BaseObject,astrotarget
 __all__ = ["Instrument"]
 
@@ -38,22 +39,27 @@ class Instrument( Image ):
                                            **kwargs)
         flux = self.count_to_flux(count)
         var  = self.count_to_flux(err)**2
+        
         # ------------------
         # - One Photopoint
         if "__iter__" not in dir(flux):
-            return photopoint(self.lbda,flux,var,
-                            source="image",mjd=self.mjd_obstime,
+            return get_photopoint(self.lbda,flux,var,
+                            source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
         # -----------------------
-        # - Several Photopoints
-        pps = [photopoint(self.lbda,flux_,var_,
-                            source="image",mjd=self.mjd_obstime,
+        # - Several Photopoints\
+        pps = [get_photopoint(self.lbda,flux_,var_,
+                            source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
                             for flux_,var_ in zip(flux,var)]
-        from ..collection import PhotoMap
-        return PhotoMap(pps,np.asarray([x,y]).T,wcs=self.wcs,wcs_coords=wcs_coords)
+        from ..collections import get_photomap
+        return get_photomap(pps,np.asarray([x,y]).T,
+                        wcs=self.wcs,
+                        catalogue=self.catalogue.get_subcatalogue(fovmask=True, catmag_range=[1,30]) \
+                          if self.has_catalogue() else None,
+                        wcs_coords=wcs_coords)
     
     @_autogen_docstring_inheritance(Image.get_target_aperture,
                                     "Image.get_target_aperture")
@@ -113,8 +119,8 @@ class Instrument( Image ):
         return self._gain * self.exposuretime
     
     @property
-    def mjd_obstime(self):
-        raise NotImplementedError("'obstime' must be implemented")
+    def mjd(self):
+        raise NotImplementedError("'mjd' (Modified Julian Date) must be implemented")
 
 ############################################
 #                                          #
@@ -129,7 +135,8 @@ class Catalogue( BaseObject ):
     source_name = "_not_defined_"
     
     _properties_keys = ["filename","data","header"]
-    _side_properties_keys = ["wcs","fovcontours","fovmask","matchedmask","lbda"]
+    _side_properties_keys = ["wcs","fovcontours","fovmask","matchedmask","lbda",
+                             "excluded_list"]
     _derived_properties_keys = ["fits","naround","naround_nofovcut","contours"]
 
     
@@ -193,8 +200,11 @@ class Catalogue( BaseObject ):
                 except:
                     print "WARNING Convertion of 'data' into astropy TableColumns failed"
         else:
-            raise TypeError("the given catalogue_file must be a .fits or.pkl")
-
+            fits   = None
+            header = None
+            format_ = kwargs.pop("format","ascii")
+            data   = Table.read(catalogue_file,format=format_,**kwargs)
+            
         # ---------------------
         # - Calling Creates
         self.create(data,header,**kwargs)
@@ -224,6 +234,7 @@ class Catalogue( BaseObject ):
         self._properties["data"] = Table(data)
         self._properties["header"] = header if header is not None \
           else pf.Header()
+        self.set_starsid(build.pop("key_class",None),build.pop("value_star",None))
         self._build_properties = kwargs_update(self._build_properties,**build)
         # -------------------------------
         # - Try to get the fundamentals
@@ -235,7 +246,18 @@ class Catalogue( BaseObject ):
     
         self._update_contours_()
 
-
+    def set_starsid(self,key, value, testkey=True):
+        """
+        """
+        
+        if self.has_data() and key is not None and key not in self.data.keys() and testkey:
+            raise ValueError("%s is not a known data entry. Set testkey to avoid the test"%key)
+        if key is not None and value is None:
+            warnings.warn("No star value set (star_value = None)")
+            
+        self._build_properties['key_class'] = key
+        self._build_properties['value_star'] = value
+        
     def extract(self,contours):
         """
         This method enables to get a (potential) sub part of the existing catalogue
@@ -283,15 +305,19 @@ class Catalogue( BaseObject ):
         self._derived_properties["contours"] = self.contours.union(catalogue_.contours)
         
             
-    def writeto(self,savefile,force_it=True):
+    def writeto(self,savefile,format="ascii",force_it=True,**kwargs):
         """
         The catalogue will be saved as pkl or fits files. The fits wil be used if this
         has a header, the pkl otherwise
         """
-        if self.header is None or len(self.header.keys())==0:
-            self._writeto_pkl_(savefile)
+        # -- First file
+        if not self.header is None and len(self.header.keys())>0 and format=="fits":
+            self._writeto_fits_(savefile,force_it=force_it,**kwargs)
+        # -- pkl file
+        elif savefile.endswith(".pkl") and format=="pkl":
+            self._writeto_pkl_(savefile,force_it=force_it,**kwargs)
         else:
-            self._writeto_fits_(savefile,force_it=force_it)
+            self.data.write(savefile,format=format,**kwargs)
 
     # --------------------- #
     # Unset Methods         #
@@ -366,7 +392,7 @@ class Catalogue( BaseObject ):
         elif fovcontours is None:
             raise ValueError("Either wcs or fovcontours must be provided")
         
-        self.fovmask = self.get_contour_mask(fovcontours)
+        self.fovmask = self.get_contour_mask(fovcontours, infov=False)
         self._side_properties["fovcontours"] = fovcontours
         
     def set_matchedmask(self,matchedmask):
@@ -422,13 +448,18 @@ class Catalogue( BaseObject ):
         return val_ if mask is None else val_[mask]
     
     def get_subcatalogue(self, contours=None, catmag_range=[None,None],
-                         stars_only=False, isolated_only=False,**kwargs):
+                         stars_only=False, isolated_only=False,
+                         fovmask=False,
+                         **kwargs):
         """ Returns a value of a sub fov of the catalogue. Only objects within the contours' fov
         will be contained in the returned catalogue """
 
         mask = self.get_mask(contours=contours, catmag_range=catmag_range,
                             stars_only=stars_only, isolated_only=isolated_only,
                             fovmask=False)
+        if fovmask:
+            mask = mask * self.fovmask
+        
         subcat = self.__class__(empty=True)
         subcat.create(self.data[mask], None, force_it=True,**self._build_properties)
         return subcat
@@ -493,8 +524,10 @@ class Catalogue( BaseObject ):
             raise AttributeError("Needs a wcs solution to get pixel coordinates")
         if not wcs_coords:
             ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
-
-        skytarget = coordinates.SkyCoord([ra*units.degree],[dec*units.degree])
+        if "__iter__" not in dir(ra):
+            ra = [ra]
+            dec = [dec]
+        skytarget = coordinates.SkyCoord(ra*units.degree,dec*units.degree)
         catsky = self.sky_radec if infov else self._sky_radec
         return catsky.search_around_sky(skytarget,
                                         radius*units.Unit(runits))[1:3]
@@ -508,37 +541,39 @@ class Catalogue( BaseObject ):
         _dec = self.dec if infov else self._dec
         return np.asarray([shape.point_in_contours(ra,dec, contours)
                            for ra,dec in zip(_ra,_dec)])
-    
-    def get_photomap(self,idx_only=None,lbda=None):
-        """
-        """
-        from ..collection import PhotoMap
-        # --------------
-        # - Masking
-        
-        mask = self.idx_to_mask(idx_only) if idx_only is not None \
-          else np.ones(self.nobjects,dtype=bool)
-        self.lbda = lbda if lbda is not None else self.lbda
-        if self.lbda is None:
-            raise ValueError("No known 'lbda' and no 'lbda' given")
 
-        flux_fluxerr = self._flux_fluxerr
-        fluxes = flux_fluxerr[0][mask]
-        variances = flux_fluxerr[1][mask]**2
-        ra = self.ra[mask]
-        dec = self.dec[mask]
-        #ppoints = 
-        pmap = PhotoMap(fluxes=fluxes,variances=variances,
-                        coords=zip(ra,dec),lbda=self.lbda,
-                        wcs =self.wcs)
-        return pmap
+    # --------------------- #
+    # Convertors            #
+    # --------------------- #
+
     
+    # --------------------- #
+    # Convertors            #
+    # --------------------- #
     def idx_to_mask(self,idx, infov=False):
         mask = np.zeros(self.nobjects,dtype=bool) if not infov else np.zeros(self.nobjects_in_fov,dtype=bool)
         for i in idx:
             mask[i] = True
         return mask
 
+    # --------------------- #
+    # Exclusion             #
+    # --------------------- #
+    def exclude_source(self,key,value):
+        """ Exclude the cases where data[key] == value. Then use the exclusionmask """
+        if key not in self.data.keys():
+            raise ValueError("the given key (%s) is not known by self.data"%key)
+        ids_to_exclude = np.argwhere(self.data[key]==value)
+        if len(ids_to_exclude)==0:
+            warnings.warn("WARNING: No value excluded. not match")
+            print "WARNING: No value excluded. not match"
+            return
+        self._side_properties["excluded_list"] = self.excluded_list.tolist()+ids_to_exclude.tolist()
+        
+    def clear_excluded_list(self):
+        """ empty the exclusion list """
+        self._side_properties["excluded_list"] = None
+        
     # --------------------- #
     # PLOT METHODS          #
     # --------------------- #
@@ -733,7 +768,6 @@ class Catalogue( BaseObject ):
     def fovmask(self):
         if self._side_properties["fovmask"] is None:
             self._load_default_fovmask_()
-            
         return self._side_properties["fovmask"]
     
     def _load_default_fovmask_(self):
@@ -745,7 +779,25 @@ class Catalogue( BaseObject ):
             raise ValueError("the given 'mask' must have the size of 'ra'")
         self._side_properties["fovmask"] = newmask
 
+    # -- Exclusion
+    @property
+    def excluded_list(self):
+        if self._side_properties["excluded_list"] is None:
+            self._side_properties["excluded_list"] = []
+        return np.asarray(self._side_properties["excluded_list"])
+    
+    def has_excluded_cases(self):
+        return len(self.excluded_list)>0
 
+    @property
+    def excludedmask(self):
+        return self._excludedmask[self.fovmask]
+    
+    @property
+    def _excludedmask(self):
+        return self.idx_to_mask(self.excluded_list,infov=False)
+        
+    # -- Matching
     @property
     def matchedmask(self):
         return self._side_properties["matchedmask"]
@@ -864,7 +916,7 @@ class Catalogue( BaseObject ):
         if "key_class" not in self._build_properties.keys():
             raise AttributeError("no 'key_class' provided in the _build_properties.")
         
-        return self.data[self._build_properties["key_class"]]
+        return np.asarray(self.data[self._build_properties["key_class"]])
     
     @property
     def starmask(self, infov=True):
@@ -874,8 +926,7 @@ class Catalogue( BaseObject ):
         """
         if "value_star" not in self._build_properties.keys():
             return None
-        flag = (self.objecttype == self._build_properties["value_star"])
-        return flag.data  #not self.fovmask already in objecttype
+        return (self.objecttype == self._build_properties["value_star"])
 
     @property
     def _starmask(self):
@@ -885,13 +936,14 @@ class Catalogue( BaseObject ):
         """
         if "value_star" not in self._build_properties.keys():
             return None
-        flag = (self._objecttype == self._build_properties["value_star"])
-        return flag.data  #not self.fovmask already in objecttype
+        return (self._objecttype == self._build_properties["value_star"])
         
     def has_starmask(self):
         return False if self.starmask is None \
           else True
-          
+
+
+
     # ------------
     # - Derived
     @property
@@ -901,7 +953,7 @@ class Catalogue( BaseObject ):
     @property
     def wcs_xy(self):
         if self.has_wcs():
-            return np.asarray(self.wcs.world2pix(self.ra,self.dec))
+            return np.asarray(self.wcs.world2pix(self.ra,self.dec)).T
         raise AttributeError("no 'wcs' solution loaded")
 
     # ----------------------
@@ -960,7 +1012,25 @@ class Catalogue( BaseObject ):
     @property
     def contours(self):
         return self._derived_properties["contours"]
+
+    @property
+    def contours_pxl(self,**kwargs):
+        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        if not self.has_wcs():
+            raise AttributeError("no wcs solution loaded. You need one.")
+        x,y = np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in
+                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)
     
     @property
     def fovcontours(self):
         return self._side_properties["fovcontours"]
+
+    @property
+    def fovcontours_pxl(self,**kwargs):
+        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        if not self.has_wcs():
+            raise AttributeError("no wcs solution loaded. You need one.")
+        x,y = np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in
+                          np.asarray(self.fovcontours.exterior.xy).T]).T # switch ra and dec ;  checked
+        return shape.get_contour_polygon(x,y)

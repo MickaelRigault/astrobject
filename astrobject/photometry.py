@@ -17,9 +17,14 @@ from . import astrometry
 from .baseobject   import BaseObject 
 from ..utils.tools import kwargs_update,flux_to_mag
 
-__all__ = ["image","photopoint"]
+__all__ = ["get_image","get_photopoint"]+ ["image","photopoint"] # should be removed
 
 def image(filename=None,astrotarget=None,**kwargs):
+    print "DECREPATED: image->get_image"
+    return get_image(filename=filename,astrotarget=astrotarget,**kwargs)
+
+
+def get_image(filename=None,astrotarget=None,**kwargs):
     """
     Initalize the image by giving its filelocation (*filename*). This
     will load it using the load() method.
@@ -43,12 +48,23 @@ def image(filename=None,astrotarget=None,**kwargs):
     Image
     """
     return Image(filename,astrotarget=astrotarget,
-                 **kwargs)#.copy()
-
+                 **kwargs)
+                 
 def photopoint(lbda=None,flux=None,var=None,
                zp=None,bandname=None,
                mjd=None,source=None,
                instrument_name=None,**kwargs):
+    
+    print "DECREPATED: photopoint->get_photopoint"
+    return get_photopoint(lbda=lbda,flux=flux,var=var,
+                          zp=zp,bandname=bandname,
+                          mjd=mjd,source=source,
+                          instrument_name=instrument_name,**kwargs)
+
+def get_photopoint(lbda=None,flux=None,var=None,
+                   zp=None,bandname=None,
+                   mjd=None,source=None,
+                   instrument_name=None,**kwargs):
     """
     Get the basic object containing  photometric point information
     
@@ -97,55 +113,6 @@ def photopoint(lbda=None,flux=None,var=None,
                       mjd=mjd,zp=zp,bandname=bandname,
                       **kwargs)
 
-def lightcurve(datapoints,times,**kwargs):
-    """
-    This functions enables to create a lightcurve object
-    from the given datapoints and times. The datapoints can
-    either be a list of 'PhotoPoint' or a dictionnary having
-    {flux, variance, lbda_s}
-
-    Parameters
-    ----------
-    datapoints: [list/dict]        Two formes fo data can be given to this function.
-
-                                   1) datapoints = list-of-PhotoPoint
-                                   This is a simple list (or array) of astrobject
-                                   PhotoPoint. Its size must corresponds to 'times' one
-                                   
-                                   2) a dictionnary having 3 parameters: lbda, fluxes,
-                                   and variances. Each have to have the size of 'times'
-                                   except lbda that could be simple float since all
-                                   must share the same lbda.
-
-    times: [array]                 This is the list/array of times corresponding to
-                                   each data points.
-
-    - options -
-
-    Return
-    ------
-    LightCurve
-    
-    """
-    if type(datapoints) is dict:
-        # this must be a dictsource:
-        datapoints = dictsource_2_photopoints(datapoints)
-        
-    if type(datapoints) is list or type(datapoints) is np.ndarray:
-        # - This should be a list of PhotoPoints, otherwise create will break
-        if len(times) != len(datapoints):
-            raise ValueError("'times and datapoints must have the same size")
-        
-        return LightCurve(datapoints, times)
-    
-    raise TypeError("'datapoints' must be a list of photopoints or a dictsource")
-        
-
-def sexobjects(sexoutput):
-    """
-    """
-    return SexObjects(sexoutput)
-    
 # ========================== #
 #  Internal Tool             #
 # ========================== #
@@ -204,9 +171,6 @@ def dictsource_2_photopoints(dictsource,**kwargs):
             for flux,var,lbda,source,ins in zip(fluxes,variances,lbda,
                                                 source,instrument_name)]
 
-    
-    
-    
 #######################################
 #                                     #
 # Base Object Classes: Image          #
@@ -234,7 +198,7 @@ class Image( BaseObject ):
     # =========================== #
     def __init__(self,filename=None,
                  astrotarget=None,data_index=0,
-                 dataslice0=[0,-1],dataslice1=[0,-1],
+                 dataslice0=[0,None],dataslice1=[0,None],
                  empty=False,**kwargs):
         """
         Initalize the image by giving its filelocation (*filename*). This
@@ -277,7 +241,8 @@ class Image( BaseObject ):
                 data_index = data_index,
                 header_exptime = "EXPTIME",
                 dataslice0="undefined",
-                dataslice1="undefined"
+                dataslice1="undefined",
+               bkgdbox={"bh":100,"bw":100,"fh":3,"fw":3},
                 )
 
     # =========================== #
@@ -288,7 +253,7 @@ class Image( BaseObject ):
     # ------------------- #
     def load(self,filename,index=None,
              force_it=False,
-             dataslice0=[0,-1],dataslice1=[0,-1]):
+             dataslice0=[0,None],dataslice1=[0,None]):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
@@ -304,6 +269,7 @@ class Image( BaseObject ):
         dataslice0/1 [2D-array]    load only the data within the given boundaries.
                                    The 0-offset will be accessible in self._dataoffset
                                    and will be passed to the wcs solution.
+                                   None means no limits
         
         index: [int]               The fits entry that contains the data
                                    If None, this will fetch it in the build_properties
@@ -339,6 +305,7 @@ class Image( BaseObject ):
         # ---------- #
         # - Data   - #
         # ---------- #
+        print dataslice0,dataslice1
         data = fits[index].data[dataslice0[0]:dataslice0[1],
                                 dataslice1[0]:dataslice1[1]]
         self._build_properties["dataslice0"] = dataslice0
@@ -385,21 +352,19 @@ class Image( BaseObject ):
         self._derived_properties["fits"]  = fits
         self._properties["header"]        = pf.Header() if header is None else header
         self._side_properties["exptime"]  = exptime
-        # - WCS solution
-        self.set_wcs(wcs)
-        
         # --------------
         # - Read data
         self._set_data_(rawdata,mask,
                         variance=variance,
                         background=background)
+        # - WCS solution
+        self.set_wcs(wcs)
         
     def reload_data(self, dataslice0, dataslice1,
                     variance=None,background=None,mask=None):
         """ Change the slicing of the data.
         This will update the background, variance and the wcs solution's offset.
         If you had an sepobjects loaded, this will update it."""
-        
         rawdata = self.fits[self._build_properties["data_index"]].data[
             dataslice0[0]:dataslice0[1],
             dataslice1[0]:dataslice1[1]]
@@ -407,15 +372,18 @@ class Image( BaseObject ):
         reload_sep = self.has_sepobjects()
 
         self._derived_properties["sepobjects"] = None
+        self._build_properties["dataslice0"] = dataslice0
+        self._build_properties["dataslice1"] = dataslice1
+
         self._set_data_(rawdata,mask=mask,
                         variance=variance,
                         background=background)
-        
-        self._build_properties["dataslice0"] = dataslice0
-        self._build_properties["dataslice1"] = dataslice1
+
         if self.has_wcs():
-            self.wcs.set_offset(*self._dataoffset)
-            
+            self.wcs.set_offset(*self._dataslicing)
+            if self.has_catalogue():
+                self.catalogue.set_fovmask(wcs=self.wcs)
+        
         if reload_sep: self.sep_extract()
         
     # ------------------- #
@@ -465,7 +433,7 @@ class Image( BaseObject ):
         if "__nature__" not in dir(wcs) or wcs.__nature__ != "WCS":
             raise TypeError("The given wcs solution is not a astrobject WCS instance")
         self._side_properties["wcs"] = astrometry.get_wcs(wcs)
-        self.wcs.set_offset(*self._dataoffset)
+        self.wcs.set_offset(*self._dataslicing)
         
     def set_catalogue(self,catalogue,force_it=False):
         """
@@ -506,7 +474,7 @@ class Image( BaseObject ):
             
             # -- Lets save the pixel values
             if self.has_sepobjects():
-                self.sepobjects.set_catalogue(catalogue,force_it=True)
+                self.sepobjects.set_catalogue(catalogue,force_it=True,reset=False)
                 self.sepobjects.match_catalogue()
             
                 
@@ -515,7 +483,7 @@ class Image( BaseObject ):
         self._side_properties["catalogue"] = catalogue
         
     def set_background(self,background,
-                       force_it=False,check=True):
+                       force_it=False,check=True, update=True):
         """
         This is a method that might strongly depend on the instrument.
         As a default (background = None) this uses Sextractor background
@@ -560,7 +528,8 @@ class Image( BaseObject ):
             raise ValueError("The given background must have rawdata's shape")
         # -- Looks good
         self._properties['background'] = np.asarray(background)
-        self._update_data_(update_background=False)
+        if update:
+            self._update_data_(update_background=False)
         
     def set_fwhm(self,value,force_it=True):
         """
@@ -597,12 +566,12 @@ class Image( BaseObject ):
         ------
         Void (or the Catalogue if set_it is False)
         """
-        from .instruments import instrument
-        radec = "%s %s"%(self.wcs.central_coords[0],
-                         self.wcs.central_coords[1])
+        from .instruments.instrument import fetch_catalogue
+        radec = "%s %s"%(self.wcs._central_coords_nooffset[0],
+                         self.wcs._central_coords_nooffset[1])
         radius = self.wcs.diag_size/1.8 # not 2 to have some room around
-        cat = instrument.catalogue(source=source,radec=radec,radius="%sd"%radius,
-                                    **kwargs)
+        cat = fetch_catalogue(source=source,radec=radec,radius="%sd"%radius,
+                              **kwargs)
         if not set_it:
             return cat
         self.set_catalogue(cat,force_it=force_it)
@@ -753,10 +722,10 @@ class Image( BaseObject ):
         r_pixels = radius*self.units_to_pixels(runits)
         # - position
         if wcs_coords and not self.has_wcs():
-            raise AttributeError("you cannot provide ra,dec coordinate without a wcs solution. cannot convert them into pixel coords")
+            raise AttributeError("you cannot provide ra,dec coordinate without a wcs solution:"+\
+                                 " cannot convert them into pixel coords")
         if wcs_coords:
             x,y = self.coords_to_pixel(x,y).T 
-            
             
         # -------------
         # - SEP Input 
@@ -766,7 +735,6 @@ class Image( BaseObject ):
         # -----------------
         # - Variance Trick
         var = kwargs.pop("var",self.var)
-
         # ------------------------
         # - Do the Aperture Photo
         # ----------------------
@@ -826,32 +794,13 @@ class Image( BaseObject ):
 
     # - Conversion tools
     def units_to_pixels(self,units_):
-        """units should be a parsable string or a astropy units"""
-        
-        if type(units_) == str:
-            # - astropy units
+        """units should be a parsable string or a astropy units. Uses the wcs method units_to_pixels()
+        In addition, you have access to the 'psf [==fwhm]' unit"""
+        if type(units_) == str and units_.lower() in ["fwhm","psf"]:
+            units_ = self.fwhm
             
-            if units_.lower() in ["pixel","pixels","pxl","pix","pxls","pixs"]:
-                return units.Quantity(1.)
-            elif units_.lower() in ["fwhm","psf"]:
-                units_ = self.fwhm
-            elif units_.lower() in ["kpc"]:
-                if not self.has_target():
-                    raise AttributeError("You need a target to convert kpc->arcsec")
-                units_ = self.target.arcsec_per_kpc * units.arcsec
-            elif units_ in dir(units):
-                units_ = 1*units.Unit(units_)
-            else:
-                TypeError("unparsable units %s: astropy.units or pixels/pxl or kpc could be provided."%units_)
-        # ----------------
-        # - astropy Units
-        if type(units_) is units.core.Unit:
-            units_ = 1*units_
-
-        if type(units_) is units.quantity.Quantity:
-            return units_.to("arcsec") / self.pixel_size_arcsec
-        
-        raise TypeError("unparsable units: astropy.units or pixels/pxl or kpc could be provided.")
+        return self.wcs.units_to_pixels(units_,target=self.target)
+    
             
     def pixel_to_coords(self,pixel_x,pixel_y):
         """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
@@ -885,8 +834,8 @@ class Image( BaseObject ):
             del self._rmsep
             
             return self._sepbackground.back()
-        
-        self.set_background(self._sepbackground.back(),force_it=True)
+        if update_background:
+            self.set_background(self._sepbackground.back(),force_it=True)
         self.sep_extract(match_catalogue= not cleaning_sep)
         self._rmsep=cleaning_sep
         return self.get_sep_background(update_background=True)
@@ -932,27 +881,41 @@ class Image( BaseObject ):
         Void [or ndarray(sep.extract output) is returnobjects set to True]
         """
         from sep import extract
+        from collections import get_sepobject
+
+        
         if thresh is None:
-            thresh = self._get_sep_extract_threshold_()
-            
+            thresh = self._get_sep_extract_threshold_() if self.var is None\
+              else np.sqrt(self.var).mean()*1.5
+              
         o = extract(self.data,thresh,**kwargs)
-        self._derived_properties["sepobjects"] = sexobjects(o)
+        
+        # -- If this is an instrument and not an image
+        instrument_prop = {'lbda':self.lbda,"mjd":self.mjd,
+                           "bandname":self.bandname} if "lbda" in dir(self) else\
+                           {}
+        self._derived_properties["sepobjects"] = \
+          get_sepobject(o,ppointkwargs=instrument_prop) 
 
         if self.has_wcs():
             self.sepobjects.set_wcs(self.wcs)
 
         if set_catalogue and self.has_catalogue():
-            self.sepobjects.set_catalogue(self.catalogue,force_it=True)
+            # by give the catalogue and not a copy, the matching information
+            # is consistant between the sepobject and this instance (same catalogue)
+            self.sepobjects.set_catalogue(self.catalogue, reset=False)
             if match_catalogue:
                 self.sepobjects.match_catalogue()
+                
                     
         if returnobjects:
             return self.sepobjects
         
     def _get_sep_extract_threshold_(self):
         """this will be used as a default threshold for sep_extract"""
+        print "_get_sep_extract_threshold_ called"
         if "_sepbackground" not in dir(self):
-                _ = self.get_sep_background()
+                _ = self.get_sep_background(update_background=False)
         return self._sepbackground.globalrms*1.5
     
 
@@ -1349,8 +1312,10 @@ class Image( BaseObject ):
         self._properties['rawdata'] = np.asarray(value)
         self._update_data_()
 
+        
     @property
-    def _dataoffset(self):
+    def _dataslicing(self):
+        """ return offset0, offset1, height, width """
         if self._build_properties["dataslice0"] == "undefined":
             warnings.warn("No _build_properties['dataslice0'] defined. 0 assumed")
             offset0 = [0,-1]
@@ -1361,8 +1326,24 @@ class Image( BaseObject ):
             offset1 = [0,-1]
         else:
             offset1=self._build_properties["dataslice1"]
+        
+        if offset0[1] is None:
+            offset0[1] = self.header["NAXIS2"]
             
-        return offset0[0],offset1[0]
+        if offset0[1] <0:
+            offset0[1] = self.height+offset0[1]+1
+            
+        if offset1[1] is None:
+            offset1[1] = self.header["NAXIS1"]
+            
+        if offset1[1] <0:
+            offset1[1] = self.width +offset1[1]+1
+            
+        return offset0[0],offset1[0],offset0[1]-offset0[0],offset1[1]-offset1[0]
+    
+    @property
+    def _dataoffset(self):
+        return self._dataslicing[:2]
             
     # Background
     @property
@@ -1454,7 +1435,6 @@ class Image( BaseObject ):
             return [ps.to("arcsec") for ps in self.pixel_size_deg]
         return self.pixel_size_deg.to("arcsec")
 
-    
     # ----------------      
     # -- target tools
     @property
@@ -1476,7 +1456,7 @@ class Image( BaseObject ):
           else False
           
     @property
-    def sepmask(self,r=5):
+    def sepmask(self,r=10):
         if not self.has_sepobjects():
             raise AttributeError("No sepobjects loaded. Run sep_extract")
         return self.sepobjects.get_ellipse_mask(self.width,self.height,r=r)
@@ -1517,7 +1497,7 @@ class Image( BaseObject ):
     # =========================== #
     def _set_data_(self,rawdata,mask=None,
                    variance=None,
-                   background=None):
+                   background=None, update=True):
         """ Change the instance fondamental: the rawdata """
         
         self._properties["rawdata"]       = self._read_rawdata_(rawdata)
@@ -1529,10 +1509,11 @@ class Image( BaseObject ):
         self._properties["var"]          = variance
         if self.has_datamask() and self.has_var():
             self._properties["var"][self.datamask] = np.NaN
-        # BACKGROUND   
-        self.set_background(background, force_it=True)
+        # BACKGROUND
+        self.set_background(background, force_it=True, update=False)
         # --> update
-        self._update_(update_background=False)
+        if update:
+            self._update_(update_background=False)
     
     def _read_rawdata_(self,rawdata):
         return np.asarray(rawdata,dtype="float")
@@ -1573,8 +1554,16 @@ class Image( BaseObject ):
         # ---------------
         # - masking sign tested
         self._derived_properties["backgroundmask"] = mask
-        self._sepbackground_prop = kwargs_update({"mask":self.backgroundmask ,
-                                                  "bw":100,"bh":100},
+        
+        if self._build_properties["bkgdbox"]['bh'] == "max":
+             self._build_properties["bkgdbox"]['bh'] = self.height-1
+        if self._build_properties["bkgdbox"]['bw'] == "max":
+             self._build_properties["bkgdbox"]['bw'] = self.width-1
+
+        build_prop = kwargs_update(self._build_properties["bkgdbox"],
+                                   **{"mask":self.backgroundmask})
+        
+        self._sepbackground_prop = kwargs_update(build_prop,
                                                   **kwargs)
         
         self._sepbackground = Background(self.rawdata,
@@ -1714,9 +1703,9 @@ class PhotoPoint( BaseObject ):
         # ****************** #
         # * Creation       * #
         # ****************** #
-        self._properties["lbda"] = np.float(lbda)
+        self._properties["lbda"] = np.float(lbda) if lbda is not None else None
         self._properties["flux"] = np.float(flux)
-        self._properties["var"]  = np.float(var)
+        self._properties["var"]  = np.float(var) if var is not None else np.NaN
 
         self._side_properties["source"] = source
         self._side_properties["instrument_name"] = instrument_name
@@ -1813,7 +1802,15 @@ class PhotoPoint( BaseObject ):
     # =========================== #
     @property
     def lbda(self):
-        return self._properties["lbda"]
+        if self._properties['lbda'] is None and self.bandname is not None:
+            try:
+                lbda = self.bandpass.wave_eff
+                warnings.warn("No wavelength provided. Effective wavelength from bandpass used.")
+                self._properties['lbda'] = self.bandpass.wave_eff
+            except:
+                warnings.warn("No wavelength provided and unknown (by sncosmo) `bandname`")
+            
+        return self._properties['lbda']
 
     @property
     def flux(self):
@@ -1835,10 +1832,11 @@ class PhotoPoint( BaseObject ):
     
     @mjd.setter
     def mjd(self,value):
-        if value < 48987:
-            print "Information mjd prior to 1993..."
-        elif value > 58849.0:
-            print "Information mjd posterior to 2020..."
+        if value is not None:
+            if value < 48987:
+                print "Information mjd prior to 1993..."
+            elif value > 58849.0:
+                print "Information mjd posterior to 2020..."
         
         self._properties["mjd"] = value
 
@@ -1848,10 +1846,11 @@ class PhotoPoint( BaseObject ):
     
     @zp.setter
     def zp(self,value):
-        if value <0:
-            raise ValueError("a zp cannot be negative")
-        if value >35:
-            warnings.warn("(PhotoPoint instance) the given zp is above 35...")
+        if value is not None:
+            if value==value and value <0:
+                raise ValueError("a zp cannot be negative")
+            if value==value and value >35:
+                warnings.warn("(PhotoPoint instance) the given zp is above 35...")
         
         self._properties["zp"] = value
         
@@ -1861,8 +1860,10 @@ class PhotoPoint( BaseObject ):
     
     @bandname.setter
     def bandname(self,value):
-        if type(value) != str and type(value) != np.string_:
-            raise TypeError("The bandname must be a string", type(value))
+        if value is not None:
+            if type(value) != str and type(value) != np.string_:
+                raise TypeError("The bandname must be a string", type(value))
+        
         self._properties["bandname"] = value
 
     @property
@@ -1932,896 +1933,3 @@ class PhotoPoint( BaseObject ):
         return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
 
 
-
-#######################################
-#                                     #
-# Base Object Classes: LightCurve     #
-#                                     #
-#######################################
-class LightCurve( BaseObject ):
-    """This object gather several PhotoPoint and there corresponding time
-    to forme a lightcurve"""
-    
-    __nature__ = "LightCurve"
-
-    _properties_keys = ["photopoints","times"]
-    _side_properties_keys = []
-    _derived_properties_keys = ["lbda"]
-    
-    # =========================== #
-    # = Constructor             = #
-    # =========================== #
-    def __init__(self,photopoints=None,
-                 times=None,empty=False):
-        """
-        """
-        print "Decrepated... To be moved to PhotoPointCollection'"
-        self.__build__()
-        if empty:
-            return
-        
-        if photopoints is not None or times is not None:
-            self.create(photopoints, times)
-            
-    # =========================== #
-    # = Main Methods            = #
-    # =========================== #
-    def create(self, photopoints, times):
-        """
-        """
-        if len(photopoints) != len(times):
-            raise ValueError("photopoints and times must have the same length")
-        
-        # ********************* #
-        # * Create the Object * #
-        # ********************* #
-        for p,t in zip(photopoints,times):
-            self.add_photopoint(p,t)
-            
-
-    # ------------------ #
-    # - Get Method     - #
-    # ------------------ #
-    def get_data(self):
-        """
-        This will be an SN cosmo like data. This is based on astropy table
-        """
-        from astropy.table.table import Table
-        return Table(data=[self.times, self.bandnames,
-                           self.fluxes,np.sqrt(self.fluxesvar),
-                           self.zps,[p.zpsys for p in self.photopoints]
-                           ],
-                    names=["time","band","flux","fluxerr","zp","zpsys"])
-    
-    # ------------------ #
-    # - I/O Photopoint - #
-    # ------------------ #
-    def create_new_photopoint(self,flux,var,lbda,time,
-                              **kwargs):
-        """
-        """
-        new_photopoint = photopoint(lbda,flux,var,**kwargs)
-        self.add_photopoint(new_photopoint,time)
-        
-        
-    def add_photopoint(self,photopoint,time):
-        """
-        """
-        # ----------------------- #
-        # - Test the bands      - #
-        # ----------------------- #
-        if "__nature__" not in dir(photopoint) or \
-          photopoint.__nature__ != "PhotoPoint":
-            raise TypeError("'photopoint' must be a list of astrobject PhotoPoint")
-        
-        self._test_lbda_(photopoint)
-        
-        if self.lbda is None:
-            self._derived_properties['lbda'] = photopoint.lbda
-            
-        if self._properties['photopoints'] is None:
-            self._properties['photopoints'] = []
-            self._properties['times'] = []
-            
-            
-        self._properties['photopoints'].append(photopoint)
-        self._properties['times'].append(time)
-
-
-    # ------------------ #
-    # - Show           - #
-    # ------------------ #
-    def show(self,savefile=None,ax=None,
-             inmag=False,show=True,**kwargs):
-        """
-        """
-        # -- Setting -- #
-        from ..utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        
-        if ax is None:
-            fig = mpl.figure(figsize=[8,8])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "imshow" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-
-        pl = self.display(ax,inmag=inmag,**kwargs)
-        self._plot['ax'] = ax
-        self._plot['fig'] = fig
-        self._plot['plot'] = pl
-        self._plot['prop'] = kwargs
-        fig.figout(savefile=savefile,show=show)
-        
-    def display(self,ax,inmag=False,**kwargs):
-        """
-        """
-        if inmag:
-            y,dy = self.mags,self.magsvar
-        else:
-            y,dy = self.fluxes,self.fluxesvar
-
-        default_prop = dict(marker="o",ms=15,mec="k",mfc="b",
-                            alpha=0.8,ecolor="0.7")
-        prop = kwargs_update(default_prop,**kwargs)
-        
-        pl = ax.errorbar(self.times,y,yerr=dy,**prop)
-        return pl
-    
-    # =========================== #
-    # = Internal Methods        = #
-    # =========================== #
-    def _test_lbda_(self,photopoint):
-        """This module check that the lbda in the given
-        photopoint is the same as the other ones.
-        Remark that is None won't be penalized. 
-        """
-        if self.lbda is None or photopoint.lbda is None:
-            return
-        if self.lbda != photopoint.lbda:
-            raise ValueError("the given 'photopoint' does not share the other's lbda")
-        
-    # =========================== #
-    # = Properties and Settings = #
-    # =========================== #
-    @property
-    def npoints(self):
-        return len(self.photopoints)
-    @property
-    def photopoints(self):
-        return self._properties['photopoints']
-    
-    @property
-    def times(self):
-        return self._properties['times']
-    
-    @property
-    def lbda(self):
-        return self._derived_properties['lbda']
-
-    # -------------
-    # - On the flight
-    @property
-    def fluxes(self):
-        return [p.flux for p in self.photopoints]
-    
-    @property
-    def fluxesvar(self):
-        return [p.var for p in self.photopoints]
-
-    @property
-    def mags(self):
-        return [p.mag for p in self.photopoints]
-    
-    @property
-    def magsvar(self):
-        return [p.magvar for p in self.photopoints]
-    
-    @property
-    def bandnames(self):
-        # - a unique lbda is tested while loading so this should be always the same
-        return [p.bandname for p in self.photopoints]
-
-    @property
-    def zps(self):
-        # - a unique lbda is tested while loading so this should be always the same
-        return [p.zp for p in self.photopoints]
-
-#######################################
-#                                     #
-# Base Object Classes: SEPObjects     #
-#                                     #
-#######################################
-class SexObjects( BaseObject ):
-    """This instance parse the ourput from Sextractor/SEP and have
-    convinient associated functions"""
-
-    _properties_keys = ["data"]
-    _side_properties_keys = ["catalogue","wcs"]
-    _derived_properties_keys = ["catmatch","starmask","pairdict"]
-    
-    
-    def __init__(self,sexoutput=None,wcs=None,empty=False):
-        """
-        = Load the SexObject =
-
-        Parameters
-        ----------
-
-        sexoutput: [ndarray/file]  The ndarray as output by sextractor/sep or the
-                                   associated file
-
-        - options -
-
-        empty: [bool]              return an empy object
-        """
-        self.__build__()
-        if empty:
-            return
-
-        self.create(sexoutput)
-        if wcs is not None:
-            self.set_wcs(wcs)
-
-            
-    # ====================== #
-    # = Main Methods       = #
-    # ====================== #
-    def create(self,sexoutput,force_it=False):
-        """
-        """
-        if self.has_data() and force_it is False:
-            raise AttributeError("'data' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-                    
-        sexdata = self._read_sexoutput_input_(sexoutput)
-        if sexdata is None:
-            warning.warn("(SexObjects.create) empty input data. *Empty SexObjects loaded*")
-            return
-        
-        # ****************** #
-        # * Creation       * #
-        # ****************** #
-        self._properties["data"] = sexdata
-
-        
-    def match_catalogue(self,catalogue=None,force_it=False,arcsec_size=2):
-        """
-        This methods enable to attached a given sexobject entry
-        to a catalog value.
-        You can set a catalogue.
-        """
-        # --------------
-        # - input 
-        if catalogue is not None:
-            self.set_catalogue(catalogue,force_it=force_it)
-
-        if not self.has_catalogue():
-            raise AttributeError("No 'catalogue' defined or given.")
-        
-        if self.has_wcs():
-            # -- matching are made in degree space
-            idxcatalogue, idxsexobjects, d2d, d3d = self.sky_radec.search_around_sky(self.catalogue.sky_radec, arcsec_size*units.arcsec)
-        else:
-            raise NotImplementedError("You currently need a wcs solution in the SexObjects to match a catalogue")
-        # --------------------
-        # - Save the results
-        self._derived_properties["catmatch"] = {
-            "idx_catalogue":idxcatalogue,
-            "idx":idxsexobjects,
-            "angsep":d2d
-            }
-        
-        self.catalogue.set_matchedmask(idxcatalogue)
-        self._derived_properties["starmask"] = np.asarray([i in self.catmask[self.catstarmask]
-                                                for i in range(len(self.data["x"]))],dtype=bool)
-
-    def idx_to_mask(self,idx):
-        """
-        Change the list of index to a True/False mask: index in the list
-        are the True values
-
-        Return:
-        -------
-        mask (boolean array)
-        """
-        mask = np.zeros(self.nobjects,dtype=bool)
-        for i in idx:
-            mask[i] = True
-        return np.asarray(mask,dtype=bool)
-        
-    # ------------------ #
-    # - SETTER         - #
-    # ------------------ #
-    def set_wcs(self,wcs,force_it=False):
-        """
-        """
-        if self.has_wcs() and force_it is False:
-            raise AttributeError("'wcs' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-
-        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
-        
-
-    def set_catalogue(self,catalogue,force_it=True,
-                      default_isolation_def = 10*units.arcsec):
-        """
-        Parameters
-        ---------
-
-        default_isolation_def: [ang dist]
-                                   If 'define_around' has not be ran yet,
-                                   this scale will be used.
-                                   This is important to know which object is
-                                   isolated.                                   
-                                   
-        Return
-        ------
-        Voids
-        """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-
-        # -------------------------
-        # - Add the world_2_pixel
-        if not catalogue.has_wcs():
-            warnings.warn("WARNING the given 'catalogue' has no pixel coordinates. Cannot load it")
-            return
-        
-        if catalogue.nobjects_in_fov < 1:
-            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
-            return
-
-        if not catalogue._is_around_defined():
-            catalogue.define_around(default_isolation_def)
-        self._side_properties["catalogue"] = catalogue
-                
-    # ------------------ #
-    # - GETTER         - #
-    # ------------------ #
-    def get(self,key,mask=None):
-        """
-        This function enable to get from the data the values of the given keys
-        or derived values, like ellipticity. Set 'help' for help.
-
-        *Remark* 'key' could be an list of keys.
-
-        Returns:
-        --------
-        array (or list of)
-        """
-        if not self.has_data():
-            raise AttributeError("no 'data' defined")
-
-        if "__iter__" in dir(key):
-            return [self.get(key_,mask=mask) for key_ in key]
-        
-        # -- These are the default key values
-        _data_keys_ = self.data.keys()
-        _matching_keys_ = ["angsep"]
-        _derived_keys_ = ["elongation","ellipticity"]
-        help_text = " Known keys are: "+", ".join(_data_keys_+_matching_keys_+_derived_keys_)
-
-        if key in ["help","keys","keylist"]:
-            print help_text
-            return
-        
-        # -- These are from the data
-        if key in _data_keys_:
-            val_ = self.data[key]
-        # -- These are the catalogue values
-        elif key in _matching_keys_:
-            if not self.has_catmatch():
-                raise AttributeError("no 'catmatch' defined. The matching has not been ran")
-            val_ = self.catmatch[key]
-        # -- These are derived values
-        elif key in _derived_keys_:
-            if key == "elongation":
-                val_ = self.get("a") / self.get("b")
-            elif key == "ellipticity":
-                val_ = 1. - 1. / self.get("elongation")
-        else:
-            raise ValueError("Cannot parse '%s'."%key +\
-                          help_text)
-                          
-        return val_ if mask is None else val_[mask]
-
-    def get_fwhm_pxl(self,stars_only=True,isolated_only=True,
-                    catmag_range=[None,None]):
-        """
-        This is defined as 2 * sqrt(ln(2) * (a^2 + b^2))
-        """
-        mask = self.get_indexes(isolated_only=isolated_only,
-                                stars_only=stars_only,
-                                catmag_range=catmag_range)
-        return np.median(2 * np.sqrt( np.log(2) * (self.get('a',mask)**2 + self.get('b',mask)**2)))
-    
-    # -----------------
-    # - get ellipse    
-    def get_ellipse_mask(self,width,height, r=3, apply_catmask=False):
-        """
-        This method returns a boolean mask of the detected ellipses
-        on the given width x height pixels image
-
-        (this method is based on the sep mask_ellipse function)
-        
-        Parameters:
-        -----------
-        r: [float]                 The scale of the ellipse (r=1 is a typical contours included the
-                                   object ; 2 enables to get the tail of most of the bright sources
-
-        apply_catmask: [bool]      Only mask the detected object associated with the current catalogue.
-                                   If no catalogue loaded, this will be set to False in any case.
-
-        Returns:
-        -------
-        2D-bool array (height x width)
-        """
-        from sep import mask_ellipse
-        ellipsemask = np.asarray(np.zeros((height,width)),dtype="bool")
-        mask = None if not apply_catmask else self.catmask
-        # -- Apply the mask to falsemask
-        mask_ellipse(ellipsemask,
-                     self.get('x',mask=mask),self.get('y',mask=mask),
-                     self.get('a',mask=mask),self.get('b',mask=mask),
-                     self.get('theta',mask=mask),
-                     r=r)
-        
-        return ellipsemask
-
-    def get_detected_ellipses(self,scaleup=5,apply_catmask=True,
-                stars_only=False, isolated_only=False,
-                catmag_range=[None,None]):
-        """
-        """
-        if not self.has_data():
-            print "WARNING [Sexobjects] No data to display"
-            return
-        
-        from matplotlib.patches import Ellipse
-        
-        # -- maskout non matched one if requested
-        if not self.has_catalogue():
-            apply_catmask = False
-            
-        mask = None if not apply_catmask else\
-          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                        catmag_range=catmag_range)
-            
-        # -------------
-        # - Properties
-        return [Ellipse([x,y],a*scaleup,b*scaleup,
-                        t*units.radian.in_units("degree"))
-                for x,y,a,b,t in zip(self.get("x",mask=mask),self.get("y",mask=mask),
-                                     self.get("a",mask=mask),self.get("b",mask=mask),
-                                     self.get("theta",mask=mask) )]
-    
-    def get_median_ellipse(self,mask=None,clipping=[3,3]):
-        
-        """This methods look for the stars and return the mean ellipse parameters"""
-        if not self.has_catalogue():
-            apply_catmask = False
-          
-        # -- apply the masking
-        a_clipped,_alow,_ahigh = sigmaclip(self.get("a",mask=mask),*clipping)
-        b_clipped,_blow,_bhigh = sigmaclip(self.get("b",mask=mask),*clipping)
-        t_clipped,_tlow,_thigh = sigmaclip(self.get("theta",mask=mask),*clipping)
-        # - so        
-        psf_a,psf_b,psf_t = a_clipped.mean(),b_clipped.mean(),t_clipped.mean()
-        m = np.sqrt(len(a_clipped)-1)
-        
-        return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
-        [psf_t,np.std(t_clipped)/m]
-
-        
-    # ---------------- #
-    # - get Mask     - #
-    # ---------------- #
-    def get_mask(self,isolated_only,stars_only,
-                 catmag_range=[None,None]):
-        """
-        This main masking method builds a boolean array following
-        the requested cuts. Remark that this implies doing a catalogue cuts
-        since stars and magnitude information arises from the catalogue.
-
-        Returns
-        -------
-        array (dtype=bool)
-        """
-        if catmag_range[0] is None:
-            warnings.warn("No lower catalogue magnitude limit given. 13mag set.")
-            catmag_range[0] = 13
-            
-        mask = np.asarray(self.get_catmag_mask(*catmag_range))
-        if isolated_only:
-            mask = mask & self.catisolatedmask
-        if stars_only:
-            mask = mask & self.catstarmask
-        
-        return mask
-
-    def get_catmag_mask(self,magmin,magmax):
-        """
-        return the boolen mask of which matched point
-        belong to the given magnitude range.
-        Set None for no limit
-
-        (see also get_mask)
-        
-        Returns
-        -------
-        array (dtype=bool)
-        """
-        if not self.has_catalogue():
-            raise AttributeError("no 'catalogue' loaded")
-        if not self.has_catmatch():
-            raise AttributeError("catalogue has not been matched to the data")
-    
-        mags = self.catalogue.mag[self.catmatch["idx_catalogue"]]
-        magmin = np.min(mags) if magmin is None else magmin
-        magmax = np.max(mags) if magmax is None else magmax
-        return (mags>=magmin) & (mags<=magmax)
-
-    def get_indexes(self,isolated_only=False,stars_only=False,
-                    catmag_range=[None,None], cat_indexes=False):
-        """
-        Converts mask into index. Particularly useful to access the catalogue
-        values (set cat_indexes to True)
-        
-        Returns
-        -------
-        array of indexes
-        """
-        id = "idx_catalogue" if cat_indexes else "idx"
-        return np.unique(self.catmatch[id][self.get_mask(isolated_only=isolated_only,
-                                                  stars_only=stars_only,
-                                                  catmag_range=catmag_range
-                                                  )])
-
-    def get_photomap(self, matched_only=True,
-                     stars_only=False, isolated_only=False):
-        """
-        """
-        print "to be done"
-
-    # ------------------- #
-    # - PLOT Methods    - #
-    # ------------------- #    
-    # - Display
-    def display(self,ax,draw=True,
-                apply_catmask=True,
-                stars_only=False, isolated_only=False,
-                catmag_range=[None,None]):
-        """
-        """
-        ells = self.get_detected_ellipses(scaleup=5,apply_catmask=apply_catmask,
-                                          stars_only=stars_only,
-                                          isolated_only=isolated_only,
-                                          catmag_range=catmag_range)
-        
-        #pl = ax.plot(x,y,**prop)
-        for ell in ells:
-            ell.set_clip_box(ax.bbox)
-            ell.set_facecolor("None")
-            ell.set_edgecolor("k")
-            ax.add_patch(ell)
-        if draw:
-            ax.figure.canvas.draw()
-        #return pl
-
-    # - Histograms
-    def show_hist(self,toshow="a",ax=None,
-                  savefile=None,show=True,
-                  apply_catmask=True,
-                  stars_only=False, isolated_only=False,
-                  catmag_range=[None,None],
-                  **kwargs):
-        """This methods enable to show the histogram of any given
-        key."""
-        # -- Properties -- #
-        if not self.has_catalogue():
-            apply_catmask = False
-            
-        mask = None if not apply_catmask else\
-          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                        catmag_range=catmag_range)
-        
-        v = self.get(toshow)[mask]
-
-        # -- Setting -- #
-        from ..utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        
-        if ax is None:
-            fig = mpl.figure(figsize=[8,6])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "hist" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-
-        # -- Properties -- #
-        default_prop = dict(histtype="step",fill=True,
-                            fc=mpl.cm.Blues(0.7,0.5),ec="k",lw=2)
-        prop = kwargs_update(default_prop,**kwargs)
-
-        out = ax.hist(v,**prop)
-
-        self._plot['ax'] = ax
-        self._plot['fig'] = fig
-        self._plot['hist'] = out
-        self._plot['prop'] = kwargs
-        fig.figout(savefile=savefile,show=show)
-
-    # - Ellipse
-    def show_ellipses(self,ax=None,
-                      savefile=None,show=True,
-                      apply_catmask=True,stars_only=False,
-                      isolated_only=False,catmag_range=[None,None],
-                      **kwargs):
-        """
-        """
-        if not self.has_data():
-            print "WARNING [Sexobjects] No data to display"
-            return
-        
-        from matplotlib.patches import Ellipse,Polygon
-        from ..utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        # ------------------- #
-        # - axes            - #
-        # ------------------- #
-        if ax is None:
-            fig = mpl.figure(figsize=[6,6])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "hist" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-
-        # ------------------- #
-        # - axes            - #
-        # ------------------- #
-        if not self.has_catalogue():
-            apply_catmask = False
-            
-        mask = None if not apply_catmask else\
-          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                        catmag_range=catmag_range)
-        # -------------
-        # - Properties
-        ells = [Ellipse([0,0],2.,2*b/a,t*units.radian.in_units("degree"))
-                for a,b,t in zip(self.get("a",mask=mask),self.get("b",mask=mask),
-                                 self.get("theta",mask))]
-        # -- Show the typical angle
-        psf_a,psf_b,psf_theta = self.get_median_ellipse(mask=mask)
-        ellipticity = 1- psf_b[0]/psf_a[0]
-        # - cos/ sin what angle in radian
-        
-        ax.plot([0,np.cos(psf_theta[0])*ellipticity],
-                [0,np.sin(psf_theta[0])*ellipticity],ls="-",lw=2,
-                 color=mpl.cm.Blues(0.8),zorder=8)
-
-        Cone_error = Polygon( [ [0,0],[np.cos(psf_theta[0]-psf_theta[1])*ellipticity,
-                                       np.sin(psf_theta[0]-psf_theta[1])*ellipticity],
-                                [np.cos(psf_theta[0]+psf_theta[1])*ellipticity,
-                                 np.sin(psf_theta[0]+psf_theta[1])*ellipticity],
-                                 [0,0]]
-                                )
-        Cone_error.set_facecolor(mpl.cm.Blues(0.8))
-        Cone_error.set_edgecolor(mpl.cm.Blues(0.8))
-        Cone_error.set_alpha(0.3)
-        ax.add_patch(Cone_error)
-
-        # -- Show the Ellipses
-        for ell in ells:
-            ell.set_clip_box(ax.bbox)
-            ell.set_facecolor("None")
-            ell.set_edgecolor("k")
-            ell.set_alpha(0.1)
-            ax.add_patch(ell)
-
-        ax.set_ylim(-1.1,1.1)
-        ax.set_xlim(-1.1,1.1)
-        # -- show the center
-        ax.axvline(0,ls="--",color="k",alpha=0.2)
-        ax.axhline(0,ls="--",color="k",alpha=0.2)
-        
-        self._plot['ax'] = ax
-        self._plot['fig'] = fig
-        self._plot['prop'] = kwargs
-        fig.figout(savefile=savefile,show=show)
-        
-    # =========================== #
-    # Internal Methods            #
-    # =========================== #
-    def _read_sexoutput_input_(self,sexoutput):
-        """This method enable to parse the input and therefore
-        allow flexible inputs"""
-
-        # ---------------
-        # -- no input
-        if sexoutput is None:
-            return
-        
-        # ---------------
-        # -- data input
-        if type(sexoutput) == np.ndarray:
-            # let's check
-            try:
-                _ = sexoutput["cxx"]
-            except :
-                raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+"\n"+\
-                                " It most likely is not a sextrator/sep output ")
-            return Table(sexoutput)
-        
-        # ---------------
-        # -- file input
-        if type(sexoutput) == str:
-            if sexoutput.endswith(".pkl"):
-                from ..utils.tools import load_pkl
-                self._read_sexoutput_input_(load_pkl(sexoutput))
-                
-            # -- So this is a sextrator output ?
-            return
-
-    def _get_pairing_(self):
-        """
-        This is slow, should be optimized
-        """
-        if not self.has_catmatch():
-            raise AttributeError("no matching performed")
-        
-        idxself,idxcat = self.catmatch["idx"],self.catmatch["idx_catalogue"]
-        pair = {}
-        for i,icat in zip(idxself,idxcat):
-            if i in pair.keys():
-                pair[i]["other_cat_match"].append(icat)
-                continue
-            
-            pair[i] = {"cat_idx":icat,
-                       "cat_mag":self.catalogue.mag[icat],
-                       "cat_magerr":self.catalogue.mag_err[icat],
-                       #"cat_ra":self.catalogue.ra[icat],
-                       #"cat_dec":self.catalogue.dec[icat],
-                       "is_isolated":self.catalogue.isolatedmask[icat] \
-                       if self.catalogue._is_around_defined() else None,
-                       "is_star":self.catalogue.starmask[icat],
-                       #"sep_a":self.get("a")[i],
-                       #"sep_b":self.get("b")[i],
-                       "sep_x":self.get("x")[i],
-                       "sep_y":self.get("y")[i],
-                       #"sep_theta":self.get("theta")[i],
-                       #"sep_flux":self.get("flux")[i],
-                       "other_cat_match":[]
-                       }
-            
-        return pair
-    # =========================== #
-    # Properties and Settings     #
-    # =========================== #
-    # ----------------      
-    # -- Data
-    @property
-    def data(self):
-        return self._properties["data"]
-    
-    def has_data(self):
-        return False if self.data is None\
-          else True
-          
-    @property
-    def nobjects(self):
-        if not self.has_data():
-            return None
-        return len(self.data)
-    
-    # ----------------
-    # - WCS
-    @property
-    def wcs(self):
-        return self._side_properties['wcs']
-
-    def has_wcs(self):
-        return False if self.wcs is None else True
-    
-    @property
-    def radec(self):
-        if not self.has_wcs():
-            raise AttributeError("no 'wcs' solution avialable. Cannot have radec")
-        return np.asarray(self.wcs.pix2world(self.data["x"],
-                                           self.data["y"])).T
-
-    @property
-    def xy(self):
-        return np.asarray([self.get("x"),self.get("y")])
-
-    @property
-    def sky_radec(self):
-        """This is an advanced radec methods tight to astropy SkyCoords"""
-        ra,dec = self.radec
-        return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
-    
-    # ----------------      
-    # -- CATALOGUE
-    @property
-    def catalogue(self):
-        return self._side_properties["catalogue"]
-    
-    def has_catalogue(self):
-        return False if self.catalogue is None\
-          else True
-
-    @property
-    def pairdict(self):
-        if self._derived_properties["pairdict"] is None:
-            self._derived_properties["pairdict"] = self._get_pairing_()
-            
-        return self._derived_properties["pairdict"]
-        
-    @property
-    def catmask(self):
-        """this array tells you if sextractor objects have a catalogue match"""
-        if not self.has_catmatch() and self.has_data():
-            return np.ones(self.nobjects,dtype=bool)
-        return self._derived_properties["catmatch"]["idx"]
-
-    @property
-    def starmask(self):
-        """ This is which are stars amoung *ALL* the detected sources, even those without matcatching"""
-        return self._derived_properties["starmask"]
-    
-
-    @property
-    def isolatedmask(self):
-        return self.catalogue.isolatedmask[self.catmcatch["idx_catalogue"]]
-    
-    @property
-    def catstarmask(self):
-        """return a bool mask of the stars. If it can not do it, not data are masked (full True)"""
-        if not self.has_catmatch() and self.has_data():
-            return np.ones(self.nobjects,dtype=bool)
-        
-        if not self.catalogue.has_starmask():
-            return np.ones(self.nobjects,dtype=bool)
-        
-        return self.catalogue.starmask[ self.catmatch["idx_catalogue"]]
-
-    @property
-    def catisolatedmask(self):
-        """return a bool mask of the stars. If it can not do it, not data are masked (full True)"""
-        if not self.has_catmatch() and self.has_data():
-            return np.ones(self.nobjects,dtype=bool)
-        
-        if not self.catalogue.has_starmask():
-            return np.ones(self.nobjects,dtype=bool)
-        
-        return self.catalogue.isolatedmask[ self.catmatch["idx_catalogue"]]
-    
-    
-    # ----------------------
-    # - Catalogue Matching
-    @property
-    def catmatch(self):
-        """This is the match dictionnary"""
-        if self._derived_properties["catmatch"] is None:
-            self._derived_properties["catmatch"] = {}
-            
-        return self._derived_properties["catmatch"]
-
-    
-    def has_catmatch(self):
-        return False if self.catmatch is None or len(self.catmatch.keys())==0 \
-          else True
-    

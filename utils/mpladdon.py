@@ -143,8 +143,6 @@ def skyhist(ax, ra=None, dec=None, values=None, bins=None, steps=None, max_steps
     """This function in a build-in axes method that makes a sky histogram of the 
     coordinates.
     
-    """
-    """
     Build-in axes method for 2d-histograms of points on the sky.
 
     ax: [matplotlib.axes]          where the data will be displayed

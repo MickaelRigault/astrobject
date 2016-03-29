@@ -118,7 +118,7 @@ class STELLA( Instrument ):
         
     
     @property
-    def mjd_obstime(self):
+    def mjd(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
         from astropy import time
