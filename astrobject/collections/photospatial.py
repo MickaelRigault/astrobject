@@ -31,7 +31,8 @@ def get_sepobject(sepoutput, wcs_coords=False,ppointkwargs={},
         pmap = SepObject(photopoints=inputphotomap["ppoints"],
                          coords=inputphotomap["coords"],
                          wcs_coords=wcs_coords, **kwargs)
-        [pmap.set_meta(k,inputphotomap["meta"][k].data) for k in inputphotomap["meta"].keys()]
+        ids_sorting = [pmap.coords_to_id(x,y) for x,y in zip(inputphotomap["meta"]["x"].data,inputphotomap["meta"]["y"].data)]
+        [pmap.set_meta(k,inputphotomap["meta"][k].data, ids=ids_sorting) for k in inputphotomap["meta"].keys()]
         return pmap
         
 # ======================= #
@@ -497,7 +498,8 @@ class SepObject( PhotoMap ):
                 catmag_range=[None,None]):
         """ Show the ellipses of the sep extracted sources """
         
-        ells = self.get_detected_ellipses(scaleup=5,apply_catmask=apply_catmask,
+        ells = self.get_detected_ellipses(scaleup=5,
+                                          apply_catmask=apply_catmask,
                                           stars_only=stars_only,
                                           isolated_only=isolated_only,
                                           catmag_range=catmag_range)
@@ -508,7 +510,6 @@ class SepObject( PhotoMap ):
             ax.add_patch(ell)
         if draw:
             ax.figure.canvas.draw()
-
 
     # - Ellipse
     def show_ellipses(self,ax=None,
@@ -652,7 +653,6 @@ class SepObject( PhotoMap ):
         mask = None if not apply_catmask else\
           self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
                             catmag_range=catmag_range, cat_indexes=False)
-        print mask
         # -------------
         # - Properties
         return [Ellipse([x,y],a*scaleup,b*scaleup,
