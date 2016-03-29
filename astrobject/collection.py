@@ -848,7 +848,7 @@ class PhotoPointCollection( Collection ):
         #if ids is not None:
             # -- This below is really time consuming. don't !
             #[self._test_id_(id_) for id_ in ids]
-        id_to_loop = self.list_id if is None else ids
+        id_to_loop = self.list_id if ids is None else ids
         nids = len(id_to_loop)
         if "__iter__" not in dir(values):
             values = [values]*nids

@@ -464,7 +464,7 @@ class Catalogue( BaseObject ):
         subcat.create(self.data[mask], None, force_it=True,**self._build_properties)
         return subcat
 
-    def get_mask(self,catmag_range=[13,None],stars_only=False,
+    def get_mask(self,catmag_range=[None,None],stars_only=False,
                  isolated_only=False,contours=None,
                  fovmask=True):
         """ This returns a bolean mask following the argument cuts. """

@@ -290,77 +290,39 @@ class PhotoMap( PhotoPointCollection ):
         sky = coordinates.SkyCoord(ra=ra*units.degree, dec=dec*units.degree)
         if not catalogue_idx:
             ra_,dec_ = self.radec.T
-            return coordinates.SkyCoord(ra=ra_*units.degree,dec=dec_*units.degree).search_around_sky(sky, radius)[1:3]
+            return coordinates.SkyCoord(ra=ra_*units.degree,
+                        dec=dec_*units.degree).search_around_sky(sky, radius)[1:3]
         if not self.has_catalogue():
             raise ValueError("no catalogue loaded, do not set catalogue_idx to True.")
             
-        return self.catalogue.get_idx_around(ra, dec, radius.value, runits=radius.unit.name,
+        return self.catalogue.get_idx_around(ra, dec, radius.value,
+                                             runits=radius.unit.name,
                                              wcs_coords=True)
-
-
-    def get_mask(self,stars_only=False,isolated_only=False,
-                 catmag_range=[None,None]):
-        """
-        This main masking method builds a boolean array following
-        the requested cuts. Remark that this implies doing a catalogue cuts
-        since stars and magnitude information arises from the catalogue.
-        Returns
-        -------
-        array (dtype=bool)
-        """
-        if not self.has_catmatch():
-            raise AttributeError("No catalogue matching performed. Run match_catalogue()")
-
-        if catmag_range[0] is None:
-            warnings.warn("No lower catalogue magnitude limit given. 10mag set.")
-            catmag_range[0] = 10
-            
-        mask = np.asarray(self._get_catmag_mask_(*catmag_range))
-        
-        if isolated_only :
-            mask = mask & self.catalogue.isolatedmask[ self.catmatch["idx_catalogue"]]
-            
-        if stars_only and self.catalogue.has_starmask():
-            mask = mask & self.catalogue.starmask[ self.catmatch["idx_catalogue"]]
-        
-        return mask
-
-    def _get_catmag_mask_(self,magmin,magmax):
-        """
-        return the boolen mask of which matched point
-        belong to the given magnitude range.
-        Set None for no limit
-        (see also get_mask)
-        
-        Returns
-        -------
-        array (dtype=bool)
-        """
-        if not self.has_catalogue():
-            raise AttributeError("no 'catalogue' loaded")
-        if not self.has_catmatch():
-            raise AttributeError("catalogue has not been matched to the data")
-    
-        mags = self.catalogue.mag[self.catmatch["idx_catalogue"]]
-        magmin = np.min(mags) if magmin is None else magmin
-        magmax = np.max(mags) if magmax is None else magmax
-        return (mags>=magmin) & (mags<=magmax)
+ 
     
     def get_indexes(self,isolated_only=False,stars_only=False,
-                    catmag_range=[None,None], cat_indexes=False):
+                    catmag_range=[None,None],contours=None,
+                    cat_indexes=False):
         """
-        Converts mask into index. Particularly useful to access the catalogue
-        values (set cat_indexes to True)
+        Based on catalogue's 'get_mask()' method, this returns the list of indexes
+        matching the input's criteria. Set cat_indexes to True to have the catalogue
+        indexes references instead of the instance's one. 
         
         Returns
         -------
         array of indexes
-        """        
+        """
+        if not self.has_catmatch():
+            raise AttributeError("No catalogue matching. Run match_catalogue()")
+        
         id_ = "idx_catalogue" if cat_indexes else "idx"
-        return np.unique(self.catmatch[id_][self.get_mask(isolated_only=isolated_only,
-                                                  stars_only=stars_only,
-                                                  catmag_range=catmag_range
-                                                  )])
+        
+        return np.unique(self.catmatch[id_][\
+                        self.catalogue.get_mask(catmag_range=catmag_range,
+                                                stars_only=stars_only,
+                                                isolated_only=isolated_only,
+                                                contours=contours, fovmask=True)[\
+                                            self.catmatch["idx_catalogue"]]])
     
     # ------------- #
     # - PLOTTER   - #
@@ -497,12 +459,12 @@ class SepObject( PhotoMap ):
                 stars_only=False, isolated_only=False,
                 catmag_range=[None,None]):
         """ Show the ellipses of the sep extracted sources """
-        
-        ells = self.get_detected_ellipses(scaleup=5,
-                                          apply_catmask=apply_catmask,
-                                          stars_only=stars_only,
-                                          isolated_only=isolated_only,
-                                          catmag_range=catmag_range)
+        mask = None if not apply_catmask else\
+          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+                            catmag_range=catmag_range, cat_indexes=False)
+                
+        ells = self.get_detected_ellipses(scaleup=5, mask=mask,
+                                          contours=False)
         for ell in ells:
             ell.set_clip_box(ax.bbox)
             ell.set_facecolor("None")
@@ -550,8 +512,7 @@ class SepObject( PhotoMap ):
         # -------------
         # - Properties
         ells = [Ellipse([0,0],2.,2*b/a,t*units.radian.in_units("degree"))
-                for a,b,t in zip(self.get("a",mask=mask),self.get("b",mask=mask),
-                                 self.get("theta",mask=mask))]
+                for a,b,t in self.get(["a","b","theta"],mask=mask)]
         # -- Show the typical angle
         psf_a,psf_b,psf_theta = self.get_median_ellipse(mask=mask)
         ellipticity = 1- psf_b[0]/psf_a[0]
@@ -628,9 +589,7 @@ class SepObject( PhotoMap ):
         return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
         [psf_t,np.std(t_clipped)/m]
         
-    def get_detected_ellipses(self,scaleup=5,apply_catmask=True,
-                              stars_only=False, isolated_only=False,
-                              catmag_range=[None,None]):
+    def get_detected_ellipses(self,scaleup=5,mask=None, contours=False):
         """
         Get the matplotlib Patches (Ellipse) defining the detected object. You can
         select the returned ellipses using the apply_catmask, stars_only,
@@ -639,6 +598,7 @@ class SepObject( PhotoMap ):
         'scaleup' scale the radius used of the ellipses. 5 means that most of the
         visible light will be within the inside the returned ellipses.
 
+        'contours' means that the returned value is a shapely MultiPolgon not a list of patches
         Return
         ------
         list of patches
@@ -650,17 +610,16 @@ class SepObject( PhotoMap ):
             print "no catalogue mask applied"
             apply_catmask = False
             
-        mask = None if not apply_catmask else\
-          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
-                            catmag_range=catmag_range, cat_indexes=False)
         # -------------
         # - Properties
-        return [Ellipse([x,y],a*scaleup,b*scaleup,
+        ells = [Ellipse([x,y],a*scaleup,b*scaleup,
                         t*units.radian.in_units("degree"))
-                for x,y,a,b,t in zip(self.get("x",mask=mask),self.get("y",mask=mask),
-                                     self.get("a",mask=mask),self.get("b",mask=mask),
-                                     self.get("theta",mask=mask) )]
-
+                for x,y,a,b,t in self.get(["x","y","a","b","theta"],mask=mask)]
+        if not contours:
+            return ells
+        from ...utils.shape import patch_to_polygon
+        return patch_to_polygon(ells)
+    
     def get_ellipse_mask(self,width,height, r=3, apply_catmask=False):
         """
         This method returns a boolean mask of the detected ellipses

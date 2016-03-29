@@ -83,6 +83,15 @@ def polygon_to_patch(polygon_,**kwargs):
     """
     return Polygon(polygon_to_vertices(polygon_), **kwargs)
 
+def patch_to_polygon(mpl_patch):
+    """ converts a matplotlib patch into a shapely polygon. If mpl_patch is a list
+     of patches, the returned polygon will be a 'union cascade' MultiPolygon  """
+    if "__iter__" not in dir(mpl_patch):
+        return get_contour_polygon(*mpl_patch.get_verts().T)
+    
+    from shapely.ops import cascaded_union
+    return cascaded_union([get_contour_polygon(*p_.get_verts().T) for p_ in mpl_patch])
+    
 
 @make_method(mpl.Axes)
 def draw_polygon(ax,polygon_,**kwargs):
