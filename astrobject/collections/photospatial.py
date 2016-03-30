@@ -461,7 +461,7 @@ class SepObject( PhotoMap ):
     output """
     def __build__(self,*args,**kwargs):
         # New derived propoerty
-        self._derived_properties_keys.append("galaxy_contours")
+        self._derived_properties_keys += ["galaxy_contours","ingalaxy_mask"]
         super(SepObject,self).__build__(*args,**kwargs)
         
     # -------------------------- #
@@ -588,12 +588,10 @@ class SepObject( PhotoMap ):
         # - SEP based masking
         if notwithin_galaxies:
             from ...utils.shape import point_in_contours
-            masking = mask.copy() if not cat_indexes else \
-              self.get_indexes(notwithin_galaxies=False,cat_indexes=False,**catmasking)
-            point_ingal = point_in_contours(self.get("x",mask=masking),self.get("y",mask=masking),
-                                               self.galaxy_contours, all=False)
-            print "in galaxy indexes ",mask[point_ingal]
-            mask = mask[~point_ingal]
+            masking = mask if not cat_indexes else \
+              self.get_indexes(notwithin_galaxies=False,cat_indexes=False,
+                               **catmasking)
+            mask = mask[~self._ingalaxy_mask[masking]]
             
         # -----------
         # - Returns
@@ -716,3 +714,24 @@ class SepObject( PhotoMap ):
                                                                  cat_indexes=False))
         return self._derived_properties["galaxy_contours"]
         
+    @property
+    def _ingalaxy_mask(self):
+        if self._derived_properties["ingalaxy_mask"] is None:
+            # -- This is the fastest way found
+            # --- Galaxies are in galaxies...
+            glaindex = self.get_indexes(nonstars_only=True)
+            potential_index = [i for i in np.arange(self.nsources)
+                               if i not in glaindex]
+            # -- for the rest, let's see.
+            from ...utils.shape import point_in_contours
+            flagin = point_in_contours(self.get("x",mask=potential_index),
+                                       self.get("y",mask=potential_index),
+                                       self.galaxy_contours,all=False)
+            listingal = np.asarray(potential_index)[flagin]
+
+            flagingal = np.zeros(self.nsources)
+            flagingal[glaindex.tolist()+listingal.tolist()] = 1
+            self._derived_properties["ingalaxy_mask"] = np.asarray(flagingal,dtype=bool)
+            
+        return self._derived_properties["ingalaxy_mask"]
+            

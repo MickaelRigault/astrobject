@@ -67,8 +67,8 @@ def point_in_contours(x,y,contours, all=True):
         return contours.contains(Point(x,y))
     if all:
         return contours.contains(MultiPoint(np.asarray([x,y]).T))
-    return np.asarray([contours.contains(Point(x_,y_))
-                       for x_,y_ in zip(x,y) ], dtype=bool)
+    return [contours.contains(Point(x_,y_))
+            for x_,y_ in zip(x,y) ])
 
 def polygon_to_vertices(polygon_):
     """
