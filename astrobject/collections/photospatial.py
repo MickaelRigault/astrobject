@@ -8,7 +8,7 @@ from astropy import table, coordinates, units
 from ..collection import PhotoPointCollection
 from ..photometry import get_photopoint
 from ...utils.tools import kwargs_update
-
+from ...utils.decorators import _autogen_docstring_inheritance
 __all__ = ["get_photomap","get_sepobject"]
 
 
@@ -31,8 +31,12 @@ def get_sepobject(sepoutput, wcs_coords=False,ppointkwargs={},
         pmap = SepObject(photopoints=inputphotomap["ppoints"],
                          coords=inputphotomap["coords"],
                          wcs_coords=wcs_coords, **kwargs)
-        ids_sorting = [pmap.coords_to_id(x,y) for x,y in zip(inputphotomap["meta"]["x"].data,inputphotomap["meta"]["y"].data)]
-        [pmap.set_meta(k,inputphotomap["meta"][k].data, ids=ids_sorting) for k in inputphotomap["meta"].keys()]
+        ids_sorting = [pmap.coords_to_id(x,y)
+                       for x,y in zip(inputphotomap["meta"]["x"].data,
+                                      inputphotomap["meta"]["y"].data)]
+        [pmap.set_meta(k,inputphotomap["meta"][k].data, ids=ids_sorting)
+         for k in inputphotomap["meta"].keys()]
+        
         return pmap
         
 # ======================= #
@@ -101,7 +105,7 @@ class PhotoMap( PhotoPointCollection ):
         """
         self._side_properties_keys = self._side_properties_keys + \
           ["refmap","wcs","catalogue"]
-        self._derived_properties_keys = self._side_properties_keys +\
+        self._derived_properties_keys = self._derived_properties_keys +\
           ["catmatch"]
         super(PhotoMap,self).__build__()
         
@@ -229,7 +233,9 @@ class PhotoMap( PhotoPointCollection ):
 
         self._side_properties["refmap"] = photomap
 
-    def set_catalogue(self,catalogue,force_it=True,reset=True):
+    def set_catalogue(self,catalogue,force_it=True,
+                      reset=True,
+                      match_catalogue=True):
         """
         Attach to this instance a catalogue.
         
@@ -267,7 +273,8 @@ class PhotoMap( PhotoPointCollection ):
         # ---------------------
         # - Good To Go
         self._side_properties["catalogue"] = catalogue
-        
+        if match_catalogue:
+            self.match_catalogue()
     # ------------- #
     # - GETTER    - #
     # ------------- #
@@ -300,9 +307,10 @@ class PhotoMap( PhotoPointCollection ):
                                              wcs_coords=True)
  
     
-    def get_indexes(self,isolated_only=False,stars_only=False,
-                    catmag_range=[None,None],contours=None,
-                    cat_indexes=False):
+    def get_indexes(self,isolated_only=False,
+                    stars_only=False,nonstars_only=False,
+                    catmag_range=[None,None],
+                    contours=None, cat_indexes=False):
         """
         Based on catalogue's 'get_mask()' method, this returns the list of indexes
         matching the input's criteria. Set cat_indexes to True to have the catalogue
@@ -314,16 +322,15 @@ class PhotoMap( PhotoPointCollection ):
         """
         if not self.has_catmatch():
             raise AttributeError("No catalogue matching. Run match_catalogue()")
-        
+        # -----------------------
+        # - Catalogue Based cuts
         id_ = "idx_catalogue" if cat_indexes else "idx"
-        
-        return np.unique(self.catmatch[id_][\
+        return self.catmatch[id_][\
                         self.catalogue.get_mask(catmag_range=catmag_range,
-                                                stars_only=stars_only,
+                                                stars_only=stars_only,nonstars_only=nonstars_only,
                                                 isolated_only=isolated_only,
                                                 contours=contours, fovmask=True)[\
-                                            self.catmatch["idx_catalogue"]]])
-    
+                                            self.catmatch["idx_catalogue"]]]
     # ------------- #
     # - PLOTTER   - #
     # ------------- #
@@ -452,6 +459,11 @@ class PhotoMap( PhotoPointCollection ):
 class SepObject( PhotoMap ):
     """ Child of PhotoMap that make uses of all the meta keys that are sextractor
     output """
+    def __build__(self,*args,**kwargs):
+        # New derived propoerty
+        self._derived_properties_keys.append("galaxy_contours")
+        super(SepObject,self).__build__(*args,**kwargs)
+        
     # -------------------------- #
     # -  Plotting tools        - #
     # -------------------------- #
@@ -476,7 +488,7 @@ class SepObject( PhotoMap ):
     # - Ellipse
     def show_ellipses(self,ax=None,
                       savefile=None,show=True,
-                      apply_catmask=True,stars_only=False,
+                      apply_catmask=True,stars_only=False,nonstars_only=True,
                       isolated_only=False,catmag_range=[None,None],
                       **kwargs):
         """ Display ellipses of the extracted sources (see masking options) """
@@ -507,7 +519,8 @@ class SepObject( PhotoMap ):
             apply_catmask = False
             
         mask = None if not apply_catmask else\
-          self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
+          self.get_indexes(isolated_only=isolated_only,
+                           stars_only=stars_only,nonstars_only=nonstars_only,
                         catmag_range=catmag_range)
         # -------------
         # - Properties
@@ -551,6 +564,40 @@ class SepObject( PhotoMap ):
         self._plot['fig'] = fig
         self._plot['prop'] = kwargs
         fig.figout(savefile=savefile,show=show)
+
+
+    # -------------------------- #
+    # Super It                 - #
+    # -------------------------- #
+    @_autogen_docstring_inheritance(PhotoMap.get_indexes,"PhotoMap.get_indexes")
+    def get_indexes(self,isolated_only=False,stars_only=False,nonstars_only=False,
+                    catmag_range=[None,None],contours=None,
+                    notwithin_galaxies=False,
+                    cat_indexes=False):
+        #
+        # Add the notwithin_galaxies masking
+        #
+        catmasking = {"isolated_only":isolated_only,
+                      "stars_only":stars_only,"nonstars_only":nonstars_only,
+                       "catmag_range":catmag_range,"contours":contours}
+        # ---------------------------
+        # - Catalogue based masking
+        mask = super(SepObject,self).get_indexes(cat_indexes=cat_indexes,
+                                                 **catmasking)
+        # ---------------------------
+        # - SEP based masking
+        if notwithin_galaxies:
+            from ...utils.shape import point_in_contours
+            masking = mask.copy() if not cat_indexes else \
+              self.get_indexes(notwithin_galaxies=False,cat_indexes=False,**catmasking)
+            point_ingal = point_in_contours(self.get("x",mask=masking),self.get("y",mask=masking),
+                                               self.galaxy_contours, all=False)
+            print "in galaxy indexes ",mask[point_ingal]
+            mask = mask[~point_ingal]
+            
+        # -----------
+        # - Returns
+        return mask
         
     # -------------------------- #
     # Other gets               - #
@@ -570,6 +617,7 @@ class SepObject( PhotoMap ):
                                 catmag_range=catmag_range)
         return np.median(2 * np.sqrt( np.log(2) * (self.get('a',mask)**2 + self.get('b',mask)**2)))
 
+    
     def get_median_ellipse(self,mask=None,clipping=[3,3]):
         
         """ This methods look for the stars and return the mean ellipse parameters """
@@ -653,3 +701,18 @@ class SepObject( PhotoMap ):
         
         return ellipsemask
     
+    # =============================== #
+    # = properties                  = #
+    # =============================== #
+    @property
+    def galaxy_contours(self, scaleup=10):
+        """ """
+        if self._derived_properties["galaxy_contours"] is None:
+            self._derived_properties["galaxy_contours"] = \
+              self.get_detected_ellipses(contours=True,
+                                         scaleup=scaleup,
+                                         mask = self.get_indexes(nonstars_only=True,
+                                                                 stars_only=False,
+                                                                 cat_indexes=False))
+        return self._derived_properties["galaxy_contours"]
+        

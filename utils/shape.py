@@ -32,7 +32,7 @@ def get_contour_polygon(x,y):
     return points.convex_hull
 
 
-def point_in_contours(x,y,contours):
+def point_in_contours(x,y,contours, all=True):
     """
     This methods check if the given coordinate (x,y)
     is within the contours, which could be a:
@@ -40,6 +40,11 @@ def point_in_contours(x,y,contours):
       - Shapely.geometry.Polygon
 
     x and y could be array of coordinates
+
+    if x and y are list of coordinates, if 'all' is True
+    an single boolean value is returned, answering the qestion:
+    'are all the given points in the contours?' Otherwise
+    a list of array is returned for each individual points
     Return
     ------
     bool (bool-array)
@@ -60,7 +65,10 @@ def point_in_contours(x,y,contours):
     # - Shapely Polygon
     if "__iter__" not in dir(x):
         return contours.contains(Point(x,y))
-    return contours.contains(MultiPoint(np.asarray([x,y]).T))
+    if all:
+        return contours.contains(MultiPoint(np.asarray([x,y]).T))
+    return np.asarray([contours.contains(Point(x_,y_))
+                       for x_,y_ in zip(x,y) ], dtype=bool)
 
 def polygon_to_vertices(polygon_):
     """

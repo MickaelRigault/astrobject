@@ -465,8 +465,8 @@ class Catalogue( BaseObject ):
         return subcat
 
     def get_mask(self,catmag_range=[None,None],stars_only=False,
-                 isolated_only=False,contours=None,
-                 fovmask=True):
+                 isolated_only=False, nonstars_only=False,
+                 contours=None,fovmask=True):
         """ This returns a bolean mask following the argument cuts. """
         
         mask = np.ones(self.nobjects_in_fov, dtype="bool") if fovmask else\
@@ -475,6 +475,9 @@ class Catalogue( BaseObject ):
         # - stars etc.        
         if stars_only:
             mask *= self.starmask if fovmask else self._starmask
+        if nonstars_only:
+            if stars_only: print "WARNING you ask for both stars_only and nonstars_only !!!"
+            mask *= ~self.starmask if fovmask else ~self._starmask
         # - isolation
         if isolated_only:
             mask *= self.isolatedmask if fovmask else self._isolatedmask

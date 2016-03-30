@@ -1047,7 +1047,8 @@ class Image( BaseObject ):
         # - How
         default_prop = {
             "interpolation":"nearest",
-            "origin":"lower"
+            "origin":"lower",
+            "cmap":mpl.cm.binary
             }
             
         prop = kwargs_update(default_prop,**kwargs)
@@ -1059,6 +1060,7 @@ class Image( BaseObject ):
             prop["vmin"] = np.percentile(x[x==x],float(prop["vmin"]))
         if "vmax" in prop.keys() and type(prop["vmax"]) is str:
             prop["vmax"] = np.percentile(x[x==x],float(prop["vmax"]))
+            
         im = ax.imshow(x,**prop)
         
         # - add target
