@@ -716,6 +716,7 @@ class SepObject( PhotoMap ):
         
     @property
     def _ingalaxy_mask(self):
+        import time
         if self._derived_properties["ingalaxy_mask"] is None:
             # -- This is the fastest way found
             # --- Galaxies are in galaxies...
@@ -723,15 +724,17 @@ class SepObject( PhotoMap ):
             potential_index = [i for i in np.arange(self.nsources)
                                if i not in glaindex]
             # -- for the rest, let's see.
-            from ...utils.shape import point_in_contours
-            flagin = point_in_contours(self.get("x",mask=potential_index),
-                                       self.get("y",mask=potential_index),
-                                       self.galaxy_contours,all=False)
+            from ...utils.shape import Point
+            points =  [Point(x_,y_) for x_,y_ in self.get(["x","y"],
+                                            mask=potential_index)]
+            flagin = np.asarray([self.galaxy_contours.contains(p_) for p_ in points],
+                                dtype=bool)
             listingal = np.asarray(potential_index)[flagin]
-
+            # -- Final Flag
             flagingal = np.zeros(self.nsources)
             flagingal[glaindex.tolist()+listingal.tolist()] = 1
-            self._derived_properties["ingalaxy_mask"] = np.asarray(flagingal,dtype=bool)
+            self._derived_properties["ingalaxy_mask"] = \
+              np.asarray(flagingal,dtype=bool)
             
         return self._derived_properties["ingalaxy_mask"]
             
