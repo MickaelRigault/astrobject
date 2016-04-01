@@ -267,7 +267,7 @@ class PhotoMap( PhotoPointCollection ):
         # ---------------------
         # - Test consistancy
         if catalogue.nobjects_in_fov < 1:
-            warnings.warn("WARNING No object in the field of view, catalogue not loaded")
+            warnings.warn("WARNING No object in the FoV, catalogue not loaded")
             return
         
         # ---------------------
@@ -327,7 +327,8 @@ class PhotoMap( PhotoPointCollection ):
         id_ = "idx_catalogue" if cat_indexes else "idx"
         return self.catmatch[id_][\
                         self.catalogue.get_mask(catmag_range=catmag_range,
-                                                stars_only=stars_only,nonstars_only=nonstars_only,
+                                                stars_only=stars_only,
+                                                nonstars_only=nonstars_only,
                                                 isolated_only=isolated_only,
                                                 contours=contours, fovmask=True)[\
                                             self.catmatch["idx_catalogue"]]]
@@ -716,25 +717,33 @@ class SepObject( PhotoMap ):
         
     @property
     def _ingalaxy_mask(self):
-        import time
+        """ the array masking the detected sources with or without of galaxies"""
+        if not self.has_catalogue():
+            raise AttributeError("No Catalogue loaded. Requested for the galaxy mask")
+        
         if self._derived_properties["ingalaxy_mask"] is None:
-            # -- This is the fastest way found
-            # --- Galaxies are in galaxies...
-            glaindex = self.get_indexes(nonstars_only=True)
-            potential_index = [i for i in np.arange(self.nsources)
-                               if i not in glaindex]
-            # -- for the rest, let's see.
             from ...utils.shape import Point
-            points =  [Point(x_,y_) for x_,y_ in self.get(["x","y"],
-                                            mask=potential_index)]
-            flagin = np.asarray([self.galaxy_contours.contains(p_) for p_ in points],
-                                dtype=bool)
-            listingal = np.asarray(potential_index)[flagin]
-            # -- Final Flag
-            flagingal = np.zeros(self.nsources)
-            flagingal[glaindex.tolist()+listingal.tolist()] = 1
-            self._derived_properties["ingalaxy_mask"] = \
-              np.asarray(flagingal,dtype=bool)
+            # -- This won't do anything if this is already loaded
+            #    otherwise, loads the catalogue with the ingalaxy info
+            self.catalogue.set_ingalaxymask(self.galaxy_contours)
+            # -- Ok let's build the mask, first, from the Catalogue values
+            galaxymask = np.zeros(self.nsources)
+            catgalmask = np.asarray(self.catalogue.ingalaxymask,dtype="bool")
+            idxIn  = self.catmatch["idx"][ catgalmask[self.catmatch["idx_catalogue"]]]
+            idxOut = self.catmatch["idx"][~catgalmask[self.catmatch["idx_catalogue"]]]
+            idxtbd = np.asarray([i for i in range(self.nsources) if i not in
+                      idxIn.tolist()+idxOut.tolist()])
+        
+            listingal = idxtbd[\
+                np.asarray([self.galaxy_contours.contains(p_) for p_ in \
+                [Point(x_,y_) for x_,y_ in self.get(["x","y"],mask=idxtbd)]
+                ],dtype=bool)]
             
+            galaxymask[idxIn] = True
+            galaxymask[idxOut] = False
+            galaxymask[idxtbd] = False
+            galaxymask[listingal] = True # this is a subpart of idxtbd
+            self._derived_properties["ingalaxy_mask"] = np.asarray(galaxymask,
+                                                                   dtype="bool")
+              
         return self._derived_properties["ingalaxy_mask"]
-            

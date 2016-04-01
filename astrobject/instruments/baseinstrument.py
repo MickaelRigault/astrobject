@@ -4,7 +4,7 @@
 import warnings 
 from sncosmo import get_bandpass
 from astropy import coordinates,units
-from astropy.table.table import Table,TableColumns
+from astropy.table.table import Table,TableColumns, Column
 
 from astropy.io import fits as pf
 import numpy as np
@@ -135,8 +135,10 @@ class Catalogue( BaseObject ):
     source_name = "_not_defined_"
     
     _properties_keys = ["filename","data","header"]
-    _side_properties_keys = ["wcs","fovcontours","fovmask","matchedmask","lbda",
-                             "excluded_list"]
+    _side_properties_keys = ["wcs",
+                             "fovcontours","fovmask","matchedmask",
+                             "lbda","excluded_list"]
+        
     _derived_properties_keys = ["fits","naround","naround_nofovcut","contours"]
 
     
@@ -413,13 +415,58 @@ class Catalogue( BaseObject ):
             return
 
         if type(matchedmask[0]) in [int,np.int32,np.int64]:
-            # - it must be a list of matched index (from SkyCoord matching fuction e.g.)
-            self._side_properties["matchedmask"] = np.asarray([i in matchedmask for i in range(len(self.ra))],
-                                                              dtype=bool)
+            # it must be a list of matched index (from SkyCoord matching fuction e.g.)
+            self._side_properties["matchedmask"] = \
+              np.asarray([i in matchedmask for i in range(len(self.ra))],dtype=bool)
             return
         raise TypeError("the format of the given 'matchedmask' is not recongnized. "+\
-                        "You could give a booleen mask array or a list of accepted index")
+                "You could give a booleen mask array or a list of accepted index")
+
+
                         
+    def set_ingalaxymask(self, galaxycontours, reset=False):
+        """
+        The will update the current ingalaxy mask with the given contours.
+        If a galaxy mask already exist, this will only check the None value,
+        use reset=True
+        to restart the process from stratch (slower).
+
+        This will update the fundamental self.data. This way, saving it will save
+        this information.
+        """
+        
+        # -- Sarting points
+        galmask = np.asarray([np.NaN]*self.nobjects) \
+          if not self.has_ingalaxymask() or reset else self._ingalaxymask
+        
+        # -- ID to work with, i.e. are not None and are in the FoV
+        idx = np.asarray([i for i in np.arange(self.nobjects)
+               if galmask[i]!=galmask[i] and self.fovmask[i]])
+        
+        if len(idx) == 0:
+            warnings.warn("No new coordinates needs a 'ingalaxy' to check")
+            return
+         
+        # -- ID that are galaxies
+        idxgal    = np.asarray(idx[~self._starmask[idx]])
+        idxnotgal = np.asarray(idx[ self._starmask[idx]])
+        
+        # -- ID that are not galaxies but are in
+        from ...utils.shape import Point
+        listingal = idxnotgal[\
+            np.asarray([galaxycontours.contains(p_) for p_ in \
+            [Point(x_,y_) for x_,y_ in \
+             self.wcs.world2pix(self._ra[idxnotgal],self._dec[idxnotgal])]
+             ],dtype=bool)]
+        
+        # -- And let's set what should be
+        gal = idxgal.tolist() + listingal.tolist()
+        galmask[idx] = False # Not in galaxy
+        galmask[np.asarray(gal)] = True# Except if they are
+
+        self.data.add_column(Column(galmask,name="ingalaxy"),
+                             rename_duplicate="ingalaxy" in self.data.keys())
+        
     # --------------------- #
     # Get Methods           #
     # --------------------- #
@@ -466,7 +513,8 @@ class Catalogue( BaseObject ):
 
     def get_mask(self,catmag_range=[None,None],stars_only=False,
                  isolated_only=False, nonstars_only=False,
-                 contours=None,fovmask=True):
+                 contours=None, notingalaxy=False,
+                 fovmask=True):
         """ This returns a bolean mask following the argument cuts. """
         
         mask = np.ones(self.nobjects_in_fov, dtype="bool") if fovmask else\
@@ -476,11 +524,29 @@ class Catalogue( BaseObject ):
         if stars_only:
             mask *= self.starmask if fovmask else self._starmask
         if nonstars_only:
-            if stars_only: print "WARNING you ask for both stars_only and nonstars_only !!!"
+            if stars_only:
+                print "WARNING you ask for both stars_only and nonstars_only !!!"
             mask *= ~self.starmask if fovmask else ~self._starmask
         # - isolation
         if isolated_only:
             mask *= self.isolatedmask if fovmask else self._isolatedmask
+
+        # - not in galaxy
+        if notingalaxy:
+            if not self.has_ingalaxymask():
+                raise AttributeError("No 'ingalaxymask' set. See set_ingalaxymask()")
+            if not fovmask:
+                if [None] in self._ingalaxymask:
+                    raise ValueError("Some of the requested index have no 'ingalaxy'"+\
+                    " information (None value). Please run set_ingalaxymask for them"+\
+                    " (Info - the not in fovmask option might be a problem )")
+                mask *= ~np.asarray(self._ingalaxymask,dtype="bool")
+            else:
+                if [None] in self.ingalaxymask:
+                    raise ValueError("Some of the requested index have no 'ingalaxy'"+\
+                    " information (None value). Please run set_ingalaxymask()")
+                mask *= ~np.asarray(self.ingalaxymask,dtype="bool")
+                
         # - contours
         if contours is not None:
             mask *= self.get_contour_mask(contours,infov=fovmask)
@@ -806,9 +872,22 @@ class Catalogue( BaseObject ):
         return self._side_properties["matchedmask"]
 
     def has_matchedmask(self):
-        return False if self.matchedmask is None\
-          else True
-          
+        return self.matchedmask is not None
+
+    # -- InGalaxy Mask
+    @property
+    def ingalaxymask(self):
+        return self._ingalaxymask[self.fovmask] \
+          if self.has_ingalaxymask() else None
+    
+    @property
+    def _ingalaxymask(self):
+        return None if "ingalaxy" not in self.data.keys() else\
+          self.data["ingalaxy"]
+    
+    def has_ingalaxymask(self):
+        return self._ingalaxymask is not None
+    
     # ------------
     # - on flight
     # - coords
@@ -1018,11 +1097,12 @@ class Catalogue( BaseObject ):
 
     @property
     def contours_pxl(self,**kwargs):
-        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        """Based on contours (in wcs) and wcs2pxl, this draws the pixels contours"""
         if not self.has_wcs():
             raise AttributeError("no wcs solution loaded. You need one.")
         x,y = np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in
-                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+                          np.asarray(self.contours.exterior.xy).T]).T
+        # switch ra and dec ;  checked
         return shape.get_contour_polygon(x,y)
     
     @property
@@ -1031,9 +1111,10 @@ class Catalogue( BaseObject ):
 
     @property
     def fovcontours_pxl(self,**kwargs):
-        """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
+        """Based on contours (in wcs) and wcs2pxl, this draws the pixels contours"""
         if not self.has_wcs():
             raise AttributeError("no wcs solution loaded. You need one.")
         x,y = np.asarray([self.wcs.world2pix(ra_,dec_) for ra_,dec_ in
-                          np.asarray(self.fovcontours.exterior.xy).T]).T # switch ra and dec ;  checked
+                          np.asarray(self.fovcontours.exterior.xy).T]).T
+        # switch ra and dec ;  checked
         return shape.get_contour_polygon(x,y)
