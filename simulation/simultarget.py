@@ -928,8 +928,50 @@ class LightCurveGenerator( _PropertyGenerator_ ):
                 'c':normal(color_mean, color_sigma, ntransient)}
 
     
-    def lightcurve_Ia_realistic():
-        raise NotImplementedError("To be done")
+    def lightcurve_Ia_realistic(self,redshifts,model=None,
+                            mabs_mean = -19.3, mabs_sigma=0.12,
+                            color_mean=0,color_sigma=0.1,
+                            stretch_mean=(0.5,-1),stretch_sigma=(1,1),
+                            stretch_thr=0.75, alpha=0.13, beta=3
+                            ):
+        """
+        stretch parameters assume bimodal distribution
+        stretch_thr is a threshold for uniformly drawn number used to determine 
+        in which mode the SNe is  
+        """
+        # ----------------
+        # - Models        
+        #self.set_model(sncosmo.Model(source=source))
+        if model is None:
+            self.set_model(sncosmo.Model(source='salt2'))
+        else:
+            self.set_model(model)
+        ntransient = len(redshifts)
+
+        c = normal(color_mean, color_sigma, ntransient)
+        x1 = normal(0,1,ntransient)
+        
+        # Shift x1 values to bimodal distribution
+        x1_thr = uniform(size=ntransient)
+        x1[x1_thr <= 0.75] *= stretch_sigma[0]
+        x1[x1_thr <= 0.75] += stretch_mean[0]
+        x1[x1_thr > 0.75] *= stretch_sigma[1]
+        x1[x1_thr > 0.75] += stretch_mean[1]
+
+        x0 = []
+        for k,z in enumerate(redshifts):
+            self.model.set(z=z)
+            mabs = normal(mabs_mean, mabs_sigma)
+            mabs -= alpha*x1[k] - beta*c[k]
+            self.model.set_source_peakabsmag(mabs, 'bessellb', 'ab')
+            x0.append(self.model.get('x0'))
+            
+        ntransient = len(redshifts)
+        
+        return {'x0':np.array(x0),
+                'x1':np.array(x1),
+                'c':np.array(c)}
+
     
     def lightcurve_Ia_hostdependent():
         raise NotImplementedError("To be done")
