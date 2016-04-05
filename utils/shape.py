@@ -32,7 +32,7 @@ def get_contour_polygon(x,y):
     return points.convex_hull
 
 
-def point_in_contours(x,y,contours):
+def point_in_contours(x,y,contours, all=True):
     """
     This methods check if the given coordinate (x,y)
     is within the contours, which could be a:
@@ -40,6 +40,11 @@ def point_in_contours(x,y,contours):
       - Shapely.geometry.Polygon
 
     x and y could be array of coordinates
+
+    if x and y are list of coordinates, if 'all' is True
+    an single boolean value is returned, answering the qestion:
+    'are all the given points in the contours?' Otherwise
+    a list of array is returned for each individual points
     Return
     ------
     bool (bool-array)
@@ -60,7 +65,10 @@ def point_in_contours(x,y,contours):
     # - Shapely Polygon
     if "__iter__" not in dir(x):
         return contours.contains(Point(x,y))
-    return contours.contains(MultiPoint(np.asarray([x,y]).T))
+    if all:
+        return contours.contains(MultiPoint(np.asarray([x,y]).T))
+    return [contours.contains(Point(x_,y_))
+            for x_,y_ in zip(x,y) ]
 
 def polygon_to_vertices(polygon_):
     """
@@ -83,6 +91,15 @@ def polygon_to_patch(polygon_,**kwargs):
     """
     return Polygon(polygon_to_vertices(polygon_), **kwargs)
 
+def patch_to_polygon(mpl_patch):
+    """ converts a matplotlib patch into a shapely polygon. If mpl_patch is a list
+     of patches, the returned polygon will be a 'union cascade' MultiPolygon  """
+    if "__iter__" not in dir(mpl_patch):
+        return get_contour_polygon(*mpl_patch.get_verts().T)
+    
+    from shapely.ops import cascaded_union
+    return cascaded_union([get_contour_polygon(*p_.get_verts().T) for p_ in mpl_patch])
+    
 
 @make_method(mpl.Axes)
 def draw_polygon(ax,polygon_,**kwargs):

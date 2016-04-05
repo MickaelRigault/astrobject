@@ -833,7 +833,7 @@ class PhotoPointCollection( Collection ):
     # ------------------- #
     # - Setter          - #
     # ------------------- #
-    def set_meta(self,key,values):
+    def set_meta(self,key,values, ids=None):
         """
         Assign to all photopoints of the instance a 'value' registered
         as 'key' in their meta dict. The 'values' could either be a
@@ -845,14 +845,24 @@ class PhotoPointCollection( Collection ):
         --------
         Void
         """
+        #if ids is not None:
+            # -- This below is really time consuming. don't !
+            #[self._test_id_(id_) for id_ in ids]
+        id_to_loop = self.list_id if ids is None else ids
+        nids = len(id_to_loop)
         if "__iter__" not in dir(values):
-            values = [values]*self.nsources
+            values = [values]*nids
         elif len(values)==1:
-            values = [values[0]]*self.nsources
-        elif len(values) !=self.nsources:
-            raise ValueError("the given 'values', must provide a value for each photopoints (%d) or a unique value  %d given"%(self.nsources,len(values)))
-        for id_,v in zip(self.list_id,values):
+            values = [values[0]]*nids
+        elif len(values) !=nids:
+            raise ValueError("the given 'values', must provide a value for each photopoints (%d)"\
+                             +" or set ids to the correct id list"\
+                             +" or a unique value  %d given"%(self.nsources,len(values)))
+        # -- latest check
+            
+        for id_,v in zip(id_to_loop,values):
             self.photopoints[id_].meta[key] = v
+            
             
     # ------------------- #
     # - Plot Stuff      - #
