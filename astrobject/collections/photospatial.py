@@ -168,6 +168,41 @@ class PhotoMap( PhotoPointCollection ):
     # =============================== #
     # = Main Methods                = #
     # =============================== #
+    def measure_local_photometry(self, ra, dec, radius,runits=False,
+                                 catindex_exclusion=None):
+        """
+        Calibrate the ppoint photometry using the current photomap
+        """
+        # ------------------- #
+        # - Get the Indexes - #
+        # ------------------- #
+        if not self.has_catalogue():
+            raise AttributeError("No Catalogue loaded. Set one.")
+        
+        # -- all existing catalogue sources
+        cat_indexes, angsep = self.get_idx_around(ra,dec,radius,runits=False,
+                                    catalogue_idx=True)
+        if len(cat_indexes)<3:
+            raise ValueError("Not enough points in the given location")
+        
+        # -- known sources in the photomap
+        catindex = cat_indexes[np.in1d( cat_indexes, self.catmatch["idx_catalogue"] )]
+        index = self.catindex_to_index(catindex)
+
+        # ------------------- #
+        # - Get Photometry  - #
+        # ------------------- #
+        mag    = self.get("mag",mask=index)
+        catmag = self.catalogue.get("mag",mask=catindex)
+
+        return 
+        
+        return catindex,index
+
+    
+
+    
+    # -- Id <-> Coords
     def coords_to_id(self,x,y):
         """ this enables to have consistent coordinate/id mapping """
         return "%.8f,%.8f"%(x,y)
@@ -176,6 +211,8 @@ class PhotoMap( PhotoPointCollection ):
         """ convert photopoint's id into coordinates. Only reading here, see radec, xy """
         return np.asarray(id.split(","),dtype="float")
 
+
+    # -- Catalogue <-> PhotoMap
     def match_catalogue(self,catalogue=None,
                         force_it=False, deltadist=1*units.arcsec):
         """
@@ -207,7 +244,41 @@ class PhotoMap( PhotoPointCollection ):
             }
         
         self.catalogue.set_matchedmask(idxcatalogue)
+
+    def index_to_catindex(self,index, cleanindex=False):
+        """ give the catalogue index corresponding to the given photomap index.
+        The cleanindex option enable to automatically remove the unknown index values.
+        If you do not. this will raise a ValueError indicating the unknown index
+        """
+        if "__iter__" not in dir(index):
+            catindex = [index]
+        index = np.asarray(index)
         
+        bool_ = np.in1d( index, self.catmatch["idx"] )
+        if not np.all(bool_) and  not cleanindex:
+            raise ValueError("Unknown photomap index(es):"+","%join(index[bool_]))
+            
+        return np.concatenate(self.catmatch["idx_catalogue"][\
+                        np.argwhere(np.in1d(self.catmatch["idx"], index[bool_]))])
+                        
+        
+    def catindex_to_index(self,catindex, cleanindex=False):
+        """ give the photomap index corresponding to the given catalogue index.
+        The cleanindex option enable to automatically remove the unknown index values.
+        If you do not. this will raise a ValueError indicating the unknown index
+        """
+        if "__iter__" not in dir(catindex):
+            catindex = [catindex]
+        catindex = np.asarray(catindex)
+        
+        bool_ = np.in1d( catindex, self.catmatch["idx_catalogue"] )
+        if not np.all(bool_) and not cleanindex:
+            raise ValueError("Unknown catalogue index(es):"+","%join(catindex[bool_]))
+            
+        return np.concatenate(self.catmatch["idx"][\
+                        np.argwhere(np.in1d(self.catmatch["idx_catalogue"], catindex[bool_]))])
+
+    
     # ------------- #
     # - SETTER    - #
     # ------------- #
@@ -260,7 +331,8 @@ class PhotoMap( PhotoPointCollection ):
         # - Add the world_2_pixel            
         if self.has_wcs():
             if catalogue.has_wcs():
-                warnings.warn("WARNING the given 'catalogue' already has a wcs solution. This did not overwrite it.")
+                warnings.warn("WARNING the given 'catalogue' already has a wcs solution."+\
+                              " This did not overwrite it.")
             else:
                 catalogue.set_wcs(self.wcs)
                 
@@ -275,21 +347,27 @@ class PhotoMap( PhotoPointCollection ):
         self._side_properties["catalogue"] = catalogue
         if match_catalogue:
             self.match_catalogue()
+
     # ------------- #
     # - GETTER    - #
     # ------------- #
-    def get_idx_around(self, ra, dec, radius, catalogue_idx=False):
+    # -- Access Index
+    def get_idx_around(self, ra, dec, radius,runits="arcmin", catalogue_idx=False):
         """
         Parameters:
         ----------
         ra, dec : [float]          Position in the sky *in degree*
 
-        radius: [astropy.Quantity] distance of search, using astropy.units
+        radius:  [float]           Distance of search (see runits for unit)
 
+        runits: [string]           Unit of the distance. (an astropy known units)
+        
         Return
         ------
         2d-array (index, angular separation)
         """
+        radius = radius*units.Unit(runits)
+        
         if "__iter__" not in dir(ra):
             ra = [ra]
             dec = [dec]
@@ -306,7 +384,7 @@ class PhotoMap( PhotoPointCollection ):
                                              runits=radius.unit.name,
                                              wcs_coords=True)
  
-    
+    # -- Masking Tool
     def get_indexes(self,isolated_only=False,
                     stars_only=False,nonstars_only=False,
                     catmag_range=[None,None],
@@ -332,6 +410,9 @@ class PhotoMap( PhotoPointCollection ):
                                                 isolated_only=isolated_only,
                                                 contours=contours, fovmask=True)[\
                                             self.catmatch["idx_catalogue"]]]
+                                            
+    
+    
     # ------------- #
     # - PLOTTER   - #
     # ------------- #

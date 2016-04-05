@@ -5,6 +5,7 @@ from astropy.io import fits as pf
 from astropy.table import Table
 from .baseinstrument import Instrument
 from ...utils.decorators import _autogen_docstring_inheritance
+from ...utils.tools import kwargs_update
 
 __all__ = ["hst"]
 
@@ -110,11 +111,12 @@ class HST( Instrument ):
         self._properties_keys.append("used_amplifier")
         super(HST,self).__build__()
         # -- How to read the image
-        self._build_properties = dict(
-                data_index = DATAINDEX,
-                error_index = DATAINDEX,
-                header_exptime = "EXPTIME"
-                )
+        self._build_properties = kwargs_update(self._build_properties,
+                                               **dict(
+                    data_index = DATAINDEX,
+                    error_index = DATAINDEX,
+                    header_exptime = "EXPTIME"
+                    ))
 
     # ------------------------ #
     # - Speciality           - #

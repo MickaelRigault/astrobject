@@ -24,8 +24,13 @@ def wcs(filename=None,header=None,extension=0):
     if "PV1_5" in header.keys():
         warnings.warn("WARNING potential issue with wcs SCAM parameters")
         warnings.warn("WARNING astLib based wcs class used")
-        return _WCSbackup(header,mode = "pyfits")
-    
+        try:
+            return _WCSbackup(header,mode = "pyfits")
+        except:
+            from pyfits import getheader
+            print "I had to use pyfits for %s"%filename
+            return _WCSbackup(getheader(filename,ext=extension),mode = "pyfits")
+        
     return WCS(header)
 
 # =========================== #
@@ -244,18 +249,20 @@ class _WCSbackup(astWCS.WCS,_MotherWCS_):
         """
         """
         offset = self.image_offset if withoffset else np.asarray([0,0])
-        x,y = (np.asarray([x,y]).T-offset[::-1]+1).T
+        x,y = (np.asarray([x,y]).T-offset[::-1]-0.5).T
         return np.asarray(self.pix2wcs(x,y))
 
     def world2pix(self,ra,dec, withoffset=True):
         """
         """
         offset = self.image_offset if withoffset else np.asarray([0,0])
-        if "__iter__" in dir(ra):
-            ra,dec = np.asarray(ra),np.asarray(dec)
+        if "__iter__" not in dir(ra):
+            ra,dec = [ra],[dec]
+        ra,dec = np.asarray(ra),np.asarray(dec)
+            
         x,y = np.asarray(self.wcs2pix(ra,dec)).T
-        return  np.asarray(x)+offset[1],\
-          np.asarray(y)+offset[0]
+
+        return zip(np.asarray(x)+offset[1]+0.5,np.asarray(y)+offset[0]+0.5)
         
 
     def coordsAreInImage(self,ra,dec):
@@ -280,7 +287,7 @@ class _WCSbackup(astWCS.WCS,_MotherWCS_):
     # = 
     # ===================== #
     def calc_footprint(self,center=True):
-        naxis1,naxis2 = self.image_height,self.image_width
+        naxis1,naxis2 = self._naxis1,self._naxis2
         if center == True:
             corners = np.array([[1, 1],
                                 [1, naxis2],

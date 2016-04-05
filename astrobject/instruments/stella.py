@@ -4,7 +4,7 @@ import numpy as np
 from astropy.io import fits as pf
 from .baseinstrument import Instrument,get_bandpass
 from ...utils.decorators import _autogen_docstring_inheritance
-
+from ...utils.tools import kwargs_update
 __all__ = ["stella","STELLA_INFO"]
 
 STELLA_INFO = {"up":{"lbda":3580,"ABmag0":None},
@@ -57,10 +57,11 @@ class STELLA( Instrument ):
         self._properties_keys.append("mab0")
         super(STELLA,self).__build__()
         # -- How to read the image
-        self._build_properties = dict(
-                data_index = DATAINDEX,
-                header_exptime = "EXPT"
-                )
+        self._build_properties = kwargs_update(self._build_properties,
+                                               **dict(
+                    data_index = DATAINDEX,
+                    header_exptime = "EXPT"
+                    ))
 
     @_autogen_docstring_inheritance(Instrument.set_catalogue,"Instrument.set_catalogue")
     def set_catalogue(self,catalogue,force_it=True,**kwargs):

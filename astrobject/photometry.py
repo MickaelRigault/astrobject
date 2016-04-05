@@ -242,7 +242,7 @@ class Image( BaseObject ):
                 header_exptime = "EXPTIME",
                 dataslice0="undefined",
                 dataslice1="undefined",
-               bkgdbox={"bh":100,"bw":100,"fh":3,"fw":3},
+                bkgdbox={"bh":100,"bw":100,"fh":3,"fw":3},
                 )
 
     # =========================== #
@@ -842,7 +842,8 @@ class Image( BaseObject ):
 
     
     def sep_extract(self,thresh=None,returnobjects=False,
-                    set_catalogue=True,match_catalogue=True,**kwargs):
+                    set_catalogue=True,match_catalogue=True,
+                    matching_distance=None,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor SEP.
 
@@ -905,7 +906,11 @@ class Image( BaseObject ):
             # is consistant between the sepobject and this instance (same catalogue)
             self.sepobjects.set_catalogue(self.catalogue, reset=False)
             if match_catalogue:
-                self.sepobjects.match_catalogue()
+                matchingdist = np.max([1,
+                                       1./self.units_to_pixels("arcsec").value])*units.arcsec \
+                                       if matching_distance is None else matching_distance
+                             
+                self.sepobjects.match_catalogue(deltadist = matchingdist)
                 
                     
         if returnobjects:
