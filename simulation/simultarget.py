@@ -16,23 +16,23 @@ from ..utils import random
 
 _d2r = np.pi / 180
 
-__all__ = ["sn_generator","transient_generator","generate_transients"]
+__all__ = ["get_sn_generator","get_transient_generator","generate_transients"]
 
 
-def sn_generator(zrange,ratekind="basic",**kwargs):
+def get_sn_generator(zrange,ratekind="basic",**kwargs):
     """
-    This function enable to load the generator of Type Ia supernovae
+    This function enables to load the generator of Type Ia supernovae
     """
     return SNIaGenerator(ratekind=ratekind,zrange=zrange,
                          **kwargs)
 
-def transient_generator(zrange,ratekind="basic",ratefunc=None,
+def get_transient_generator(zrange,ratekind="basic",ratefunc=None,
                         ra_range=[-180,180], dec_range=[-90,90],
                         ntransients=None,
                         **kwargs):
     """
-    This model return the object that enable to create and change
-    the kind of transient you which to set in the sky.
+    This model returns the object that enables to create and change
+    the kind of transient you wish to set in the sky.
 
     # - HERE COPY PASTE THE TransientGenerator INIT - #
     # - TO BE DONE
@@ -44,7 +44,8 @@ def transient_generator(zrange,ratekind="basic",ratefunc=None,
                               **kwargs)
     
 def generate_transients(zrange,**kwargs):
-    """This module call transient_generator to create the
+    """
+    This module calls transient_generator to create the
     TransientGenerator object and then returns the associated
     TransientGenerator.transients
 
