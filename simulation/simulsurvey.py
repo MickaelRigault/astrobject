@@ -11,7 +11,6 @@ from astropy.table import Table, vstack
 from ..astrobject.baseobject import BaseObject
 from ..utils.tools import kwargs_update
 from ..utils.plot.skybins import SurveyField, SurveyFieldBins 
-from .simultarget import sn_generator,transient_generator
 
 
 __all__ = ["SimulSurvey", "SurveyPlan"] # to be changed
