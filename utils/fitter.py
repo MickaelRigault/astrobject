@@ -24,12 +24,12 @@ class Fitter( BaseObject ):
 
     _properties_keys = ['model', 'cosmo', 'lightcurves']
 
-    _side_properties = ['source', 'fit_param']
+    _side_properties_keys = ['source', 'fit_param']
 
     _derived_properties_keys = ['fit', 'raw_fit', 'true']
 
     def __init__(self, lightcurves, source='salt2', model=None, 
-                 cosmo=FlatLambdaCDM(H0=70, Om0=0.3),
+                 cosmo=FlatLambdaCDM(H0=70, Om0=0.3), empty=False,
                  fit_param=['t0', 'x0', 'x1', 'c']):
         """
         Arguments:
@@ -48,6 +48,10 @@ class Fitter( BaseObject ):
 
         fit_param -- list of parameters to be fit
         """
+        self.__build__()
+        if empty:
+            return
+
         if model is None:
             self.set_source(source)
         else:
@@ -64,7 +68,7 @@ class Fitter( BaseObject ):
         """
         """
         self.fit_all()
-        self._update_HR()
+        self._update_HR_()
 
     def _update_HR_(self):
         """
@@ -75,19 +79,19 @@ class Fitter( BaseObject ):
     def fit_all(self):
         """
         """
-        if self.raw_fit is not None:
+        if self.raw_fit is None:
             self._derived_properties["raw_fit"] = []
             
         for lc in self.lightcurves:
             for pname in [name for name in self.model.param_names
-                          if name not in self.fit_param]:
+                          if name not in self.fit_param and name != 'mwr_v']:
                 if pname not in lc.meta.keys():
                     raise KeyError("Parameter '%s' not in lightcurve meta dict"%pname)
                 self.model.set(**{pname: lc.meta[pname]})
 
             res, _ = sncosmo.fit_lc(lc, self.model, self.fit_param)
 
-            self._derived_keys['raw_fit'].append(res)
+            self._derived_properties['raw_fit'].append(res)
                 
     # ------------
     # - Properties
@@ -110,7 +114,7 @@ class Fitter( BaseObject ):
         if "mwebv" not in model.param_names:
             model.add_effect(sncosmo.CCM89Dust(), 'mw', 'obs')
 
-        self._side_properties["model"] = model
+        self._properties["model"] = model
 
     @property
     def cosmo(self):
@@ -158,8 +162,8 @@ class Fitter( BaseObject ):
         """Summary of fit results (not implement yet)"""        
         pass
 
-     @property
-     def true(self):
+    @property
+    def true(self):
         """True values for simulated lcs taken from meta dict of lightcurves"""
         return self._derived_properties["raw_fit"]
 
