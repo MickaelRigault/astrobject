@@ -9,6 +9,9 @@ Classes for lightcurve fits and their statistics
 """
 
 import numpy as np
+import re
+from itertools import combinations
+
 import sncosmo
 from astropy.cosmology import FlatLambdaCDM
 from astropy.table import Table, Column
@@ -68,6 +71,7 @@ class Fitter( BaseObject ):
         """
         """
         self.fit_all()
+        self._update_covnames_()
         self._update_HR_()
 
     def _update_HR_(self):
@@ -92,7 +96,88 @@ class Fitter( BaseObject ):
             res, _ = sncosmo.fit_lc(lc, self.model, self.fit_param)
 
             self._derived_properties['raw_fit'].append(res)
+
+    def get_param(self, param):
+        """
+        Return array of values for parameter 'param' 
+        """
+        if self._derived_properties["fit"] is not None:
+            if param not in self.fit.colnames:
+                if param.startswith('cov_'):
+                    param = self._get_cov_reverse_(param)
+                else:
+                    raise ValueError('Unknown parameter name')                
+            return self._derived_properties["fit"][param]
+
+        if param in self.model.param_names:
+            k = self.model.param_names.index(param)
+            return np.array([res['parameters'][k] for res in self.raw_fit])
+        elif param.startswith('mag_'):
+            raise ImplementationError('Peak magnitudes not implemented yet')
+        elif param.startswith('err_'):
+            if not param[4:].startswith('mag'):
+                return np.array([res['errors'][param[4:]] 
+                                 for res in self.raw_fit])
+            else:
+                raise ImplementationError('Peak magnitudes not implemented yet')
+        elif param.startswith('cov_'):
+            return self._get_cov_(param)
+        else:
+            raise ValueError('Unknown parameter name: %s'%param)
+
+    def _make_param_table_(self):
+        """
+        """
+        self._derived_properties["fit"] = None
                 
+        new = Table()
+        for param in [name for name in self.model.param_names
+                      if name not in self.fit_param and name != 'mwr_v']:
+            new.add_column(name=param, data=self.get_param(param))
+        for param in self.fit_param:
+            new.add_column(name=param, data=self.get_param(param))
+            new.add_column(name='err_%s'%param, 
+                           data=self.get_param('err_%s'%param))
+        for n1, n2 in combinations(self.fit_param, 2):
+            new.add_column(name='cov_%s_%s'%(n1,n2), 
+                           data=self.get_param('cov_%s_%s'%(n1,n2)))
+
+    def _get_cov_idx_(self, param, return_names=False):
+        """
+        Find indices for covariance name
+        Can also return the parameter names instead
+
+        TODO: Figure out how this should handle peak magnitudes 
+        """
+        pattern = '(%s)'%('|'.join(self.fit_param))
+        matches = re.findall(patter, param[4:])
+        
+        if len(matches) != 2:
+            raise ValueError('Unknown covariance name: %s'%param)
+        
+        if return_names:
+            return tuple(matches)
+
+        return (self.fit_param.index(matches[0]),
+                self.fit_param.index(matches[1]))
+
+    def _get_cov_reverse_(self, param):
+        """
+        Reverse order of parameter names in covariance name
+        """
+        n1, n2 = self._get_cov_idx_(param, return_names=True)
+        
+        return 'cov_%s_%s'%(n1, n2)
+
+    def _get_cov_(self, param):
+        """
+        Get array of covariances
+        TODO: Extend to calculating the 
+        """
+        k0, k1 = self._get_cov_idx_(param)
+        
+        return np.array([res['covariance'][k0,k1] for res in self.raw_fit])
+
     # ------------
     # - Properties
     @property
@@ -154,13 +239,19 @@ class Fitter( BaseObject ):
     # - Derived properties
     @property
     def raw_fit(self):
-        """Raw fit ouput of sncosmo.fit_lc()"""        
+        """Raw fit ouput of sncosmo.fit_lc()"""
+        if self._derived_properties["raw_fit"] is None:
+            raise ValueError("Lightcurves not fit yet. Run Fitter.fit_all().")
+
         return self._derived_properties["raw_fit"]
 
     @property
     def fit(self):
         """Summary of fit results (not implement yet)"""        
-        pass
+        if self._derived_properties["fit"] is None:
+            self._process_raw_fits_()
+
+        return self._derived_properties["fit"]
 
     @property
     def true(self):
