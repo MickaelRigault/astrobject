@@ -21,14 +21,14 @@ __all__     = ["get_target"]+["astrotarget"] # to be removed
 
 
 def astrotarget(name=None,zcmb=None, ra=None, dec=None,
-               type_=None,mwebmv=None,**kwargs):
+               type_=None,mwebmv=None,zcmberr=None,**kwargs):
     
     print "DECREPATED: astrotarget->get_target"
     return get_target(name=name,zcmb=zcmb, ra=ra, dec=dec,
                     type_=type_,mwebmv=mwebmv,**kwargs)
 
 def get_target(name=None,zcmb=None, ra=None, dec=None,
-               type_=None,mwebmv=None,**kwargs):
+               type_=None,mwebmv=None,zcmberr=None,**kwargs):
     """
     = Initialize the AstroTarget Function =
 
@@ -37,7 +37,7 @@ def get_target(name=None,zcmb=None, ra=None, dec=None,
         
     name: [string]             name of the astro-object
 
-    zcmb: [float]              redshift in the cmb frame. This will be used
+    zcmb,zcmberr: [float]      redshift/error in the cmb frame. This will be used
                                to derive distmeter etc. depending on the cosmology
 
     ra: [float]                right-ascention of the object. (degree favored).
@@ -74,7 +74,8 @@ def get_target(name=None,zcmb=None, ra=None, dec=None,
     if name is None and "object" in kwargs.keys():
         name = kwargs.pop("object")
         
-    forced_mwebmv = kwargs.pop("forced_mwebmv",kwargs.pop("MWebmv",kwargs.pop("MWebv",None)))
+    forced_mwebmv = kwargs.pop("forced_mwebmv",kwargs.pop("MWebmv",
+                                             kwargs.pop("MWebv",None)))
     
     dec = kwargs.pop("Dec",dec)
     ra = kwargs.pop("Ra",ra)
@@ -168,7 +169,7 @@ class AstroTarget( BaseObject ):
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
-    _properties_keys         = ["zcmb","ra","dec","name"]
+    _properties_keys         = ["zcmb","ra","dec","name","zcmb.err"]
     
     _side_properties_keys    = ["cosmology","literature_name",
                                 "type","mwebmv","sfd98_dir"]
@@ -180,7 +181,7 @@ class AstroTarget( BaseObject ):
     # =========================== #
     # = Initialization          = #
     # =========================== #
-    def __init__(self,name=None,zcmb=None,
+    def __init__(self,name=None,zcmb=None,zcmberr=None,
                  ra=None,dec=None,
                  type_=None,cosmo=COSMO_DEFAULT,
                  load_from=None,empty=False,sfd98_dir=None,
@@ -193,7 +194,7 @@ class AstroTarget( BaseObject ):
         
         name: [string]             name of the astro-object
 
-        zcmb: [float]              redshift in the cmb frame. This will be used
+        zcmb,zcmberr: [float]      redshift/error in the cmb frame. This will be used
                                    to derive distmeter etc. depending on the cosmology
 
         ra: [float]                right-ascention of the object. (degree favored).
@@ -241,13 +242,13 @@ class AstroTarget( BaseObject ):
     # =========================== #
     def define(self,name,zcmb,ra,dec,
                cosmo=COSMO_DEFAULT,type_=None,sfd98_dir=None,
-               forced_mwebmv=None):
+               forced_mwebmv=None,zcmberr=None):
         """
         This function enables you to define the fundamental object parameter
         upon which the entire object will be defined.
         """
         self.name = name
-        self.zcmb = zcmb
+        self.set_zcmb(zcmb,zcmberr)
         self.radec = ra,dec
         self.type  = type_
         self.set_cosmo(cosmo)
@@ -315,11 +316,14 @@ class AstroTarget( BaseObject ):
     def zcmb(self):
         return self._properties["zcmb"]
     
-    @zcmb.setter
-    def zcmb(self,value):
+    def set_zcmb(self,value, error=None):
         self._properties["zcmb"] = value
+        self._properties["zcmb.err"] = error
         self._update_distance_()
-    
+
+    @property
+    def zcmb_err(self):
+        return self._properties["zcmb.err"]
     # ------------------ #
     # - Coordinate     - #
     # ------------------ #
@@ -392,7 +396,13 @@ class AstroTarget( BaseObject ):
     # the cosmology or the redshift   
     @property
     def distmeter(self):
+        """ converts the distmpc in meter """
         return self.distmpc * units.mpc.in_units("m")
+
+    @property
+    def distmeter_err(self):
+        """ converts the distmpc_err in meter """
+        return self.distmpc_err * units.mpc.in_units("m")
     
     @property
     def distmpc(self):
@@ -400,6 +410,23 @@ class AstroTarget( BaseObject ):
             raise AttributeError("'cosmo' and 'redshift' required.")
         return self.cosmo.luminosity_distance(self.zcmb).value
 
+    @property
+    def distmpc_err(self):
+        """ assymetric error to account for the non linearity of
+        the distance measurement
+        Returns:
+        --------
+        [-lower, +upper] (both in absolute value).
+        (np.NaN,np.NaN are returned if no error on the redshift
+        """
+        if self.zcmb is None or self.zcmb_err is None:
+            return np.NaN,np.NaN
+        
+        return np.asarray([
+          self.cosmo.luminosity_distance(self.zcmb-self.zcmb_err).value-self.distmpc,
+          self.distmpc-self.cosmo.luminosity_distance(self.zcmb+self.zcmb_err).value])
+                
+    
     
     @property
     def arcsec_per_kpc(self):

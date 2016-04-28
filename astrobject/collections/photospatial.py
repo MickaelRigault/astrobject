@@ -191,12 +191,7 @@ class PhotoMap( PhotoPointCollection ):
 
         # ------------------- #
         # - Get Photometry  - #
-        # ------------------- #
-        mag    = self.get("mag",mask=index)
-        catmag = self.catalogue.get("mag",mask=catindex)
-
-        return 
-        
+        # ------------------- #        
         return catindex,index
 
     
