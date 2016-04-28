@@ -15,6 +15,13 @@ from ..utils.shape import draw_polygon
 
 __all__ = ["ImageCollection"]
 
+
+
+def get_imagecollection(images,**kwargs):
+    """ Create an Image collection from the given list of images """
+    return ImageCollection(images=images,**kwargs)
+
+
 #######################################
 #                                     #
 # Base Collection                     #
@@ -539,12 +546,13 @@ class ImageCollection( Collection ):
             # -- Loop over the images, check what is needed
             if not self.has_catalogue() or \
               not self.catalogue.contours.contains(self.images[id_]["wcs"].contours):
+                print "Fetching a new catalogue"
                 new_cat = self._get_id_catalogue_(id_,source=source,**kwargs)
+                
                 if not self.has_catalogue():
                     self.set_catalogue(new_cat)
                 else:
                     self.catalogue.merge(new_cat)
-
     
     # ========================== #
     # = Show                   = #
@@ -611,7 +619,7 @@ class ImageCollection( Collection ):
         radius = img_radius if radius_degree is None or radius_degree<img_radius \
           else radius_degree
           
-        return inst.catalogue(source=source,radec=radec,radius="%sd"%radius,
+        return inst.fetch_catalogue(source=source,radec=radec,radius="%sd"%radius,
                              **kwargs)
     # =============== #
     # = IO images   = #
@@ -655,7 +663,7 @@ class ImageCollection( Collection ):
     def _load_image_(self,id,**kwargs):
         """
         """
-        self.images[id]["image"] = inst.instrument(self.images[id]["file"],**kwargs)
+        self.images[id]["image"] = inst.get_instrument(self.images[id]["file"],**kwargs)
         
     # ========================== #
     # = Properties             = #

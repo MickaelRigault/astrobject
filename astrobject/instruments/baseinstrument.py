@@ -408,7 +408,9 @@ class Catalogue( BaseObject ):
         if matchedmask is None:
             self._side_properties["matchedmask"] = None
             return
-        
+        if len(matchedmask) == 0:
+            self._side_properties["matchedmask"] = np.zeros(self.nobjects_in_fov)
+            return
         if type(matchedmask[0]) is bool:
             # - it already is a mask, good
             self._side_properties["matchedmask"] = np.asarray(matchedmask,dtype=bool)
@@ -421,7 +423,6 @@ class Catalogue( BaseObject ):
             return
         raise TypeError("the format of the given 'matchedmask' is not recongnized. "+\
                 "You could give a booleen mask array or a list of accepted index")
-
 
                         
     def set_ingalaxymask(self, galaxycontours, reset=False):

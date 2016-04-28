@@ -5,6 +5,7 @@ from astropy.io import fits as pf
 from astropy import units
 from .baseinstrument import Instrument,get_bandpass
 from ...utils.decorators import _autogen_docstring_inheritance
+from ...utils.tools import kwargs_update
 
 __all__ = ["ptf","PTF_INFO"]
 
@@ -57,10 +58,11 @@ class PTF( Instrument ):
         self._properties_keys.append("mab0")
         super(PTF,self).__build__()
         # -- How to read the image
-        self._build_properties = dict(
-                data_index = DATAINDEX,
-                header_exptime = "EXPTIME"
-                )
+        self._build_properties = kwargs_update(self._build_properties,
+                                               **dict(
+                    data_index = DATAINDEX,
+                    header_exptime = "EXPTIME"
+                    ))
 
     @_autogen_docstring_inheritance(Instrument.set_catalogue,"Instrument.set_catalogue")
     def set_catalogue(self,catalogue,force_it=True,**kwargs):

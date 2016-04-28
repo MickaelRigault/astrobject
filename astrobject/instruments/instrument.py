@@ -117,7 +117,7 @@ def is_known_instrument_file(filename):
     bool
     """
     try:
-        inst = instrument(filename,empty=True)
+        inst = get_instrument(filename,empty=True)
     except:
         return False
     return True
