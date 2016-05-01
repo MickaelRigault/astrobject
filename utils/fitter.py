@@ -14,7 +14,10 @@ TODO:
 """
 
 import numpy as np
+import cPickle
+import glob
 import re
+import os
 from itertools import combinations
 from collections import OrderedDict as odict
 
@@ -37,9 +40,10 @@ class Fitter( BaseObject ):
 
     _derived_properties_keys = ['fit', 'raw_fit', 'idx_good', 'true']
 
-    def __init__(self, lightcurves, source='salt2', model=None, 
+    def __init__(self, lightcurves=None, source='salt2', model=None, 
                  cosmo=FlatLambdaCDM(H0=70, Om0=0.3), empty=False,
-                 fit_param=['t0', 'x0', 'x1', 'c']):
+                 fit_param=['t0', 'x0', 'x1', 'c'], load_from=None, 
+                 modelcov=True):
         """
         Arguments:
         ----------
@@ -56,6 +60,8 @@ class Fitter( BaseObject ):
                   can be string for built-in model
 
         fit_param -- list of parameters to be fit
+
+        load_from -- file with previously saved lcs and fits
         """
         self.__build__()
         if empty:
@@ -68,22 +74,22 @@ class Fitter( BaseObject ):
 
         self.set_cosmo(cosmo, update=False)
 
-        self._properties['lightcurves'] = lightcurves
-        self._side_properties['fit_param'] = fit_param
+        if load_from is None:
+            if lightcurves is None:
+                raise ValueError('Please provide lightcurves or savefile')
+            self._properties['lightcurves'] = lightcurves
+            self._side_properties['fit_param'] = fit_param
+            self._update_()
+        else:
+            self.load(load_from)
 
-        self._update_()
-
+    # --------------------------- #
+    # - Update and fit Methods  - #
+    # --------------------------- #
     def _update_(self):
         """
         """
         self.fit_all()
-        self._update_HR_()
-
-    def _update_HR_(self):
-        """
-        Not implemented yet, requires calculation of peak magnitudes
-        """
-        pass
 
     def fit_all(self):
         """
@@ -114,6 +120,61 @@ class Fitter( BaseObject ):
 
         self.model.set(**param0)
 
+    def _make_param_table_(self):
+        """
+        """
+        self._derived_properties["fit"] = None
+                
+        new = Table()
+        new.add_column(Column(name='n_points', data=self.get_param('n_points')))
+        new.add_column(Column(name='chisq', data=self.get_param('chisq')))
+        for param in [name for name in self.model.param_names
+                      if name not in self.fit_param and name != 'mwr_v']:
+            new.add_column(Column(name=param, data=self.get_param(param)))
+        
+        full_list = self.fit_param+self._get_mag_names_()
+        for param in full_list:
+            new.add_column(Column(name=param, data=self.get_param(param)))
+            new.add_column(Column(name='err_%s'%param, 
+                           data=self.get_param('err_%s'%param)))
+
+        for n1, n2 in combinations(full_list, 2):
+            new.add_column(Column(name='cov_%s_%s'%(n1,n2), 
+                           data=self.get_param('cov_%s_%s'%(n1,n2))))
+
+        self._derived_properties["fit"] = new
+
+    # --------------------------- #
+    # - Save/load Methods       - #
+    # --------------------------- #
+
+    def save(self, savefile):
+        """
+        Save lightcurves and fits to a Pickle file.
+        """
+        out = {'lightcurves': self.lightcurves,
+               'fit_param': self.fit_param,
+               'raw_fit': self.raw_fit,
+               'idx_good': self.idx_good}
+            
+        cPickle.dump(out, open(savefile, 'w'))
+
+    def load(self, savefile):
+        """
+        """
+        data = cPickle.load(open(savefile))
+
+        self._properties['lightcurves'] = data['lightcurves']
+        self._side_properties['fit_param'] = data['fit_param']
+        self._derived_properties['raw_fit'] = data['raw_fit']
+        self._derived_properties['idx_good'] = data['idx_good'] 
+        
+        if self._derived_properties['fit'] is not None:
+            self._derived_properties['fit'] = None
+            
+    # --------------------------- #
+    # - Get Methods             - #
+    # --------------------------- #
     def get_param(self, param):
         """
         Return array of values for parameter 'param' 
@@ -148,29 +209,47 @@ class Fitter( BaseObject ):
         else:
             raise ValueError('Unknown parameter name: %s'%param)
 
-    def _make_param_table_(self):
+    def get_hr(self, band, absmag=-19.3, corr=None):
         """
+        band must be registered band 
+        corr is dictionary of lc parameter names for correction and
+        nuisance parameter values, e.g. {'x1': 0.13, 'c': -3}
+        (Note the sign change for beta. This is because the correction is always
+        performed by adding the values)
         """
-        self._derived_properties["fit"] = None
-                
-        new = Table()
-        new.add_column(Column(name='n_points', data=self.get_param('n_points')))
-        new.add_column(Column(name='chisq', data=self.get_param('chisq')))
-        for param in [name for name in self.model.param_names
-                      if name not in self.fit_param and name != 'mwr_v']:
-            new.add_column(Column(name=param, data=self.get_param(param)))
-        
-        full_list = self.fit_param+self._get_mag_names_()
-        for param in full_list:
-            new.add_column(Column(name=param, data=self.get_param(param)))
-            new.add_column(Column(name='err_%s'%param, 
-                           data=self.get_param('err_%s'%param)))
+        if corr is None:
+            corr = {}
 
-        for n1, n2 in combinations(full_list, 2):
-            new.add_column(Column(name='cov_%s_%s'%(n1,n2), 
-                           data=self.get_param('cov_%s_%s'%(n1,n2))))
+        mag = self.get_param('mag_%s'%band)
+        distmod = self.cosmo.distmod(self.get_param('z')).value
+        hr = mag - absmag - distmod
 
-        self._derived_properties["fit"] = new
+        for name, value in corr.items():
+            hr += value * self.get_param(name)
+
+        return hr
+
+    def get_hr_err(self, band, corr=None):
+        """
+        band must be registered band 
+        corr is dictionary of lc parameter names for correction and
+        nuisance parameter values, e.g. {'x1': 0.13, 'c': -3}
+        (Note the sign change for beta. This is because the correction is always
+        performed by adding the values)
+        """
+        if corr is None:
+            corr = {}
+
+        var = self.get_param('err_mag_%s'%band)**2
+
+        for name, value in corr.items():
+            var += value**2 * self.get_param('err_%s'%name)**2
+            var += 2*value * self.get_param('cov_mag_%s_%s'%(band,name))
+
+        for n0, n1 in combinations(corr.keys(), 2):
+            var +- 2*corr[n0]*corr[n1] * self.get_param('cov_%s_%s'%(n0,n1)) 
+
+        return np.sqrt(var)
 
     def _get_cov_idx_(self, param, return_names=False):
         """
