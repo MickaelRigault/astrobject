@@ -162,34 +162,43 @@ class TransientGenerator( BaseObject ):
         
         if "lcmodel" in kwargs.keys():
             self.set_model(kwargs["lcmodel"])
-            self.set_lightcurve_prop(self.model.source,**kwargs)
+            self.set_lightcurve_prop(model=self.model,**kwargs)
         elif "lcsource" in kwargs.keys():
-            self.set_lightcurve_prop(kwargs["lcsource"],**kwargs)
+            self.set_lightcurve_prop(source=kwargs["lcsource"],**kwargs)
 
         if update:
             self._update_()
             
-    def set_lightcurve_prop(self,source,lcsimul_func=None,lcsimul_prop={},
-                            **kwargs):
+    def set_lightcurve_prop(self,source=None, model=None, lcsimul_func=None,
+                            lcsimul_prop={}, **kwargs):
         """
         lcsimul_func must be function with redshift and sncosmo.model as arguments
         lcsimul_prop can be used for options of lcsimul_func
         """
-        accepted = [str, sncosmo.models.SALT2Source, 
-                    sncosmo.models.TimeSeriesSource]
-        if source.__class__ not in accepted:
-            raise TypeError("source must be string, " + 
-                            "sncosmo.models.TimeSeriesSource or" +
-                            "sncosmo.models.SALT2Source")
-    
         if lcsimul_func is None:
             raise ValueError("please set lcsimul_func")
 
-        self._properties["transient_coverage"]["lightcurve_prop"] = { 
-            "source": source,
+        props = { 
             "param_func": lcsimul_func,
             "param_func_kwargs": lcsimul_prop
         }
+
+        if model is not None:
+            props["source"] = None
+            props["model"] = model
+        elif source is not None:
+            accepted = [str, sncosmo.models.SALT2Source, 
+                        sncosmo.models.TimeSeriesSource]
+            if source.__class__ not in accepted:
+                raise TypeError("source must be string, " + 
+                                "sncosmo.models.TimeSeriesSource or" +
+                                "sncosmo.models.SALT2Source")    
+            props["source"] = source
+            props["model"] = None
+        else:
+            raise ValueError("Please provide a model or a source")
+
+        self._properties["transient_coverage"]["lightcurve_prop"] = props
 
     # --------------------------- #
     # - Get Methods             - #
