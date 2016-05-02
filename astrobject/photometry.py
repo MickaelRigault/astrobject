@@ -1934,6 +1934,14 @@ class PhotoPoint( BaseObject ):
         return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2    
 
     @property
+    def mag_asymerr(self):
+        """ this returns non assumetric errors around the magnitude:
+        mag-mag_from_flux+err
+        """
+        return [flux_to_mag(self.flux-np.sqrt(self.var),None,self.lbda)[0]-self.mag,
+                self.mag-flux_to_mag(self.flux+np.sqrt(self.var),None,self.lbda)[0] ]
+    
+    @property
     def magabs(self):
         if not self.has_target():
             raise AttributeError("No target defined, I can't get the distance")
