@@ -4,6 +4,7 @@
 
 import warnings
 import numpy as np
+from copy import deepcopy
 
 import sncosmo
 from astropy.table import Table, vstack
@@ -122,7 +123,8 @@ class SimulSurvey( BaseObject ):
         properties = {"desg":{"gain":1,"zp":30,"zpsys":'ab'},
                       "desr":{"gain":1,"zp":30,"zpsys":'ab'}}
         """
-        for band,d in properties.items():
+        prop = deepcopy(properties)
+        for band,d in prop.items():
             gain,zp,zpsys=d.pop("gain"),d.pop("zp"),d.pop("zpsys","ab")
             if gain is None or zp is None:
                 raise ValueError('gain or zp is None or not defined for %s'%band)
