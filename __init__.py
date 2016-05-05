@@ -4,9 +4,9 @@
 
 import astrobject
 import utils
-import simulation
 
 from astrobject import *
 
-__all__ = ["astrobject","simulation","utils"]
+__all__ = ["astrobject","utils"]
 
+__version__ = "0.1.0"
