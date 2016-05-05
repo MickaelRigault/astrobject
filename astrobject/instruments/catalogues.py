@@ -39,8 +39,7 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5.
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
     c = vizier.Vizier(catalog="V/139", columns=columns,
                       column_filters=kwargs_update(column_quality,**column_filters))
-    c.ROW_LIMIT = 100000
-    print column_filters
+    c.ROW_LIMIT = "unlimited"
     #try:
     t = c.query_region(center,radius=radius).values()[0]
     #except :
