@@ -44,7 +44,7 @@ class LCFitter( BaseObject ):
     def __init__(self, lightcurves=None, source='salt2', model=None, 
                  cosmo=FlatLambdaCDM(H0=70, Om0=0.3), empty=False,
                  fit_param=['t0', 'x0', 'x1', 'c'], load_from=None, 
-                 modelcov=True):
+                 modelcov=False):
         """
         Arguments:
         ----------
@@ -63,6 +63,9 @@ class LCFitter( BaseObject ):
         fit_param -- list of parameters to be fit
 
         load_from -- file with previously saved lcs and fits
+
+        modelcov -- Use model covariance (currently not properly implemented; 
+                    using hacked sncosmo.fitting)
         """
         self.__build__()
         if empty:
@@ -80,21 +83,25 @@ class LCFitter( BaseObject ):
                 raise ValueError('Please provide lightcurves or savefile')
             self._properties['lightcurves'] = lightcurves
             self._side_properties['fit_param'] = fit_param
-            self._update_()
+            self._update_(modelcov=modelcov)
         else:
             self.load(load_from)
 
     # --------------------------- #
     # - Update and fit Methods  - #
     # --------------------------- #
-    def _update_(self):
+    def _update_(self, modelcov=False):
         """
         """
-        self.fit_all()
+        self.fit_all(modelcov=modelcov)
 
-    def fit_all(self):
+    def fit_all(self, modelcov=False):
         """
         """
+        print modelcov
+        if modelcov:
+            from hacked_sncosmo_fitting import fit_lc_hacked
+
         param0 = self._get_current_model_param_()
         self._derived_properties["raw_fit"] = []
         self._derived_properties["idx_good"] = []
@@ -107,7 +114,10 @@ class LCFitter( BaseObject ):
                 self.model.set(**{pname: lc.meta[pname]})
 
             try: 
-                res, _ = sncosmo.fit_lc(lc, self.model, self.fit_param)
+                if modelcov:
+                    res, _ = fit_lc_hacked(lc, self.model, self.fit_param)
+                else:
+                    res, _ = sncosmo.fit_lc(lc, self.model, self.fit_param)
                 
                 if res['covariance'] is not None:
                     self._derived_properties['raw_fit'].append(res)
