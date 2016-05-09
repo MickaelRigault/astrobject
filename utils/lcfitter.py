@@ -94,7 +94,6 @@ class LCFitter( BaseObject ):
     def fit_all(self, modelcov=False):
         """
         """
-        print modelcov
         if modelcov:
             from hacked_sncosmo_fitting import fit_lc_hacked
 
