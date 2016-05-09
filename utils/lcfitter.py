@@ -34,7 +34,8 @@ class LCFitter( BaseObject ):
         
     PROPERTIES         = ['model', 'cosmo', 'lightcurves']
     SIDE_PROPERTIES    = ['source', 'fit_param', 'bands']
-    DERIVED_PROPERTIES = ['fit', 'raw_fit', 'idx_good', 'true']
+    DERIVED_PROPERTIES = ['fit', 'raw_fit', 'idx_good', 'good_lightcurves', 
+                          'true']
 
     def __init__(self, lightcurves=None, source='salt2', model=None, 
                  cosmo=FlatLambdaCDM(H0=70, Om0=0.3), empty=False,
@@ -205,6 +206,15 @@ class LCFitter( BaseObject ):
         else:
             raise ValueError('Unknown parameter name: %s'%param)
 
+    def get_param_true(self, param):
+        """
+        Get true (i.e. input) values of the parameter param
+        """
+        if param.startswith('mag'):
+            return self.get_bandmag(self.bands[param[4:]], true_param=True)
+        else:
+            return np.array([lc.meta[param] for lc in self.good_lightcurves])
+
     def get_hr(self, band, absmag=-19.3, corr=None):
         """
         band must be registered band 
@@ -306,26 +316,29 @@ class LCFitter( BaseObject ):
             idx -= len(self.fit_param) 
             return self._get_bandmag_gradient_(self.bands.values()[idx])
 
-    def _get_param_dicts_(self):
+    def _get_param_dicts_(self, true_param=False):
         """
         Returns odered dictionaries of fixed parameters, fit parameters and
         their uncertainties (all that is needed to get bandmags + uncertainties)
         """
         out = []
-        for lc, res in zip(self.lightcurves, self.raw_fit):
+        for lc, res in zip(self.good_lightcurves, self.raw_fit):
             fixed = {p: lc.meta[p] for p in [n for n in self.model.param_names
                                              if n not in self.fit_param 
                                              and n != 'mwr_v']}
             fit = odict()
             for p in self.fit_param:
-                fit[p] = res['parameters'][res['param_names'].index(p)]
+                if true_param:
+                    fit[p] = lc.meta[p]
+                else:
+                    fit[p] = res['parameters'][res['param_names'].index(p)]
 
             out.append((fixed, fit, res['errors']))
 
         return out
 
     def get_bandmag(self, band='bessellb', magsys='vega', t=0, restframe=True,
-                    remove_mw_dust=True):
+                    remove_mw_dust=True, true_param=False):
         """
         Returns the magnitudes of transient according to lightcurve parameters
         [Modified from simultarget, should find a common place to store this]
@@ -334,7 +347,7 @@ class LCFitter( BaseObject ):
         param0 = self._get_current_model_param_()
  
         out = []
-        for fixed, fit, err  in self._get_param_dicts_():
+        for fixed, fit, err  in self._get_param_dicts_(true_param=true_param):
             self.model.set(**fixed)
             self.model.set(**fit)
 
@@ -359,7 +372,8 @@ class LCFitter( BaseObject ):
                                  for g, res in zip(grad, self.raw_fit)]))
 
     def _get_bandmag_gradient_(self, band='bessellb', magsys='vega', t=0, 
-                               restframe=True, remove_mw_dust=True):
+                               restframe=True, remove_mw_dust=True,
+                               true_param=False):
         """
         Return gradient of _get_bandmag as function of param
         param, sig must be dictionaries of means and uncertainties
@@ -370,7 +384,7 @@ class LCFitter( BaseObject ):
 
         out = []
 
-        for fixed, fit, err  in self._get_param_dicts_():
+        for fixed, fit, err  in self._get_param_dicts_(true_param=true_param):
             grad = []
 
             self.model.set(**fixed)
@@ -552,6 +566,6 @@ class LCFitter( BaseObject ):
         return self._derived_properties["idx_good"]
 
     @property
-    def true(self):
-        """True values for simulated lcs taken from meta dict of lightcurves"""
-        return self._derived_properties["raw_fit"]
+    def good_lightcurves(self):
+        """List of lightcurves that could be fit"""
+        return [self.lightcurves[k] for k in self.idx_good]
