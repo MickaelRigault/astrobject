@@ -27,9 +27,9 @@ from astropy.table import Table, Column
 
 from .. import BaseObject
 
-__all__ = ["Fitter"]
+__all__ = ["LCFitter"]
 
-class Fitter( BaseObject ):
+class LCFitter( BaseObject ):
     """ Basic lightcurve fitter class """
         
     PROPERTIES         = ['model', 'cosmo', 'lightcurves']
