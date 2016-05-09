@@ -5,7 +5,7 @@
 
 import warnings
 import numpy  as np
-
+from scipy import stats
 from astropy.io import fits as pf
 
 from scipy.stats import sigmaclip
@@ -1610,7 +1610,7 @@ class PhotoPoint( BaseObject ):
     _properties_keys = ["lbda","flux","var","mjd","bandname","zp"]
     _side_properties_keys = ["source","intrument_name","target","zpsys",
                              "meta"]
-    _derived_properties_keys = []
+    _derived_properties_keys = ["flux_normal"]
     
     # =========================== #
     # = Constructor             = #
@@ -1666,6 +1666,13 @@ class PhotoPoint( BaseObject ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
+    def flux_gausspdf(self,x):
+        """ **Assuming gaussian errors** this is the likelihood that
+        the true value is at x given the observations.
+        """
+        return self._fluxnormal.pdf(x)
+
+    
     def create(self,lbda,flux,var,
                source=None,instrument_name=None,
                mjd=None,zp=None,bandname=None,zpsys="ab",
@@ -1713,7 +1720,8 @@ class PhotoPoint( BaseObject ):
         self._properties["lbda"] = np.float(lbda) if lbda is not None else None
         self._properties["flux"] = np.float(flux)
         self._properties["var"]  = np.float(var) if var is not None else np.NaN
-
+        self._reset_derived_prop_()
+        
         self._side_properties["source"] = source
         self._side_properties["instrument_name"] = instrument_name
         self._side_properties["meta"] = meta
@@ -1722,7 +1730,6 @@ class PhotoPoint( BaseObject ):
         self.mjd = mjd
         self.zp = zp
         self.bandname = bandname
-        
         self._update_()
 
     def display(self,ax,toshow="flux",function_of_time=False,**kwargs):
@@ -1803,7 +1810,11 @@ class PhotoPoint( BaseObject ):
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
-    
+    def _reset_derived_prop_(self):
+        """ reset the derived and recorded properties like flux_normal"""
+        self._derived_properties["flux_normal"] = None
+        self._derived_properties["mag_lognormal"] = None
+        
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -1924,6 +1935,28 @@ class PhotoPoint( BaseObject ):
     
     # ------------
     # - Derived
+    @property
+    def _fluxnormal(self):
+        """ gaussian function estimated from the flux and variances.
+        This method is created and recorded on the flight at the first flux call.
+        """
+        if self._derived_properties["flux_normal"] is None:
+            self._derived_properties["flux_normal"] = stats.norm(loc=self.flux,scale=np.sqrt(self.var))
+            
+        return self._derived_properties["flux_normal"]
+
+    @property
+    def _mag_lognormal(self):
+        """ assuming gaussian distribution in flux space """
+        # reminder  ABmag = -2.5*np.log10(flux * wavelength**2) - 2.406
+        # ABmag = -2.5*np.log(g_pp.flux * g_pp.lbda**2 * 10**(2.406*0.4)) / np.log(10)
+
+        loc = np.log(self.flux * scaling)
+        if self._derived_properties["mag_lognormal"] is None:
+            self._derived_properties["mag_lognormal"] = stats.norm(loc=loc,scale=np.sqrt(self.var)*scaling)
+            
+        return self._derived_properties["mag_lognormal"]
+        
     # magnitudes
     @property
     def mag(self):

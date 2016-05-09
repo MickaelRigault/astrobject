@@ -421,7 +421,7 @@ class Spectrum( BaseObject ):
         #  Creation of the Object  #
         # ************************ #
         # -- Header 
-        self._properties['header'] = pf.Header() if header is None else header
+        self._properties['header'] = header
         # -- Data
         self._properties['y']      = np.asarray(flux).copy()
         # -- Wavelength
@@ -479,7 +479,6 @@ class Spectrum( BaseObject ):
         # - Set the Figure
         self._plot = {}
         if ax is None:
-            
             fig = figure(figsize=[8,5])
             ax = fig.add_axes([0.1,0.1,0.8,0.8])
         elif "plot" not in dir(ax):
@@ -635,6 +634,8 @@ class Spectrum( BaseObject ):
     # - Header
     @property
     def header(self):
+        if self._properties["header"] is None:
+            self._properties["header"] = pf.Header()
         return self._properties['header']
 
     @property

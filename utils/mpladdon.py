@@ -33,7 +33,8 @@ def errorscatter(ax,x,y,dx=None,dy=None,**kwargs):
 # --------------------- #
 @make_method(mpl.Axes)
 def specplot(ax,x,y,var=None,
-             color=None,bandprop={},**kwargs):
+             color=None,bandprop={},
+             err_onzero=False,**kwargs):
     """This function in a build-in axes method that enable to quickly and
     easily plot a spectrum.
     """
@@ -58,8 +59,12 @@ def specplot(ax,x,y,var=None,
             )
         bandprop = kwargs_update(default_band,**bandprop)
         # -- Band
-        fill = ax.fill_between(x,y+np.sqrt(var),y-np.sqrt(var),
-                        **bandprop)
+        if not err_onzero:
+            fill = ax.fill_between(x,y+np.sqrt(var),y-np.sqrt(var),
+                            **bandprop)
+        else:
+            fill = ax.fill_between(x,np.sqrt(var),-np.sqrt(var),
+                            **bandprop)
     else:
         fill = None
         
