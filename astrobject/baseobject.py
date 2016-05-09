@@ -397,12 +397,12 @@ class AstroTarget( BaseObject ):
     @property
     def distmeter(self):
         """ converts the distmpc in meter """
-        return self.distmpc * units.mpc.in_units("m")
+        return self.distmpc * units.Mpc.in_units("m")
 
     @property
     def distmeter_err(self):
         """ converts the distmpc_err in meter """
-        return self.distmpc_err * units.mpc.in_units("m")
+        return self.distmpc_err * units.Mpc.in_units("m")
     
     @property
     def distmpc(self):
