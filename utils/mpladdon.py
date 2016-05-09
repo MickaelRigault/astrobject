@@ -4,6 +4,7 @@
 
 import numpy as np
 import matplotlib.pyplot as mpl
+from matplotlib.transforms  import Bbox
 import warnings
 from .tools import kwargs_update
 from .decorators import make_method
