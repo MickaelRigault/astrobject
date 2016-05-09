@@ -29,7 +29,7 @@ from ..astrobject.baseobject import BaseObject
 
 __all__ = ["Fitter"]
 
-class Fitter( BaseObject ):
+class LCFitter( BaseObject ):
     """
     Basic lightcurve fitter class
     """
