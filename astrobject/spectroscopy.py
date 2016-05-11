@@ -6,14 +6,26 @@ from astropy.io import fits as pf
 from ..__init__ import BaseObject
 
 
-__all__ = ["spectrum","cube",
+__all__ = ["get_spectrum",#"cube",
            "merge_spectra"]
 
 
-def spectrum(filename,**kwargs):
+def get_spectrum(filename,**kwargs):
+    """ create a spectrum having wavelength, flux, variance
+    and associated methods
+
+    Parameters
+    ----------
+    filename: [string]
+        location of the spectrum fits-file to open.
+
+    Return
+    ------
+    Spectrum
+    """
     return Spectrum(filename,**kwargs).copy()
 
-def cube():
+def get_cube():
     raise NotImplementedError("Not ready yet")
 
 

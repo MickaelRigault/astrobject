@@ -2,12 +2,13 @@
 # This is the astrobject library
 #
 
-import astrobject
+import numpy as np
 import utils
-
+import copy
+import warnings
 from astrobject import *
 
-__all__ = ["astrobject","BaseObject"]
+__all__ = ["BaseObject"]
 
 __version__ = "0.2.0"
 
