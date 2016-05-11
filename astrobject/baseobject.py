@@ -90,48 +90,74 @@ def get_target(name=None,zcmb=None, ra=None, dec=None,
 #                                     #
 # Base Object Classes                 #
 #                                     #
-#######################################
+#######################################    
 
 class BaseObject( object ):
     """The zero Level Structure that has the basic tools"""
-    _properties_keys         = []
-    _side_properties_keys    = []
-    _derived_properties_keys = []
 
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = []
+    
+    def __new__(cls,*arg,**kwargs):
+        """ Upgrade of the New function to enable the
+        _properties,_side_properties and _derived_properties tricks
+        """
+        obj = super(BaseObject,cls).__new__(cls)
+        obj._properties_keys         = copy.copy([])
+        obj._side_properties_keys    = copy.copy([])
+        obj._derived_properties_keys = copy.copy([])
+        # ---------------------------------------------
+        # - load also the properties of all the Parents
+        for c in obj.__class__.__mro__:
+            if "PROPERTIES" in dir(c):
+                obj._properties_keys += c.PROPERTIES
+            if "SIDE_PROPERTIES" in dir(c):
+                obj._side_properties_keys += c.SIDE_PROPERTIES
+            if "DERIVED_PROPERTIES" in dir(c):
+                obj._derived_properties_keys += c.DERIVED_PROPERTIES
+
+        # -----------------
+        # - avoid doublon
+        obj._properties_keys         = np.unique(obj._properties_keys).tolist()
+        obj._side_properties_keys    = np.unique(obj._side_properties_keys).tolist()
+        obj._derived_properties_keys = np.unique(obj._derived_properties_keys).tolist()
+        
+        # -- keys
+        if "_properties" not in dir(obj):
+            obj._properties = {}
+            obj._side_properties = {}
+            obj._derived_properties = {}
+
+        # -- fill empty
+        for k in obj._properties_keys:
+            if k in obj._properties.keys():
+                warnings.warn("%s is already build.  Conflit => key ignored"%k)
+                continue
+            obj._properties[k] = None
+            
+        for k in obj._side_properties_keys:
+            if k in obj._side_properties.keys():
+                warnings.warn("%s is already build.  Conflit => key ignored"%k)
+                continue
+            obj._side_properties[k] = None
+            
+        for k in obj._derived_properties_keys:
+            if k in obj._derived_properties.keys():
+                warnings.warn("%s is already build.  Conflit => key ignored"%k)
+                continue
+            obj._derived_properties[k] = None
+
+            
+        return obj
     
     def __init__(self):
         self.__build__()
         
     def __build__(self):
         """Create the properties dictionary"""
-        # -- main
-        
-        if not ("_built" in dir(self) and self._built):
-            self._properties = {}
-            self._side_properties = {}
-            self._derived_properties = {}
-            
-        for k in self._properties_keys:
-            if k in self._properties.keys():
-                warnings.warn("%s is already build.  Conflit => key ignored"%k)
-                continue
-            self._properties[k] = None
-            
-        for k in self._side_properties_keys:
-            if k in self._side_properties.keys():
-                warnings.warn("%s is already build.  Conflit => key ignored"%k)
-                continue
-            self._side_properties[k] = None
-            
-        for k in self._derived_properties_keys:
-            if k in self._derived_properties.keys():
-                warnings.warn("%s is already build.  Conflit => key ignored"%k)
-                continue
-            self._derived_properties[k] = None
+        pass
 
-            
-        self._built = True
-        
     def copy(self, empty=False):
         """returns an independent copy of the current object"""
         
@@ -157,7 +183,7 @@ class BaseObject( object ):
                 
     def _update_(self):
         """Adapte the derived properties as a function of the main ones"""
-        return
+        pass
 
     # ================ #
     # = Properties   = #
@@ -181,19 +207,14 @@ class AstroTarget( BaseObject ):
     # could crash (i.e. astroimages.Aperture)
      
     __nature__ = "AstroTarget"
-    
+
+    PROPERTIES         = ["zcmb","ra","dec","name","zcmb.err"]
+    SIDE_PROPERTIES    = ["cosmology","literature_name","type","mwebmv","sfd98_dir"]
+    DERIVED_PROPERTIES = ["distmeter","distmpc","arc_per_kpc"]
+
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
-    _properties_keys         = ["zcmb","ra","dec","name","zcmb.err"]
-    
-    _side_properties_keys    = ["cosmology","literature_name",
-                                "type","mwebmv","sfd98_dir"]
-        
-    _derived_properties_keys = ["distmeter","distmpc",
-                                "arc_per_kpc"]
-    
-
     # =========================== #
     # = Initialization          = #
     # =========================== #
@@ -253,6 +274,7 @@ class AstroTarget( BaseObject ):
                     cosmo=cosmo,type_=type_,sfd98_dir=sfd98_dir,
                     **kwargs)
         return
+        
     # =========================== #
     # = Main Methods            = #
     # =========================== #

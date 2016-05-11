@@ -32,14 +32,15 @@ class BaseCollection(BaseObject):
     """
     __nature__ = "Collection"
 
-    _properties_keys = ["handler"]
-    
-    def __init__(self):
-        """
-        """
-        self.__build__()
-        return 
+    PROPERTIES         = ["handler"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = []
 
+    def __init__(self):
+        """ """
+        self.__build__()
+         
+        
     # ========================== #
     # = Generic Methods        = #
     # ========================== #
@@ -121,10 +122,14 @@ class BaseCollection(BaseObject):
 class Collection( BaseCollection ):
     """
     """
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = ["target"]
+    DERIVED_PROPERTIES = []
+
+    
     def __build__(self,*args,**kwargs):
         """
         """
-        self._side_properties_keys.append("target")
         super(Collection,self).__build__(*args,**kwargs)
         self._build_properties = {}
     # ----------------- #
@@ -185,7 +190,9 @@ class Collection( BaseCollection ):
 class ImageCollection( Collection ):
     """
     """
-    _side_properties_keys = ["catalogue"]
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = ["catalogue"]
+    DERIVED_PROPERTIES = []
     
     def __init__(self,images=None,empty=False,catalogue=None):
         """
@@ -725,6 +732,9 @@ class ImageCollection( Collection ):
 class PhotoPointCollection( Collection ):
     """
     """
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = []
     
     def __init__(self, photopoints=None,filein=None,empty=False,**kwargs):
         """

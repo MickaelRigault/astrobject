@@ -7,6 +7,6 @@ import utils
 
 from astrobject import *
 
-__all__ = ["astrobject","utils"]
+__all__ = ["astrobject"]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

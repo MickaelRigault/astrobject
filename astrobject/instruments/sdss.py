@@ -163,12 +163,15 @@ class SDSS( Instrument ):
     
     """
     instrument_name = "SDSS"
-    
+
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = ["sky"]
+
     def __build__(self,data_index=DATAINDEX):
         """
         """
         # -- Load the basic builds
-        self._derived_properties_keys.append("sky")
         super(SDSS,self).__build__(data_index=data_index)
         self._build_properties["bkgdbox"]['bh'] = 200
         self._build_properties["bkgdbox"]['bw'] = 200

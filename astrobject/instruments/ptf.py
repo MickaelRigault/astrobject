@@ -50,12 +50,15 @@ class PTF( Instrument ):
     This is the image object custom for PTF data
     """
     instrument_name = "PTF"
+
+    PROPERTIES         = ["mab0"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = []
     
     def __build__(self,**kwargs):
         """
         """
         # -- Load the basic builds
-        self._properties_keys.append("mab0")
         super(PTF,self).__build__()
         # -- How to read the image
         self._build_properties = kwargs_update(self._build_properties,

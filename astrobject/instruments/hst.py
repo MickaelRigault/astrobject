@@ -104,11 +104,13 @@ class HST( Instrument ):
     """This is the umage object custom for HST data"""
     
     instrument_name = "HST"
+
+    PROPERTIES         = ["used_amplifier"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = []
     
     def __build__(self,**kargs):
-        """
-        """
-        self._properties_keys.append("used_amplifier")
+        """  """
         super(HST,self).__build__()
         # -- How to read the image
         self._build_properties = kwargs_update(self._build_properties,

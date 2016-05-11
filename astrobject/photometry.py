@@ -180,18 +180,14 @@ class Image( BaseObject ):
     """
     """
     __nature__ = "Image"
+
+    PROPERTIES         = ["filename","rawdata","header","var","background"]
+    SIDE_PROPERTIES    = ["wcs","datamask","target","catalogue","exptime"] # maybe Exptime should just be on flight
+    DERIVED_PROPERTIES = ["fits","data","sepobjects","backgroundmask","apertures_photos","fwhm"]
+
     # -------------------- #
     # Internal Properties  #
     # -------------------- #
-    _properties_keys         = ["filename","rawdata","header",
-                                "var","background"]
-    _side_properties_keys    = ["wcs","datamask",
-                                "target","catalogue",
-                                "exptime"] # maybe Exptime should just be on flight
-        
-    _derived_properties_keys = ["fits","data","sepobjects","backgroundmask",
-                                "apertures_photos","fwhm"]
-    
     # Where in the fitsfile the data are
     # =========================== #
     # = Constructor             = #
@@ -231,10 +227,8 @@ class Image( BaseObject ):
             self.set_target(astrotarget)
             
     def __build__(self,data_index=0):
-        #
-        # Improvement of BaseObject
-        # including the _object_properties
-        #
+        """ build the structure of the class"""
+    
         super(Image,self).__build__()
         # -- How to read the image
         self._build_properties = dict(
@@ -1606,11 +1600,10 @@ class PhotoPoint( BaseObject ):
     a photometric point"""
 
     __nature__ = "PhotoPoint"
-
-    _properties_keys = ["lbda","flux","var","mjd","bandname","zp"]
-    _side_properties_keys = ["source","intrument_name","target","zpsys",
-                             "meta"]
-    _derived_properties_keys = ["flux_normal"]
+    
+    PROPERTIES         = ["lbda","flux","var","mjd","bandname","zp"]
+    SIDE_PROPERTIES    = ["source","intrument_name","target","zpsys","meta"]
+    DERIVED_PROPERTIES = ["flux_normal"] 
     
     # =========================== #
     # = Constructor             = #
@@ -1661,8 +1654,7 @@ class PhotoPoint( BaseObject ):
         prop = kwargs_update(dict(mjd=mjd,zp=zp,bandname=bandname),
                              **kwargs)
         self.create(lbda,flux,var,**prop)    
-        
-        
+            
     # =========================== #
     # = Main Methods            = #
     # =========================== #

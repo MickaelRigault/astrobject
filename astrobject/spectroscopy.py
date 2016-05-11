@@ -116,15 +116,9 @@ def headerparameter2lbda(npix,step,start):
 class Spectrum( BaseObject ):
     """
     """
-    _properties_keys = ["y","var","header",
-                        "name","filename",
-                        "npix","step","start"]
-        
-    _derived_properties_keys = ["fits","lbda",
-                               "raw_lbda"]
-        
-    _side_properties_keys = ["target"]
-
+    PROPERTIES         = ["y","var","header","name","filename","npix","step","start"]
+    SIDE_PROPERTIES    = ["target"]
+    DERIVED_PROPERTIES = ["fits","lbda","raw_lbda"]
 
     # =========================== #
     # = Constructor             = #
@@ -132,6 +126,9 @@ class Spectrum( BaseObject ):
     def __init__(self,filename=None,empty=False,**kwargs):
         """
         """
+        print "Spectrum init ", self._properties_keys
+        print "Spectrum init ",self._side_properties_keys
+        print "Spectrum init ",self._derived_properties_keys
         self.__build__()
         
         if empty:
@@ -141,10 +138,15 @@ class Spectrum( BaseObject ):
             self.load(filename,**kwargs)
 
     def __build__(self):
-        #
-        # Improvement of BaseObject
-        # including the _build_properties
-        #
+        """ build the object's structure """
+        """
+        self._properties_keys += ["y","var","header",
+                                "name","filename",
+                                "npix","step","start"]
+        self._side_properties_keys += ["target"]        
+        self._derived_properties_keys += ["fits","lbda",
+                               "raw_lbda"]
+        """
         super(Spectrum,self).__build__()
         
          # -- How to read the image

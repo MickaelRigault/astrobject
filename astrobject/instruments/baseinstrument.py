@@ -133,15 +133,13 @@ class Catalogue( BaseObject ):
     """
     __nature__ = "Catalogue"
     source_name = "_not_defined_"
-    
-    _properties_keys = ["filename","data","header"]
-    _side_properties_keys = ["wcs",
-                             "fovcontours","fovmask","matchedmask",
-                             "lbda","excluded_list"]
-        
-    _derived_properties_keys = ["fits","naround","naround_nofovcut","contours"]
 
-    
+    PROPERTIES         = ["filename","data","header"]
+    SIDE_PROPERTIES    = ["wcs","fovcontours","fovmask","matchedmask",
+                          "lbda","excluded_list"]
+    DERIVED_PROPERTIES = ["fits","naround","naround_nofovcut","contours"]
+
+
     def __init__(self, catalogue_file=None,empty=False,
                  data_index=0,
                  key_mag=None,key_magerr=None,

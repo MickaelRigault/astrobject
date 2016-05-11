@@ -103,6 +103,10 @@ class Transient( AstroTarget ):
     """This instance enables time information in the astroTarget
     it has a lightcurve"""
 
+    PROPERTIES         = ['lightcurve']
+    SIDE_PROPERTIES    = ['mjd']
+    DERIVED_PROPERTIES = ["fits","lbda","raw_lbda"]
+    
     # =========================== #
     # = Constructor             = #
     # =========================== #
@@ -110,7 +114,7 @@ class Transient( AstroTarget ):
                  name=None,zcmb=None,
                  ra=None,dec=None,type_=None,
                  mjd=None,empty=False,**kwargs):
-        
+        """ """
         super(Transient,self).__init__(name=name,zcmb=zcmb,
                             ra=ra,dec=dec,type_=type_,
                             empty=empty,**kwargs)
@@ -118,10 +122,7 @@ class Transient( AstroTarget ):
         self.set_lightcurve(lightcurve)
         self.mjd = mjd
         
-    def __build__(self):
-        self._properties_keys.append('lightcurve')
-        self._side_properties_keys.append('mjd')
-        super(Transient,self).__build__()
+
 
     # =========================== #
     # = Main Methods            = #

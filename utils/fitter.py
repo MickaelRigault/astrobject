@@ -30,15 +30,11 @@ from ..astrobject.baseobject import BaseObject
 __all__ = ["Fitter"]
 
 class Fitter( BaseObject ):
-    """
-    Basic lightcurve fitter class
-    """
-
-    _properties_keys = ['model', 'cosmo', 'lightcurves']
-
-    _side_properties_keys = ['source', 'fit_param', 'bands']
-
-    _derived_properties_keys = ['fit', 'raw_fit', 'idx_good', 'true']
+    """ Basic lightcurve fitter class """
+        
+    PROPERTIES         = ['model', 'cosmo', 'lightcurves']
+    SIDE_PROPERTIES    = ['source', 'fit_param', 'bands']
+    DERIVED_PROPERTIES = ['fit', 'raw_fit', 'idx_good', 'true']
 
     def __init__(self, lightcurves=None, source='salt2', model=None, 
                  cosmo=FlatLambdaCDM(H0=70, Om0=0.3), empty=False,
@@ -82,7 +78,7 @@ class Fitter( BaseObject ):
             self._update_()
         else:
             self.load(load_from)
-
+        
     # --------------------------- #
     # - Update and fit Methods  - #
     # --------------------------- #

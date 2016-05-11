@@ -84,6 +84,11 @@ class PhotoMap( PhotoPointCollection ):
     """
     """
     #__nature__ = "PhotoMap"
+
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = ["refmap","wcs","catalogue"]
+    DERIVED_PROPERTIES = ["catmatch"]
+
     
     def __init__(self, photopoints=None,coords=None,
                  filein=None,empty=False,wcs=None,catalogue=None,
@@ -98,17 +103,6 @@ class PhotoMap( PhotoPointCollection ):
             
         if photopoints is not None:
             self.create(photopoints,coords,wcs=wcs,catalogue=catalogue,**kwargs)
-        
-            
-    def __build__(self):
-        """
-        """
-        self._side_properties_keys = self._side_properties_keys + \
-          ["refmap","wcs","catalogue"]
-        self._derived_properties_keys = self._derived_properties_keys +\
-          ["catmatch"]
-        super(PhotoMap,self).__build__()
-        
 
     def _read_table_comment_(self, comments):
         """
@@ -536,10 +530,10 @@ class PhotoMap( PhotoPointCollection ):
 class SepObject( PhotoMap ):
     """ Child of PhotoMap that make uses of all the meta keys that are sextractor
     output """
-    def __build__(self,*args,**kwargs):
-        # New derived propoerty
-        self._derived_properties_keys += ["galaxy_contours","ingalaxy_mask"]
-        super(SepObject,self).__build__(*args,**kwargs)
+
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = ["galaxy_contours","ingalaxy_mask"]
         
     # -------------------------- #
     # -  Plotting tools        - #
