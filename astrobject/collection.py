@@ -8,7 +8,7 @@ import warnings
 from astropy import coordinates, table
 
 from .photometry import get_photopoint
-from .baseobject import BaseObject
+from ..__init__ import BaseObject
 from .instruments import instrument as inst
 from ..utils.tools import kwargs_update
 from ..utils.shape import draw_polygon

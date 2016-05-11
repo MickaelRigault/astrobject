@@ -17,7 +17,7 @@ import warnings
 import numpy as np
 from copy import copy
 
-from ...astrobject.baseobject import BaseObject
+from ...__init__ import BaseObject
 #import astrobject.astrobject import baseobject as b
 from .skyplot import rot_xz_sph
 from ..tools import kwargs_extract,kwargs_update

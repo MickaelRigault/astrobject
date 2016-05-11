@@ -25,7 +25,7 @@ import sncosmo
 from astropy.cosmology import FlatLambdaCDM
 from astropy.table import Table, Column
 
-from ..astrobject.baseobject import BaseObject
+from .. import BaseObject
 
 __all__ = ["Fitter"]
 

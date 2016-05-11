@@ -3,7 +3,7 @@
 """This module gather the spectral-objects and there associated tools"""
 import numpy  as np
 from astropy.io import fits as pf
-from .baseobject import BaseObject
+from ..__init__ import BaseObject
 
 
 __all__ = ["spectrum","cube",
@@ -126,9 +126,6 @@ class Spectrum( BaseObject ):
     def __init__(self,filename=None,empty=False,**kwargs):
         """
         """
-        print "Spectrum init ", self._properties_keys
-        print "Spectrum init ",self._side_properties_keys
-        print "Spectrum init ",self._derived_properties_keys
         self.__build__()
         
         if empty:

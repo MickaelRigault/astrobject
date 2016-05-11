@@ -14,7 +14,9 @@ from ...utils import shape
 
 from .. import astrometry
 from ...astrobject.photometry import Image,get_photopoint
-from ..baseobject import BaseObject,astrotarget
+from ..baseobject import astrotarget
+from ...__init__ import BaseObject
+
 __all__ = ["Instrument"]
 
 class Instrument( Image ):

@@ -14,7 +14,7 @@ from astropy     import units,coordinates
 from astropy.table import Table
 
 from . import astrometry
-from .baseobject   import BaseObject 
+from ..__init__ import BaseObject 
 from ..utils.tools import kwargs_update,flux_to_mag
 
 __all__ = ["get_image","get_photopoint"]+ ["image","photopoint"] # should be removed
