@@ -98,24 +98,40 @@ class BaseObject( object ):
     _side_properties_keys    = []
     _derived_properties_keys = []
 
+    
     def __init__(self):
         self.__build__()
         
     def __build__(self):
         """Create the properties dictionary"""
-        self._properties = {}
+        # -- main
+        
+        if not ("_built" in dir(self) and self._built):
+            self._properties = {}
+            self._side_properties = {}
+            self._derived_properties = {}
+            
         for k in self._properties_keys:
+            if k in self._properties.keys():
+                warnings.warn("%s is already build.  Conflit => key ignored"%k)
+                continue
             self._properties[k] = None
             
-        self._side_properties = {}
         for k in self._side_properties_keys:
+            if k in self._side_properties.keys():
+                warnings.warn("%s is already build.  Conflit => key ignored"%k)
+                continue
             self._side_properties[k] = None
-
-        self._derived_properties = {}
-        for k in self._derived_properties_keys:
-            self._derived_properties[k] = None
             
-    
+        for k in self._derived_properties_keys:
+            if k in self._derived_properties.keys():
+                warnings.warn("%s is already build.  Conflit => key ignored"%k)
+                continue
+            self._derived_properties[k] = None
+
+            
+        self._built = True
+        
     def copy(self, empty=False):
         """returns an independent copy of the current object"""
         
