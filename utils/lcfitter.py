@@ -61,7 +61,7 @@ class LCFitter( BaseObject ):
         load_from -- file with previously saved lcs and fits
 
         modelcov -- Use model covariance (currently not properly implemented; 
-                    using hacked sncosmo.fitting)
+                    using hacked sncosmo.fitting) [Not implemented yet]
         """
         self.__build__()
         if empty:
@@ -95,7 +95,9 @@ class LCFitter( BaseObject ):
         """
         """
         if modelcov:
-            from hacked_sncosmo_fitting import fit_lc_hacked
+            # TODO: Implement fitting with modelcov
+            # from hacked_sncosmo_fitting import fit_lc_hacked
+            raise NotImplementedError("Model covariance coming soon.")
 
         param0 = self._get_current_model_param_()
         self._derived_properties["raw_fit"] = []
@@ -201,15 +203,15 @@ class LCFitter( BaseObject ):
             k = self.model.param_names.index(param)
             return np.array([res['parameters'][k] for res in self.raw_fit])
         elif param.startswith('mag_'):
-            if param[4:] not in self.bands:
+            if param[4:] not in self.bands.keys():
                 raise ValueError('Unknown band: %s'%param[4:])
-            return self.get_bandmag(self.bands[param[4:]])
+            return self.get_bandmag(**self.bands[param[4:]])
         elif param.startswith('err_'):
             if not param[4:].startswith('mag'):
                 return np.array([res['errors'][param[4:]] 
                                  for res in self.raw_fit])
             else:
-                return self.get_bandmag_err(band=self.bands[param[8:]])
+                return self.get_bandmag_err(**self.bands[param[8:]])
         elif param.startswith('cov_'):
             return self._get_cov_(param)
         else:
@@ -323,7 +325,7 @@ class LCFitter( BaseObject ):
             return [out for k in range(len(self.raw_fit))]
         else:
             idx -= len(self.fit_param) 
-            return self._get_bandmag_gradient_(self.bands.values()[idx])
+            return self._get_bandmag_gradient_(**self.bands.values()[idx])
 
     def _get_param_dicts_(self, true_param=False):
         """
@@ -500,14 +502,16 @@ class LCFitter( BaseObject ):
     def bands(self):
         """
         Bandpasses for which to calculcate peak magnitudes
-        Ordered Dictionary containing the sncosmo bandpass names or objects
-        Keys are short names for the bands, e.g {'B': 'bessellb'}
+        Ordered Dictionary containing the sncosmo bandpass names or objects 
+        and the magnitude system 
+        Keys are short names for the bands, e.g {'B': {'band': 'bessellb', 
+                                                       'magsys': 'vega']}
         """        
         if self._side_properties["bands"] is None:
             return {}
         return self._side_properties["bands"]
 
-    def add_band(self, name, band, update=True):
+    def add_band(self, name, band, magsys='vega', update=True):
         """
         Add a bandpass to Fitter.band
 
@@ -526,7 +530,8 @@ class LCFitter( BaseObject ):
         if self._side_properties["bands"] is None:
             self._side_properties["bands"] = odict()
 
-        self._side_properties["bands"][name] = band
+        self._side_properties["bands"][name] = {'band': band, 
+                                                'magsys': magsys}
 
         if update and self._derived_properties["fit"] is not None:
             self._derived_properties["fit"] = None
