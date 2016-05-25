@@ -5,9 +5,18 @@
 """This module manage the Astrometry issue"""
 
 import numpy as np
-from ..utils import shape
 import warnings
-from astLib      import astWCS
+# - local
+from ..utils import shape
+
+try:
+    from astLib      import astWCS
+    _HAS_ASTLIB_ = True
+except ImportError:
+    warnings.warn("ImportError - astLib can not be imported ; PTF-like images won't load.")
+    _HAS_ASTLIB_ = False
+    
+# - astropy
 from astropy.wcs import WCS as pyWCS
 from astropy.io  import fits
 from astropy.coordinates.angle_utilities import angular_separation
@@ -22,6 +31,10 @@ def wcs(filename=None,header=None,extension=0):
         raise ValueError("'filename' or 'header' must be given")
     
     if "PV1_5" in header.keys():
+        if not _HAS_ASTLIB_:
+            raise ImportError(" astLib could not be imported. Astrometry inaccessible for this file."+\
+                              " Such file (PTF-like) might be accessible with astLib installed.")
+                              
         warnings.warn("WARNING potential issue with wcs SCAM parameters")
         warnings.warn("WARNING astLib based wcs class used")
         try:
@@ -45,7 +58,7 @@ def get_wcs(wcsinput,verbose=True):
     # ----------------------
     # - astLib.astWCS Format
     if wcsinput.__module__ == "astLib.astWCS":
-        return convert_to_wcs(wcsinput)
+        return astlibwcs_to_wcs(wcsinput)
     
     # --------------
     # - Good format
@@ -217,7 +230,8 @@ class WCS(pyWCS,_MotherWCS_):
     
     @property
     def edge_size(self):
-        """return the p1,p2 and p2,p3 size (The order is counter-clockwise starting with the bottom left corner. p1,p2,p3,p4)"""
+        """return the p1,p2 and p2,p3 size (The order is counter-clockwise starting
+        with the bottom left corner. p1,p2,p3,p4)"""
         p1,p2,p3,p4 = self.calc_footprint()
         return angular_separation(*np.concatenate([p1,p2])),angular_separation(*np.concatenate([p2,p3]))
     
@@ -239,83 +253,78 @@ class WCS(pyWCS,_MotherWCS_):
         return  pxl[0] * units.Unit(self.wcs.cunit[0]).in_units("degree")* units.degree,\
           pxl[1] * units.Unit(self.wcs.cunit[1]).in_units("degree")* units.degree
           
+if _HAS_ASTLIB_:
+    class _WCSbackup(astWCS.WCS,_MotherWCS_):
 
-class _WCSbackup(astWCS.WCS,_MotherWCS_):
-
-    # -------------------- #
-    # - Mimic astLib     - #
-    # -------------------- #
-    def pix2world(self,x,y, withoffset=True):
-        """
-        """
-        offset = self.image_offset if withoffset else np.asarray([0,0])
-        x,y = (np.asarray([x,y]).T-offset[::-1]-0.5).T
-        return np.asarray(self.pix2wcs(x,y))
-
-    def world2pix(self,ra,dec, withoffset=True):
-        """
-        """
-        offset = self.image_offset if withoffset else np.asarray([0,0])
-        if "__iter__" not in dir(ra):
-            ra,dec = [ra],[dec]
-        ra,dec = np.asarray(ra),np.asarray(dec)
+        # -------------------- #
+        # - Mimic astLib     - #
+        # -------------------- #
+        def pix2world(self,x,y, withoffset=True):
+            """
+            """
+            offset = self.image_offset if withoffset else np.asarray([0,0])
+            x,y = (np.asarray([x,y]).T-offset[::-1]-0.5).T
+            return np.asarray(self.pix2wcs(x,y))
+    
+        def world2pix(self,ra,dec, withoffset=True):
+            """
+            """
+            offset = self.image_offset if withoffset else np.asarray([0,0])
+            if "__iter__" not in dir(ra):
+                ra,dec = [ra],[dec]
+            ra,dec = np.asarray(ra),np.asarray(dec)
             
-        x,y = np.asarray(self.wcs2pix(ra,dec)).T
+            x,y = np.asarray(self.wcs2pix(ra,dec)).T
 
-        return zip(np.asarray(x)+offset[1]+0.5,np.asarray(y)+offset[0]+0.5)
+            return zip(np.asarray(x)+offset[1]+0.5,np.asarray(y)+offset[0]+0.5)
         
 
-    def coordsAreInImage(self,ra,dec):
-        """
-        """
-        return shape.point_in_contours(ra,dec,self.contours)
+        def coordsAreInImage(self,ra,dec):
+            """
+            """
+            return shape.point_in_contours(ra,dec,self.contours)
         
-
-    @property
-    def edge_size(self):
-        """return the p1,p2 and p2,p3 size (The order is counter-clockwise starting with the bottom left corner. p1,p2,p3,p4)"""
-        p1,p2,p3,p4 = self.calc_footprint()
-        return angular_separation(*np.concatenate([p1,p2])),angular_separation(*np.concatenate([p2,p3]))
+        @property
+        def edge_size(self):
+            """return the p1,p2 and p2,p3 size (The order is counter-clockwise starting with
+            the bottom left corner. p1,p2,p3,p4)"""
+            p1,p2,p3,p4 = self.calc_footprint()
+            return angular_separation(*np.concatenate([p1,p2])),angular_separation(*np.concatenate([p2,p3]))
     
-    @property
-    def diag_size(self):
-        """return the largest diagonal size"""
-        p1,p2,p3,p4 = self.calc_footprint()
-        return np.max([angular_separation(*np.concatenate([p1,p3])),angular_separation(*np.concatenate([p2,p4]))])
+        @property
+        def diag_size(self):
+            """return the largest diagonal size"""
+            p1,p2,p3,p4 = self.calc_footprint()
+            return np.max([angular_separation(*np.concatenate([p1,p3])),
+                           angular_separation(*np.concatenate([p2,p4]))])
 
-    # ===================== #
-    # = 
-    # ===================== #
-    def calc_footprint(self,center=True):
-        naxis1,naxis2 = self._naxis1,self._naxis2
-        if center == True:
-            corners = np.array([[1, 1],
-                                [1, naxis2],
-                                [naxis1, naxis2],
-                                [naxis1, 1]], dtype = np.float64)
-        else:
-            corners = np.array([[0.5, 0.5],
-                                [0.5, naxis2 + 0.5],
-                                [naxis1 + 0.5, naxis2 + 0.5],
-                                [naxis1 + 0.5, 0.5]], dtype = np.float64)
-        return np.asarray([self.pix2world(*p_) for p_ in corners])
+        # ===================== #
+        # = 
+        # ===================== #
+        def calc_footprint(self,center=True):
+            naxis1,naxis2 = self._naxis1,self._naxis2
+            if center == True:
+                corners = np.array([[1, 1],
+                                    [1, naxis2],
+                                    [naxis1, naxis2],
+                                    [naxis1, 1]], dtype = np.float64)
+            else:
+                corners = np.array([[0.5, 0.5],
+                                    [0.5, naxis2 + 0.5],
+                                    [naxis1 + 0.5, naxis2 + 0.5],
+                                    [naxis1 + 0.5, 0.5]], dtype = np.float64)
+            return np.asarray([self.pix2world(*p_) for p_ in corners])
 
         
-    @property
-    def _naxis1(self):
-        return self.header["NAXIS1"]
-    
-    @property
-    def _naxis2(self):
-        return self.header["NAXIS2"]
-    
-    @property
-    def pix_indeg(self):
-        return  self.getPixelSizeDeg() * units.degree
+        @property
+        def _naxis1(self):
+            return self.header["NAXIS1"]
         
-          
-    # ===================== #
-    # = 
-    # ===================== #
-    
-    
+        @property
+        def _naxis2(self):
+            return self.header["NAXIS2"]
+        
+        @property
+        def pix_indeg(self):
+            return  self.getPixelSizeDeg() * units.degree
+        

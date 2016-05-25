@@ -13,7 +13,9 @@ Python
 - matplotlib
 - astropy (pip install astropy)
 - astroquery (pip install astroquery)
-- astLib (pip install astlib)
 - sep  (pip install sep)
 - sncosmo (pip install sncosmo)
-- shapely (pip install shapely)
+#### Optional dependencies
+- shapely (pip install shapely) _for spatial test and vizualisation_
+- astLib (pip install astlib) _for PTF-like SCAM astrometry_
+
