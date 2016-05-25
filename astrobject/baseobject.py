@@ -11,22 +11,12 @@ import warnings
 from ..utils.tools import load_pkl,dump_pkl
 from ..__init__ import BaseObject
 
-from astropy import cosmology
 from astropy import units
-COSMO_DEFAULT = cosmology.Planck13
 
-from sncosmo import SFD98Map
+
 
 __version__ = 0.1
-__all__     = ["get_target"]+["astrotarget"] # to be removed
-
-
-def astrotarget(name=None,zcmb=None, ra=None, dec=None,
-               type_=None,mwebmv=None,zcmberr=None,**kwargs):
-    
-    print "DECREPATED: astrotarget->get_target"
-    return get_target(name=name,zcmb=zcmb, ra=ra, dec=dec,
-                    type_=type_,mwebmv=mwebmv,**kwargs)
+__all__     = ["get_target"]
 
 def get_target(name=None,zcmb=None, ra=None, dec=None,
                type_=None,mwebmv=None,zcmberr=None,**kwargs):
@@ -114,7 +104,7 @@ class AstroTarget( BaseObject ):
     # =========================== #
     def __init__(self,name=None,zcmb=None,zcmberr=None,
                  ra=None,dec=None,
-                 type_=None,cosmo=COSMO_DEFAULT,
+                 type_=None,cosmo=None,
                  load_from=None,empty=False,sfd98_dir=None,
                  **kwargs):
         """
@@ -173,7 +163,7 @@ class AstroTarget( BaseObject ):
     # = Main Methods            = #
     # =========================== #
     def define(self,name,zcmb,ra,dec,
-               cosmo=COSMO_DEFAULT,type_=None,sfd98_dir=None,
+               cosmo=None,type_=None,sfd98_dir=None,
                forced_mwebmv=None,zcmberr=None):
         """
         This function enables you to define the fundamental object parameter
@@ -215,9 +205,15 @@ class AstroTarget( BaseObject ):
                 raise AttributeError("'%s' is a requested fundamental "+\
                                      "parameter and is not in the input dictionnary"%k)
 
+        cosmo = candidatepkl.pop("cosmo")
+        if cosmo is None:
+            from astropy.cosmology import Planck15
+            cosmo = Planck15
+            warnings.warn("Planck 2015 cosmology used by default")
+            
         self.define(candidatepkl["name"],candidatepkl["zcmb"],
                     candidatepkl["ra"],candidatepkl["dec"],
-                    cosmo = candidatepkl.pop("cosmo",COSMO_DEFAULT),
+                    cosmo = cosmo,
                     type_ = candidatepkl.pop("type",None),
                     forced_mwebmv = candidatepkl.pop("mwebmv",None))
         
@@ -395,6 +391,7 @@ class AstroTarget( BaseObject ):
         
     def _update_mwebmv_(self):
         try:
+            from sncosmo import SFD98Map
             m = SFD98Map(mapdir=self._sfd98_dir)
             self.set_mwebmv(m.get_ebv((self.ra, self.dec)), force_it=True)
         except IOError:

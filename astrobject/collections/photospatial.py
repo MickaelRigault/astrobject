@@ -4,9 +4,9 @@
 import warnings
 import numpy as np
 
-from astropy import table, coordinates, units
-from ..collection import PhotoPointCollection
-from ..photometry import get_photopoint
+from astropy        import coordinates, units
+from ..collection   import PhotoPointCollection
+from ..photometry   import get_photopoint
 from ...utils.tools import kwargs_update
 from ...utils.decorators import _autogen_docstring_inheritance
 __all__ = ["get_photomap","get_sepobject"]
@@ -47,6 +47,7 @@ def get_sepobject(sepoutput, wcs_coords=False,ppointkwargs={},
 def is_sepoutput(array):
     """
     """
+    from astropy import table
     if type(array) != np.ndarray:
         return False
     tsep = table.Table(array)
@@ -57,6 +58,7 @@ def is_sepoutput(array):
 def parse_sepoutput(sepoutput,lbda=None,**kwargs):
     """
     """
+    from astropy import table
     if type(sepoutput) != np.ndarray:
         raise TypeError("the given 'sexoutput' is not an ndarray ; This is not a sepoutput")
 

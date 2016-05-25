@@ -3,17 +3,15 @@
 #
 
 import numpy as np
-import utils
+#import utils
 import copy
 import warnings
-from astrobject import *
 
-__all__ = ["BaseObject"]
+#from astrobject import *
+
+__all__ = ["BaseObject","astrobject","utils"]
 
 __version__ = "0.2.0"
-
-
-
 
 
 #######################################
