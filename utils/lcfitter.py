@@ -27,19 +27,20 @@ from astropy.table import Table, Column
 
 from .. import BaseObject
 
-__all__ = ["Fitter"]
+__all__ = ["LCFitter"]
 
-class Fitter( BaseObject ):
+class LCFitter( BaseObject ):
     """ Basic lightcurve fitter class """
         
     PROPERTIES         = ['model', 'cosmo', 'lightcurves']
     SIDE_PROPERTIES    = ['source', 'fit_param', 'bands']
-    DERIVED_PROPERTIES = ['fit', 'raw_fit', 'idx_good', 'true']
+    DERIVED_PROPERTIES = ['fit', 'raw_fit', 'idx_good', 'good_lightcurves', 
+                          'true']
 
     def __init__(self, lightcurves=None, source='salt2', model=None, 
                  cosmo=FlatLambdaCDM(H0=70, Om0=0.3), empty=False,
                  fit_param=['t0', 'x0', 'x1', 'c'], load_from=None, 
-                 modelcov=True):
+                 modelcov=False):
         """
         Arguments:
         ----------
@@ -58,6 +59,9 @@ class Fitter( BaseObject ):
         fit_param -- list of parameters to be fit
 
         load_from -- file with previously saved lcs and fits
+
+        modelcov -- Use model covariance (currently not properly implemented; 
+                    using hacked sncosmo.fitting) [Not implemented yet]
         """
         self.__build__()
         if empty:
@@ -75,21 +79,26 @@ class Fitter( BaseObject ):
                 raise ValueError('Please provide lightcurves or savefile')
             self._properties['lightcurves'] = lightcurves
             self._side_properties['fit_param'] = fit_param
-            self._update_()
+            self._update_(modelcov=modelcov)
         else:
             self.load(load_from)
         
     # --------------------------- #
     # - Update and fit Methods  - #
     # --------------------------- #
-    def _update_(self):
+    def _update_(self, modelcov=False):
         """
         """
-        self.fit_all()
+        self.fit_all(modelcov=modelcov)
 
-    def fit_all(self):
+    def fit_all(self, modelcov=False):
         """
         """
+        if modelcov:
+            # TODO: Implement fitting with modelcov
+            # from hacked_sncosmo_fitting import fit_lc_hacked
+            raise NotImplementedError("Model covariance coming soon.")
+
         param0 = self._get_current_model_param_()
         self._derived_properties["raw_fit"] = []
         self._derived_properties["idx_good"] = []
@@ -102,7 +111,10 @@ class Fitter( BaseObject ):
                 self.model.set(**{pname: lc.meta[pname]})
 
             try: 
-                res, _ = sncosmo.fit_lc(lc, self.model, self.fit_param)
+                if modelcov:
+                    res, _ = fit_lc_hacked(lc, self.model, self.fit_param)
+                else:
+                    res, _ = sncosmo.fit_lc(lc, self.model, self.fit_param)
                 
                 if res['covariance'] is not None:
                     self._derived_properties['raw_fit'].append(res)
@@ -191,19 +203,28 @@ class Fitter( BaseObject ):
             k = self.model.param_names.index(param)
             return np.array([res['parameters'][k] for res in self.raw_fit])
         elif param.startswith('mag_'):
-            if param[4:] not in self.bands:
+            if param[4:] not in self.bands.keys():
                 raise ValueError('Unknown band: %s'%param[4:])
-            return self.get_bandmag(self.bands[param[4:]])
+            return self.get_bandmag(**self.bands[param[4:]])
         elif param.startswith('err_'):
             if not param[4:].startswith('mag'):
                 return np.array([res['errors'][param[4:]] 
                                  for res in self.raw_fit])
             else:
-                return self.get_bandmag_err(band=self.bands[param[8:]])
+                return self.get_bandmag_err(**self.bands[param[8:]])
         elif param.startswith('cov_'):
             return self._get_cov_(param)
         else:
             raise ValueError('Unknown parameter name: %s'%param)
+
+    def get_param_true(self, param):
+        """
+        Get true (i.e. input) values of the parameter param
+        """
+        if param.startswith('mag'):
+            return self.get_bandmag(self.bands[param[4:]], true_param=True)
+        else:
+            return np.array([lc.meta[param] for lc in self.good_lightcurves])
 
     def get_hr(self, band, absmag=-19.3, corr=None):
         """
@@ -304,28 +325,31 @@ class Fitter( BaseObject ):
             return [out for k in range(len(self.raw_fit))]
         else:
             idx -= len(self.fit_param) 
-            return self._get_bandmag_gradient_(self.bands.values()[idx])
+            return self._get_bandmag_gradient_(**self.bands.values()[idx])
 
-    def _get_param_dicts_(self):
+    def _get_param_dicts_(self, true_param=False):
         """
         Returns odered dictionaries of fixed parameters, fit parameters and
         their uncertainties (all that is needed to get bandmags + uncertainties)
         """
         out = []
-        for lc, res in zip(self.lightcurves, self.raw_fit):
+        for lc, res in zip(self.good_lightcurves, self.raw_fit):
             fixed = {p: lc.meta[p] for p in [n for n in self.model.param_names
                                              if n not in self.fit_param 
                                              and n != 'mwr_v']}
             fit = odict()
             for p in self.fit_param:
-                fit[p] = res['parameters'][res['param_names'].index(p)]
+                if true_param:
+                    fit[p] = lc.meta[p]
+                else:
+                    fit[p] = res['parameters'][res['param_names'].index(p)]
 
             out.append((fixed, fit, res['errors']))
 
         return out
 
     def get_bandmag(self, band='bessellb', magsys='vega', t=0, restframe=True,
-                    remove_mw_dust=True):
+                    remove_mw_dust=True, true_param=False):
         """
         Returns the magnitudes of transient according to lightcurve parameters
         [Modified from simultarget, should find a common place to store this]
@@ -334,7 +358,7 @@ class Fitter( BaseObject ):
         param0 = self._get_current_model_param_()
  
         out = []
-        for fixed, fit, err  in self._get_param_dicts_():
+        for fixed, fit, err  in self._get_param_dicts_(true_param=true_param):
             self.model.set(**fixed)
             self.model.set(**fit)
 
@@ -359,7 +383,8 @@ class Fitter( BaseObject ):
                                  for g, res in zip(grad, self.raw_fit)]))
 
     def _get_bandmag_gradient_(self, band='bessellb', magsys='vega', t=0, 
-                               restframe=True, remove_mw_dust=True):
+                               restframe=True, remove_mw_dust=True,
+                               true_param=False):
         """
         Return gradient of _get_bandmag as function of param
         param, sig must be dictionaries of means and uncertainties
@@ -370,7 +395,7 @@ class Fitter( BaseObject ):
 
         out = []
 
-        for fixed, fit, err  in self._get_param_dicts_():
+        for fixed, fit, err  in self._get_param_dicts_(true_param=true_param):
             grad = []
 
             self.model.set(**fixed)
@@ -477,14 +502,16 @@ class Fitter( BaseObject ):
     def bands(self):
         """
         Bandpasses for which to calculcate peak magnitudes
-        Ordered Dictionary containing the sncosmo bandpass names or objects
-        Keys are short names for the bands, e.g {'B': 'bessellb'}
+        Ordered Dictionary containing the sncosmo bandpass names or objects 
+        and the magnitude system 
+        Keys are short names for the bands, e.g {'B': {'band': 'bessellb', 
+                                                       'magsys': 'vega']}
         """        
         if self._side_properties["bands"] is None:
             return {}
         return self._side_properties["bands"]
 
-    def add_band(self, name, band, update=True):
+    def add_band(self, name, band, magsys='vega', update=True):
         """
         Add a bandpass to Fitter.band
 
@@ -503,7 +530,8 @@ class Fitter( BaseObject ):
         if self._side_properties["bands"] is None:
             self._side_properties["bands"] = odict()
 
-        self._side_properties["bands"][name] = band
+        self._side_properties["bands"][name] = {'band': band, 
+                                                'magsys': magsys}
 
         if update and self._derived_properties["fit"] is not None:
             self._derived_properties["fit"] = None
@@ -552,6 +580,6 @@ class Fitter( BaseObject ):
         return self._derived_properties["idx_good"]
 
     @property
-    def true(self):
-        """True values for simulated lcs taken from meta dict of lightcurves"""
-        return self._derived_properties["raw_fit"]
+    def good_lightcurves(self):
+        """List of lightcurves that could be fit"""
+        return [self.lightcurves[k] for k in self.idx_good]
