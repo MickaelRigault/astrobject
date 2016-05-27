@@ -31,7 +31,7 @@ def check_dependencies():
    try:
        import astropy
    except ImportError:
-       install_requires.append('numpy')
+       install_requires.append('astropy')
    try:
        import astroquery
    except ImportError:
