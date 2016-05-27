@@ -14,7 +14,7 @@ MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/astrobject/'
 LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/astrobject/'
-VERSION = '0.0.1.dev0'
+VERSION = '0.2.0'
 
 try:
     from setuptools import setup
