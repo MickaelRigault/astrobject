@@ -173,16 +173,15 @@ class AstroTarget( BaseObject ):
         self.set_zcmb(zcmb,zcmberr)
         self.radec = ra,dec
         self.type  = type_
+        if cosmo is None:
+            from astropy.cosmology import Planck15
+            cosmo = Planck15
+            warnings.warn("Planck 2015 cosmology used by default")
+            
         self.set_cosmo(cosmo)
         self._update_()
         if forced_mwebmv is not None:
             self.set_mwebmv(forced_mwebmv,force_it=True)
-
-    def define_from_properties(self,properties,
-                               side_properties={}):
-        """
-        """
-        pass
         
     def writeto(self,output_file,**kwargs):
         """
@@ -206,11 +205,6 @@ class AstroTarget( BaseObject ):
                                      "parameter and is not in the input dictionnary"%k)
 
         cosmo = candidatepkl.pop("cosmo")
-        if cosmo is None:
-            from astropy.cosmology import Planck15
-            cosmo = Planck15
-            warnings.warn("Planck 2015 cosmology used by default")
-            
         self.define(candidatepkl["name"],candidatepkl["zcmb"],
                     candidatepkl["ra"],candidatepkl["dec"],
                     cosmo = cosmo,
