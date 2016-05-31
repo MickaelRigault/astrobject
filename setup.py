@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 #
-# Copyright (C) 2015 SNSurvey Developers
 
-DESCRIPTION = "astrobject: Basice tools for astrophysics and cosmology"
+DESCRIPTION = "astrobject: Basic tools for astrophysics and cosmology"
 LONG_DESCRIPTION = """\
 This module gathers the basic tools one usually needs for astrophysics and cosmology usage.
 """
@@ -53,12 +52,11 @@ if __name__ == "__main__":
 
     if _has_setuptools:
         packages = find_packages()
-        # print packages
+        print packages
     else:
         # This should be updated if new submodules are added
         packages = [
             'astrobject', 
-            'astrobject.astrobject', 
             'astrobject.utils', 
             'astrobject.astrobject.collections', 
             'astrobject.astrobject.instruments', 
