@@ -12,7 +12,7 @@ MAINTAINER = 'Mickael Rigault'
 MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/astrobject/'
 LICENSE = 'BSD (3-clause)'
-DOWNLOAD_URL = 'https://github.com/MickaelRigault/astrobject/'
+DOWNLOAD_URL = 'https://github.com/MickaelRigault/astrobject/tarball/0.3'
 VERSION = '0.3.0'
 
 try:
