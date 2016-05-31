@@ -1603,7 +1603,7 @@ class PhotoPoint( BaseObject ):
     
     PROPERTIES         = ["lbda","flux","var","mjd","bandname","zp"]
     SIDE_PROPERTIES    = ["source","intrument_name","target","zpsys","meta"]
-    DERIVED_PROPERTIES = ["flux_normal"] 
+    DERIVED_PROPERTIES = ["flux_normal","maglognorm_param"] 
     
     # =========================== #
     # = Constructor             = #
@@ -1658,12 +1658,16 @@ class PhotoPoint( BaseObject ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
-    def flux_gausspdf(self,x):
+    def flux_norm_pdf(self,x):
         """ **Assuming gaussian errors** this is the likelihood that
         the true value is at x given the observations.
         """
-        return self._fluxnormal.pdf(x)
-
+        return self.stats.norm.pdf(x, loc=self.flux,scale=np.sqrt(self.var))
+    def mag_lognorm_pdf(self,x):
+        """ assuming a lognorma distribution (normal for flux)
+        get the pdf at the given x-magnitude
+        """
+        return self.stats.lognorm.pdf(x, *self._mag_lognorm_param)
     
     def create(self,lbda,flux,var,
                source=None,instrument_name=None,
@@ -1804,8 +1808,7 @@ class PhotoPoint( BaseObject ):
     # =========================== #
     def _reset_derived_prop_(self):
         """ reset the derived and recorded properties like flux_normal"""
-        self._derived_properties["flux_normal"] = None
-        self._derived_properties["mag_lognormal"] = None
+        self._derived_properties["maglognorm_param"] = None
         
     # =========================== #
     # = Properties and Settings = #
@@ -1927,28 +1930,22 @@ class PhotoPoint( BaseObject ):
     
     # ------------
     # - Derived
+
     @property
-    def _fluxnormal(self):
-        """ gaussian function estimated from the flux and variances.
-        This method is created and recorded on the flight at the first flux call.
+    def _mag_lognorm_param(self, testsize=5000):
+        """ the parameter to get the magnitude lognormal distribution.
+        To get the pdf 'p' of the magnitude at x simply do:
+        ```python
+        p = stats.lognorm(x, *self._mag_lognorm_param)
+        ```
+        the value is recorded at the first call
         """
-        if self._derived_properties["flux_normal"] is None:
-            self._derived_properties["flux_normal"] = stats.norm(loc=self.flux,scale=np.sqrt(self.var))
-            
-        return self._derived_properties["flux_normal"]
+        if self._derived_properties["maglognorm_param"] is None:
+            mag =  tools.flux_to_mag(np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=testsize),None,self.lbda)[0]
+            self._derived_properties["maglognorm_param"] =  stats.lognorm.fit(mag[mag==mag], fscale=1)
+        return self._derived_properties["maglognorm_param"]
 
-    @property
-    def _mag_lognormal(self):
-        """ assuming gaussian distribution in flux space """
-        # reminder  ABmag = -2.5*np.log10(flux * wavelength**2) - 2.406
-        # ABmag = -2.5*np.log(g_pp.flux * g_pp.lbda**2 * 10**(2.406*0.4)) / np.log(10)
-
-        loc = np.log(self.flux * scaling)
-        if self._derived_properties["mag_lognormal"] is None:
-            self._derived_properties["mag_lognormal"] = stats.norm(loc=loc,scale=np.sqrt(self.var)*scaling)
-            
-        return self._derived_properties["mag_lognormal"]
-        
+    
     # magnitudes
     @property
     def mag(self):
