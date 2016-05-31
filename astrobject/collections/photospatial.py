@@ -5,8 +5,9 @@ import warnings
 import numpy as np
 
 from astropy        import coordinates, units
-from ..collection   import PhotoPointCollection
+
 from ..photometry   import get_photopoint
+from ..collection   import PhotoPointCollection
 from ..utils.tools import kwargs_update
 from ..utils.decorators import _autogen_docstring_inheritance
 __all__ = ["get_photomap","get_sepobject"]
