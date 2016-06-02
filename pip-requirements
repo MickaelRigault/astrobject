@@ -1,0 +1,4 @@
+astropy>=1.1.1
+astroquery>=0.3.0
+sep>=0.5.2
+sncosmo>=1.2.0
