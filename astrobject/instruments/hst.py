@@ -140,7 +140,7 @@ class HST( Instrument ):
     def get_contours(self,pixel=True):
         """ """
         # To Be Fasten
-        from ...utils import shape
+        from ..utils import shape
         if pixel:
             x = [2060,9,-1,self.width,2060,19,9,2060]
             y = [1154,1027,-1,114,self.height,2056,1038,1166]
