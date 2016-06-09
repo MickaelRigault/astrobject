@@ -20,8 +20,43 @@ def catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"}
                          column_filters=column_filters,**kwargs)
 
 def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
+    """ Download a catalogue from internet (Vizier)
+    (Module based on astroquery.)
+
+    Parameters
+    ----------
+
+    source: [string]
+        Source of the catalogue. Could be: sdss/2mass/wise
+
+    radec: [string / 2D array]
+        Coordinates [deg] of the central point of the catalogue.
+        Format - string ('%f %f'%(ra,dec)) or 2D array [ra,dec]
+
+    radius: [string]
+        Radius around the central location (radec) of the catalogue
+        Format: string 'ValueUnits' e.g.: 0.5degree radius would be '0.5d'
+
+    extracolumns: [array of string] -optional-
+        Additional column to download for the catalogue. Entries depend on the
+        requested catalogue.
+
+    column_filters: [dict] -optional-
+        Criteria the requested catalogue entries should have to be downloaded.
+        This should be a dictionary with keys being column names (see Vizier)
+        Column name depend on the catalogues.
+        Example: If you only want stars for the sdss catalogue add  'cl':6
+
+    **kwargs goes to vizier.Vizier
+
+    Return
+    ------
+    Catalogue
     """
-    """
+    if type(radec) is not str:
+        if len(radec) != 2: raise TypeError("radec must be a string ('ra dec') or a 2D array ([ra,dec])")
+        radec = "%f %f"(radec[0],radec[1])
+    
     if source.lower() == "sdss":
         return catalogues.fetch_sdss_catalogue(radec,radius,
                                     extracolums=extracolums,
@@ -35,7 +70,7 @@ def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5
                                     extracolums=extracolums,
                                     column_filters=column_filters,**kwargs)
     
-    raise NotImplementedError("Only the SDSS, 2MASS source catalogues implemented")
+    raise NotImplementedError("Only the SDSS, 2MASS and WISE source catalogues implemented")
 
 def get_catalogue(filename, source,**kwargs):
     """

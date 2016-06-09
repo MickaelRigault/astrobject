@@ -48,7 +48,7 @@ def stellar_density( catalogue, mask=None,
 # BASIC SDSS: Catalogue         #
 #                               #
 #################################
-def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5..25"}):
+def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
     """
     """
     from .sdss import SDSS_INFO
@@ -71,7 +71,8 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5.
     column_quality = {"mode":"1","Q":"2.3"}
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
     c = vizier.Vizier(catalog="V/139", columns=columns,
-                      column_filters=kwargs_update(column_quality,**column_filters))
+                      column_filters=kwargs_update(column_quality,**column_filters),
+                      **kwargs)
     c.ROW_LIMIT = "unlimited"
     #try:
     t = c.query_region(center,radius=radius).values()[0]
@@ -141,7 +142,8 @@ def fetch_2mass_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5
     
     columns = columns+extracolums
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
-    c = vizier.Vizier(catalog="II/246", columns=columns, column_filters=column_filters)
+    c = vizier.Vizier(catalog="II/246", columns=columns, column_filters=column_filters,
+                      **kwargs)
     c.ROW_LIMIT = 100000
     try:
         t = c.query_region(center,radius=radius).values()[0]
@@ -242,7 +244,8 @@ def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5.
     
     columns = columns+extracolums
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
-    c = vizier.Vizier(catalog="II/328", columns=columns, column_filters=column_filters)
+    c = vizier.Vizier(catalog="II/328", columns=columns, column_filters=column_filters,
+                      **kwargs)
     c.ROW_LIMIT = 100000
     try:
         t = c.query_region(center,radius=radius).values()[0]
