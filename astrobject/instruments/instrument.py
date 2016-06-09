@@ -10,7 +10,7 @@ import hst
 import stella
 import ptf
 
-__all__ = ["get_instrument","get_catalogue","fetch_catalogue"]+["instrument","catalogue"] # To be removed
+__all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
 
 KNOWN_INSTRUMENTS = ["sdss","hst","stella","ptf"]
 
@@ -73,7 +73,21 @@ def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5
     raise NotImplementedError("Only the SDSS, 2MASS and WISE source catalogues implemented")
 
 def get_catalogue(filename, source,**kwargs):
-    """
+    """ Reads the given catalogue file and open its corresponding Catalogue
+
+    Parameters:
+    -----------
+    filename: [string]
+        location of the catalogue file to open.
+        
+    soource: [string]
+        Name of the catalogue associated to the data (sdss/2mass/wise/etc)
+
+    **kwargs goes to the Catalogue __init__
+
+    Return
+    ------
+    Catalogue (corresponding Child's class)
     """
     if source == "sdss":
         return catalogues.SDSSCatalogue(filename,**kwargs)
@@ -86,16 +100,23 @@ def get_catalogue(filename, source,**kwargs):
     
     raise NotImplementedError("Only the SDSS, 2MASS source catalogues implemented")
 
-def instrument(filename,astrotarget=None,**kwargs):
-    print "DECREPATED: instrument->get_instrument"
-    return get_instrument(filename,astrotarget=astrotarget,
-                          **kwargs)
-
 def get_instrument(filename,astrotarget=None,**kwargs):
-    """This method parse the input file to know to which
-    instrument this filename is associated to.
-    This methods will return the corresponding object"""
-    
+    """ Reads the given file and open its corresponding Instrument object.
+    Known instruments are (might not be exhaustive): SDSS / HST / PTF  
+
+    Parameters
+    ----------
+    filename: [string]
+        location of the data file to open (a fits file)
+
+    astrotarget: [AstroTarget] -optional-
+        Target associated to the image. The target should be within the
+        image's boundaries.
+
+    Return
+    ------
+    Instrument (the corresponding Child's object)
+    """
     # - SDSS 
     if sdss.is_sdss_file(filename):
         return sdss.sdss(filename,astrotarget=astrotarget,
@@ -118,7 +139,18 @@ def get_instrument(filename,astrotarget=None,**kwargs):
                      "these are:"+", ".join(KNOWN_INSTRUMENTS))
 
 def which_band_is_file(filename):
-    """
+    """ Read to filename and return the name of the photometric
+    band associated to the given data file.
+    Known instruments are (might not be exhaustive): SDSS / HST / PTF
+    
+    Parameters
+    ----------
+    filename: [string]
+        location of the data file to open (a fits file)
+
+    Return
+    ------
+    String (name of the photometric band)
     """
     # - SDSS 
     if sdss.is_sdss_file(filename):
