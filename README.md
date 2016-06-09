@@ -1,5 +1,6 @@
 # astrobject
-This module gathers the basic tools one usually needs for astrophysics and cosmology usage. 
+This module gathers the basic tools one usually needs for astrophysics and cosmology. 
+Main Tools: Instruments (sdss, hst etc.), Catalogues (query and manipulation), PhotoMap, Spectrum etc.
 
 [![PyPI](https://img.shields.io/pypi/v/astrobject.svg?style=flat-square)](https://pypi.python.org/pypi/astrobject)
 
