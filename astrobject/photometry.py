@@ -17,7 +17,7 @@ from . import astrometry
 from .baseobject import BaseObject 
 from .utils.tools import kwargs_update,flux_to_mag
 
-__all__ = ["get_image","get_photopoint"]+ ["image","photopoint"] # should be removed
+__all__ = ["get_image","get_photopoint"]
 
 def image(filename=None,astrotarget=None,**kwargs):
     print "DECREPATED: image->get_image"
