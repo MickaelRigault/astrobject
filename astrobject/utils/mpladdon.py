@@ -232,7 +232,7 @@ def skyhist(ax, ra=None, dec=None, values=None, bins=None, steps=None, max_steps
     # -- Plot 
     ax.add_collection(collec)
 
-    axcar = ax.insert_ax('bottom',shrunk=0.9, space=.08, axspace=0.05)
+    axcar = ax.insert_ax('bottom',shrunk=0.85,space=0,axspace=0.08)
 
     cbar = axcar.colorbar(cmap, vmin=vmin, vmax=vmax, label=cblabel)
 
@@ -368,7 +368,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
     # ----------------- #
     if not (color is "None" or not cbar):
         # - this means it is not an ax
-        axcar = ax.insert_ax("right", shrunk=0.8,space=.05,axspace=0.03) \
+        axcar = ax.insert_ax("right", shrunk=0.8,space=.0,axspace=0.03) \
           if "imshow" not in dir(cbar) else cbar
         calpha = cbarprop.pop('alpha',kwargs.pop("alpha",None))
         return collec, axcar.colorbar(cmap,vmin=vmin,vmax=vmax,label=cblabel,
