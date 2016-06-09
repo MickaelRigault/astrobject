@@ -15,7 +15,27 @@ __all__ = ["get_photomap","get_sepobject"]
 
 
 def get_photomap(photopoints=None,coords=None,wcs_coords=True,**kwargs):
-    """
+    """ Create a collection of photopoints
+
+    Parameters
+    ----------
+    photopoints: [array of photopoint]
+        Array of the photopoint you want to unify within a unique Collection
+        (a PhotoMap)
+
+    coords: [2D-array]
+        List of coordinates [[x0,y0],[x1,y1] etc.] associated to the given
+        photopoint array.
+
+    wcs_coords: [bool]
+        True if the coordinate have been given in Ra,Dec, False if they are
+        given in pixel coordinates.
+
+    **kwargs goes to PhotoMap init
+
+    Return
+    ------
+    PhotoMap (Collection of PhotoPoints)
     """
     return PhotoMap(photopoints=photopoints,
                     coords=coords,
@@ -23,15 +43,34 @@ def get_photomap(photopoints=None,coords=None,wcs_coords=True,**kwargs):
                     **kwargs)
 
 
-def get_sepobject(sepoutput, wcs_coords=False,ppointkwargs={},
+def get_sepobject(sepoutput, ppointkwargs={},
                    **kwargs):
-    """
+    """ Create a Spectial collection of photopoints dedicated
+    to the SEP's output.
+
+    Parameters
+    ----------
+    sepoutput: [array]
+        Whatever is returned by sep.extract()
+
+    ppointkwargs: [dict]
+        Potential meta value associated to the individual photopoints
+        of the PhotoMap. Should have the format {'k':v} where v is an array
+        of the same size as the number of photopoint or being a unique
+        value.
+        See set_meta() of PhotoPoint
+
+    **kwargs goes to SepObject init (Child of PhotoMap)
+
+    Return
+    ------
+    SepObject (Child of PhotoMap)
     """
     if is_sepoutput(sepoutput):
         inputphotomap = parse_sepoutput(sepoutput,**ppointkwargs)
         pmap = SepObject(photopoints=inputphotomap["ppoints"],
                          coords=inputphotomap["coords"],
-                         wcs_coords=wcs_coords, **kwargs)
+                         wcs_coords=False, **kwargs)
         ids_sorting = [pmap.coords_to_id(x,y)
                        for x,y in zip(inputphotomap["meta"]["x"].data,
                                       inputphotomap["meta"]["y"].data)]
@@ -39,7 +78,8 @@ def get_sepobject(sepoutput, wcs_coords=False,ppointkwargs={},
          for k in inputphotomap["meta"].keys()]
         
         return pmap
-        
+    else:
+        raise TypeError("The Input Array is not an sep.extract() output")
 # ======================= #
 #                         #
 # Internal Functions      #

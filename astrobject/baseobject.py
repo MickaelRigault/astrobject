@@ -18,46 +18,41 @@ __all__     = ["BaseObject","get_target"]
 
 def get_target(name=None,zcmb=None, ra=None, dec=None,
                type_=None,mwebmv=None,zcmberr=None,**kwargs):
-    """
-    = Initialize the AstroTarget Function =
+    """ Create an AstroTarget
 
-    Parameters
-    ----------
-        
-    name: [string]             name of the astro-object
+    Parameters:
+    -----------
+    (all are optional, you may create an empty Target)
+    
+    name: [string]
+        name of the astro-object
 
-    zcmb,zcmberr: [float]      redshift/error in the cmb frame. This will be used
-                               to derive distmeter etc. depending on the cosmology
+    zcmb,zcmberr: [float,float]
+        redshift and its error in the cmb frame. This will be used
+        to derive distances etc. given the used cosmology
 
-    ra: [float]                right-ascention of the object. (degree favored).
-                               *ra* and *dec* must have the same unit.
+    ra, dec: [float, float]
+        right-ascention / declination of the object. (degree favored).
                                    
-    dec: [float]               declination of the object. (degree favored)
-                               *ra* and *dec* must have the same unit.
                                
-    - options -
-        
-    type_:[string]             type of the astro-object (galaxy, sn, Ia, Ibc...)
-                               (no predifined list type so far, but this could append)
+    type_:[string]
+        type of the astro-object (galaxy, sn, Ia, Ibc...)
+        (no predifined list type so far, but this could append)
 
-    mwebmv (or forced_mwebmv): [float]
-                               Force the Milky way extinction for this object.
-                               Otherwise this
-                               extinction depend on the object *radec*.
-                               ->Use this use Caution<-
+    mwebmv: [float]
+        Force the Milky way extinction for this object.
+        Otherwise this extinction depend on the object coordinate.
+        ->Use this use Caution<-
 
-    - kwargs options, potentially non-exhaustive ; kwargs goes to AstroTarget -
-        
-    cosmo:[astropy.cosmology]  the cosmology used to derive the distances and so on.
+    **kwargs  goes to AstroTarget's init could e.g. be:
+        cosmo:[astropy.cosmology]
+            Cosmology used to derive the distances and so on. Default is Planck15
 
-    load_from: [dict]          a dictionary having an entry for each of the fundamental
-                               parameter (name, ra, dec, zcmb...)
-
-    empty: [bool]              Does not do anything, just loads an empty object.
-                              (Careful with that)
+        empty: [bool]
+            To force having an empty Target no matter what you gave before
                               
-    Returns
-    -------
+    Return
+    ------
     AstroTarget
     """
     if name is None and "object" in kwargs.keys():
