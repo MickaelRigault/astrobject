@@ -1658,17 +1658,6 @@ class PhotoPoint( BaseObject ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
-    def flux_norm_pdf(self,x):
-        """ **Assuming gaussian errors** this is the likelihood that
-        the true value is at x given the observations.
-        """
-        return self.stats.norm.pdf(x, loc=self.flux,scale=np.sqrt(self.var))
-    def mag_lognorm_pdf(self,x):
-        """ assuming a lognorma distribution (normal for flux)
-        get the pdf at the given x-magnitude
-        """
-        return self.stats.lognorm.pdf(x, *self._mag_lognorm_param)
-    
     def create(self,lbda,flux,var,
                source=None,instrument_name=None,
                mjd=None,zp=None,bandname=None,zpsys="ab",
@@ -1830,6 +1819,15 @@ class PhotoPoint( BaseObject ):
         return self._properties["flux"]
 
     @property
+    def fluxdist(self):
+        """ Distribution of the fluxes, assuming a normal distribution
+        Return
+        ------
+        scipy's stats.norm (initialized)
+        """
+        return stats.norm(loc=self.flux,scale=np.sqrt(self.var))
+    
+    @property
     def var(self):
         return self._properties["var"]
 
@@ -1936,12 +1934,13 @@ class PhotoPoint( BaseObject ):
         """ the parameter to get the magnitude lognormal distribution.
         To get the pdf 'p' of the magnitude at x simply do:
         ```python
-        p = stats.lognorm(x, *self._mag_lognorm_param)
+        p = stats.lognorm(*self._mag_lognorm_param)
         ```
         the value is recorded at the first call
         """
         if self._derived_properties["maglognorm_param"] is None:
-            mag =  tools.flux_to_mag(np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=testsize),None,self.lbda)[0]
+            from .utils.tools import flux_to_mag
+            mag =  flux_to_mag(np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=testsize),None,self.lbda)[0]
             self._derived_properties["maglognorm_param"] =  stats.lognorm.fit(mag[mag==mag], fscale=1)
         return self._derived_properties["maglognorm_param"]
 
@@ -1951,6 +1950,21 @@ class PhotoPoint( BaseObject ):
     def mag(self):
         return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[0]
 
+    @property
+    def magdist(self):
+        """ distribution (lognormal) of the magnitude.
+        This assumes the fluxes are normaly distributed.
+
+        Return
+        ------
+        scipy's stats.lognorm initialized
+
+        Example
+        -------
+        get the pdf of the magnitude distribution: self.magdist.pdf(x)
+        """
+        return stats.lognorm(*self._mag_lognorm_param)
+    
     @property
     def magvar(self):
         return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2    
