@@ -9,16 +9,16 @@
 #from photometry import *
 #from instruments.instrument import *
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
-from baseobject import *
+from baseobject   import *
 
 from spectroscopy import *
-from photometry import *
+from photometry   import *
 
 # don't invert collections and collection
-from collections.photospatial import *
-from collection import *
+from collections import *
+from collection  import *
 from instruments.instrument import *
 
 

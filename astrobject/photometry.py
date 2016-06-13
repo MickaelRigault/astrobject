@@ -1930,7 +1930,7 @@ class PhotoPoint( BaseObject ):
     # - Derived
 
     @property
-    def _mag_lognorm_param(self, testsize=5000):
+    def _mag_lognorm_param(self, testsize=5000): 
         """ the parameter to get the magnitude lognormal distribution.
         To get the pdf 'p' of the magnitude at x simply do:
         ```python
@@ -1941,7 +1941,9 @@ class PhotoPoint( BaseObject ):
         if self._derived_properties["maglognorm_param"] is None:
             from .utils.tools import flux_to_mag
             mag =  flux_to_mag(np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=testsize),None,self.lbda)[0]
-            self._derived_properties["maglognorm_param"] =  stats.lognorm.fit(mag[mag==mag], fscale=1)
+            self._derived_properties["maglognorm_param"] =  stats.lognorm.fit(mag[mag==mag], mag[mag==mag].std(),
+                                                                              fscale=1,
+                                                                              loc = np.median(mag[mag==mag]))
         return self._derived_properties["maglognorm_param"]
 
     
