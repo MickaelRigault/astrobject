@@ -439,7 +439,7 @@ class AstroTarget( BaseObject ):
     @property
     def distmeter(self):
         """ converts the distmpc in meter """
-        return self.distmpc * units.Mpc.in_units("m")
+        return self._distance.to("m").value
 
     @property
     def distmeter_err(self):
@@ -448,9 +448,8 @@ class AstroTarget( BaseObject ):
     
     @property
     def distmpc(self):
-        if self.cosmo is None or self.zcmb is None:
-            raise AttributeError("'cosmo' and 'redshift' required.")
-        return self.cosmo.luminosity_distance(self.zcmb).value
+        """ distance to the target in megaparsec """
+        return self._distance.to("Mpc").value
 
     @property
     def distmpc_err(self):
@@ -469,7 +468,12 @@ class AstroTarget( BaseObject ):
           self.distmpc-self.cosmo.luminosity_distance(self.zcmb+self.zcmb_err).value])
                 
     
-    
+    @property
+    def _distance(self):
+        """ astropy based distance """
+        if self.cosmo is None or self.zcmb is None:
+            raise AttributeError("'cosmo' and 'redshift' required.")
+        return self.cosmo.luminosity_distance(self.zcmb)
     @property
     def arcsec_per_kpc(self):
         if self.cosmo is None or self.zcmb is None:

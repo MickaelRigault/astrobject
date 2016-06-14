@@ -96,7 +96,7 @@ def get_massestimator(photopoints=None,samplers=None,dist_param=None,
 # Mass Measurements                      #
 #                                        #
 ##########################################
-def taylor_mass_relation(mag_i,mag_g, distmpc, relation_dispersion=0.1):
+def taylor_mass_relation(mag_i,mag_g, distmpc):
     """ Estimate the stellar-mass of a galaxy based on its i and g bands.
     
     This fuction uses the eq. 8 of Taylor et al 2011
@@ -117,12 +117,6 @@ def taylor_mass_relation(mag_i,mag_g, distmpc, relation_dispersion=0.1):
     distmpc: [float]
         Distance in Mega parsec of the galaxy
 
-    relation_dispersion: [float] -optional-
-        To simulate the intrinsic dispersion of the Taylor relation, a random
-        offset will be added. This add on value is drawn for a normal distribution
-        centered on zero with a dispersion equal to this value.
-        Taylor quote an intrinsic disperion of 0.1dex.
-
     Return
     ------
     float (the mass of the target galaxy)
@@ -131,9 +125,7 @@ def taylor_mass_relation(mag_i,mag_g, distmpc, relation_dispersion=0.1):
     # Mi = i - 5*(np.log10(ppoint_i.target.distmpc*1.e6) - 1)
     #      1.15 + 0.70*(g - i) - 0.4*i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
     #      1.15 + 0.70*g - 1.1*i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
-    
-    return 1.15 + 0.70*mag_g - 1.1*mag_i + (0.4*5*(np.log10(distmpc*1.e6) - 1)) \
-      + np.random.normal(loc=0,scale=relation_dispersion)
+    return 1.15 + 0.70*mag_g - 1.1*mag_i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
         
 # ==================================== #
 #                                      #
@@ -148,7 +140,7 @@ class MassEstimate( PhotoPointCollection ):
     DERIVED_PROPERTIES = ["loggamma_param","samplers"]
     
     def __init__(self, ppoint_g=None, ppoint_i=None,
-                 nsamples=10000, addon_magdisp=0.1, empty=False):
+                 nsamplers=10000, relation_dispersion=0.1, empty=False):
         """ """
         self.__build__()
         if empty:
@@ -156,8 +148,8 @@ class MassEstimate( PhotoPointCollection ):
         if ppoint_g is not None or ppoint_i is not None:
             self.create([ppoint_i, ppoint_g], ids=["i","g"])
         
-
-
+        self.taylordispersion = relation_dispersion
+        self.nsamplers = nsamplers
     # =================== #
     # = Main Methods    = #
     # =================== #
@@ -169,6 +161,8 @@ class MassEstimate( PhotoPointCollection ):
         galaxy's stellar mass will be estimated.
         """
         self._derived_properties['samplers'] = samplers
+        self._derived_properties['loggamma_param'] = None
+        
     # --------- #
     #  GETTER   #
     # --------- #
@@ -179,10 +173,15 @@ class MassEstimate( PhotoPointCollection ):
         """
         if "i" not in self.photopoints.keys() or "g" not in self.photopoints.keys():
             raise AttributeError("You need 'i' and 'g' photopoints to be able to draw the samplers")
+
+        nodisp_sampler = \
+          taylor_mass_relation(self.photopoints["i"].magdist.rvs(self.nsamplers),
+                               self.photopoints["g"].magdist.rvs(self.nsamplers),
+                               self.target.distmpc)
+        addon_dispersion = np.random.normal(loc=0, scale=self.taylordispersion,
+                                            size=self.nsamplers)
         
-        self._derived_properties['samplers'] =  taylor_mass_relation(self.photopoints["i"].magdist.rvs(self.nsamplers),
-                                                self.photopoints["g"].magdist.rvs(self.nsamplers),
-                                                self.target.distmpc,relation_dispersion=self.taylorrelation_magdisp)
+        self.set_samplers( nodisp_sampler + addon_dispersion)
     
     def get_estimate(self):
         """
@@ -196,7 +195,7 @@ class MassEstimate( PhotoPointCollection ):
     # --------- #
     #  PLOT     #
     # --------- #
-    def show(self, savefile=None, show=None, ax=None,
+    def show(self, savefile=None, show=True, ax=None,
              propmodel={},**kwargs):
         """
         """
@@ -218,7 +217,8 @@ class MassEstimate( PhotoPointCollection ):
         # -------------
         # - Prop
         prop = kwargs_update(dict(histtype="step", bins=50, normed=True,
-                    lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4), ec=mpl.cm.Blues(1.,1.)),
+                    lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
+                    ec=mpl.cm.Blues(1.,1.)),
                     **kwargs)
         propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2),
                     **propmodel)
@@ -229,10 +229,11 @@ class MassEstimate( PhotoPointCollection ):
             self.draw_samplers()
             
         h = ax.hist(self.samplers,**prop)
-        x = np.linspace(2,12,1000)
-        pl = ax.plot(x,self.massdist.pdf(x), **propmodel_)
-        # - show estimate
+
         med,highmed,lowmed = self.get_estimate()
+        # - show estimate
+        x = np.linspace(med-lowmed*10,med+highmed*10,10000)
+        pl = ax.plot(x,self.massdist.pdf(x), **propmodel_)
         ax.axvline(med, color="0.5", zorder=2)
         ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
         ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
@@ -302,15 +303,21 @@ class MassEstimate( PhotoPointCollection ):
         """ Set the number of random drawing used to build the mass pdf """
         if value<10:
             raise ValueError("set a value greater than 10!")
-        self._properties["nsamplers"] = default
+        self._properties["nsamplers"] = value
 
     @property
-    def taylorrelation_magdisp(self, default=0.1):
+    def taylordispersion(self, default=0.1):
         """ Natural dispersion of the Taylor et al. 2011
         relation. They quote 0.1mag
         http://adsabs.harvard.edu/abs/2011MNRAS.418.1587T """
         if self._side_properties["relation_magdisp"] is None:
             self._side_properties["relation_magdisp"] = default
         return self._side_properties["relation_magdisp"]
-        
+
+    @taylordispersion.setter
+    def taylordispersion(self, value):
+        """ Set the intrinsic dispersion of the Taylor Relation """
+        if value < 0:
+            raise ValueError("The intrinsic dispersion must be positive")
+        self._side_properties["relation_magdisp"] = value
     
