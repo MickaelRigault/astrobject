@@ -6,8 +6,8 @@
 import warnings
 import numpy   as np
 from scipy import stats
-
-from ..collection   import PhotoPointCollection
+from ..baseobject  import Samplers
+from ..collection  import PhotoPointCollection
 from ..utils.tools import kwargs_update
 
 
@@ -126,18 +126,18 @@ def taylor_mass_relation(mag_i,mag_g, distmpc):
     #      1.15 + 0.70*(g - i) - 0.4*i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
     #      1.15 + 0.70*g - 1.1*i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
     return 1.15 + 0.70*mag_g - 1.1*mag_i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
-        
+
 # ==================================== #
 #                                      #
 #      Da Class for Mass Estimate      #
 #                                      #
 # ==================================== #
-class MassEstimate( PhotoPointCollection ):
+class MassEstimate( Samplers, PhotoPointCollection ):
     """
     """
-    PROPERTIES = ["nsamplers"]
+    PROPERTIES = []
     SIDE_PROPERTIES = ["relation_magdisp"]
-    DERIVED_PROPERTIES = ["loggamma_param","samplers"]
+    DERIVED_PROPERTIES = []
     
     def __init__(self, ppoint_g=None, ppoint_i=None,
                  nsamplers=10000, relation_dispersion=0.1, empty=False):
@@ -150,30 +150,28 @@ class MassEstimate( PhotoPointCollection ):
         
         self.taylordispersion = relation_dispersion
         self.nsamplers = nsamplers
+        
     # =================== #
     # = Main Methods    = #
     # =================== #
     # --------- #
     #  SETTER   #
     # --------- #
-    def set_samplers(self, samplers):
-        """ Manually set the mass-samplers from which the
-        galaxy's stellar mass will be estimated.
-        """
-        self._derived_properties['samplers'] = samplers
-        self._derived_properties['loggamma_param'] = None
-        
+
     # --------- #
     #  GETTER   #
     # --------- #
-    def draw_samplers(self):
+    def draw_samplers(self, nsamplers=None):
         """ Return a monte-carlo distribution of the masses
         based on Taylor et al. 2011 relation and the given
         photopoints magnitudes
+        
+        You can change the number of samplers used by setting nsamplers.
         """
         if "i" not in self.photopoints.keys() or "g" not in self.photopoints.keys():
             raise AttributeError("You need 'i' and 'g' photopoints to be able to draw the samplers")
-
+        if nsamplers is not None:
+            self.nsamplers = nsamplers
         nodisp_sampler = \
           taylor_mass_relation(self.photopoints["i"].magdist.rvs(self.nsamplers),
                                self.photopoints["g"].magdist.rvs(self.nsamplers),
@@ -183,69 +181,17 @@ class MassEstimate( PhotoPointCollection ):
         
         self.set_samplers( nodisp_sampler + addon_dispersion)
     
-    def get_estimate(self):
+    # =================== #
+    #  Internal           #
+    # =================== #
+    # this is currently default in astrobject, but it might change
+    # Let's set it here
+    def _set_rvdist_(self):
+        """ set the rvdistribution.
+        This method defines which kind of rv_continuous distribution you use
         """
-        """
-        if not self.has_samplers():
-            self.draw_samplers()
-            
-        v = np.percentile(self.samplers, [16, 50, 84])
-        return v[1], v[2]-v[1], v[1]-v[0]
-    
-    # --------- #
-    #  PLOT     #
-    # --------- #
-    def show(self, savefile=None, show=True, ax=None,
-             propmodel={},**kwargs):
-        """
-        """
-        from astrobject.utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        # -------------
-        # - Input
-        if ax is None:
-            fig = mpl.figure(figsize=[8,6])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-            ax.set_xlabel(r"$\mathrm{\log(M/M\odot)}$",fontsize = "x-large")
-            ax.set_ylabel(r"$\mathrm{frequency}$",fontsize = "x-large")
-        elif "imshow" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
-                             "No imshow available")
-        else:
-            fig = ax.figure
-        # -------------
-        # - Prop
-        prop = kwargs_update(dict(histtype="step", bins=50, normed=True,
-                    lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
-                    ec=mpl.cm.Blues(1.,1.)),
-                    **kwargs)
-        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2),
-                    **propmodel)
-        # -------------
-        # - Samplers
-        if not self.has_samplers():
-            warnings.warn("Samplers created for the plot method")
-            self.draw_samplers()
-            
-        h = ax.hist(self.samplers,**prop)
-
-        med,highmed,lowmed = self.get_estimate()
-        # - show estimate
-        x = np.linspace(med-lowmed*10,med+highmed*10,10000)
-        pl = ax.plot(x,self.massdist.pdf(x), **propmodel_)
-        ax.axvline(med, color="0.5", zorder=2)
-        ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
-        ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
-        
-        self._plot["figure"] = fig
-        self._plot["ax"] = ax
-        self._plot["plot"] = [h,pl]
-        
-        fig.figout(savefile=savefile,show=show)
-        
-        return self._plot
-    
+        return stats.loggamma(*stats.loggamma.fit(self.samplers,
+                                        loc=np.median(self.samplers))) 
     # =================== #
     # = Properties      = #
     # =================== #
@@ -260,51 +206,8 @@ class MassEstimate( PhotoPointCollection ):
         """ test if the instance has a target (via the photopoints) """
         return self.target is not None
 
-    @property
-    def massdist(self):
-        """
-        distribution (loggamma) of the mass.
-        
-        Return
-        ------
-        scipy's stats.loggamma initialized
-
-        Example
-        -------
-        get the pdf of the mass distribution: self.massdist.pdf(x)
-        """
-        return stats.loggamma(*self._mass_loggamma_param)
-    
-    @property
-    def _mass_loggamma_param(self):
-        """ """
-        if self._derived_properties['loggamma_param'] is None:
-            self._derived_properties['loggamma_param'] = \
-              stats.loggamma.fit(self.samplers, loc=np.median(self.samplers))
-        return self._derived_properties['loggamma_param']
-                
     # --------------
     # - Taylor Stuff
-    @property
-    def samplers(self):
-        return self._derived_properties['samplers']
-    
-    def has_samplers(self):
-        return self.samplers is not None
-    
-    @property
-    def nsamplers(self, default=10000):
-        if self._properties["nsamplers"] is None:
-            self._properties["nsamplers"] = default
-        return self._properties["nsamplers"]
-    
-    @nsamplers.setter
-    def nsamplers(self, value):
-        """ Set the number of random drawing used to build the mass pdf """
-        if value<10:
-            raise ValueError("set a value greater than 10!")
-        self._properties["nsamplers"] = value
-
     @property
     def taylordispersion(self, default=0.1):
         """ Natural dispersion of the Taylor et al. 2011

@@ -3,18 +3,19 @@
 
 """This module defines the basic low-level objects"""
 
-
-import numpy as np
 import copy
 import warnings
 
+import numpy as np
+from scipy import stats
+
 from astropy import units
-from .utils.tools import load_pkl,dump_pkl
+from .utils.tools import load_pkl, dump_pkl, kwargs_update
 
 
 
 __version__ = 0.1
-__all__     = ["BaseObject","get_target"]
+__all__     = ["BaseObject","Samplers","get_target"]
 
 def get_target(name=None,zcmb=None, ra=None, dec=None,
                type_=None,mwebmv=None,zcmberr=None,**kwargs):
@@ -196,6 +197,163 @@ class BaseObject( object ):
     @property
     def _fundamental_parameters(self):
         return self._properties.keys()
+
+
+class Samplers( BaseObject ):
+    """ Class to Handle the Samplers for scipy.stats rv_continuous distribution """
+    PROPERTIES = ["nsamplers"]
+    DERIVED_PROPERTIES = ["samplers","rvdist"]
+
+    # =================== #
+    #   Main Methods      #
+    # =================== #
+    # --------- #
+    #  SETTER   #
+    # --------- #
+    def set_samplers(self, samplers):
+        """ Set the samplers to use """
+        self._derived_properties["samplers"] = samplers
+        
+    # --------- #
+    #  GETTER   #
+    # --------- #
+    def draw_samplers(self):
+        """ To Be Implemented in the child class"""
+        raise NotImplementedError(" The draw_samplers() method has not been implemented ")
+
+    def get_estimate(self):
+        """ Estimation of the True parameters based on the current samplers.
+        Return
+        ------
+        value [+sigma, -sigma] (such that value = 50% , value+sigma=84%, value-sigma=16%)
+        """
+        if not self.has_samplers():
+            self.draw_samplers()
+            
+        v = np.percentile(self.samplers, [16, 50, 84])
+        return v[1], v[2]-v[1], v[1]-v[0]
+
+    # --------- #
+    #  PLOT     #
+    # --------- #
+    def show(self, savefile=None, show=True, ax=None,
+             propmodel={}, xlabel="",**kwargs):
+        """ Show the samplers and the derived rv_distribution (scipy.stats)
+
+        Parameters
+        ----------
+
+        Return
+        ------
+        dict (plot information)
+        """
+        
+        from astrobject.utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        # -------------
+        # - Input
+        if ax is None:
+            fig = mpl.figure(figsize=[8,6])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            ax.set_xlabel(xlabel ,fontsize = "x-large")
+            ax.set_ylabel(r"$\mathrm{frequency}$",fontsize = "x-large")
+        elif "imshow" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+        # -------------
+        # - Prop
+        prop = kwargs_update(dict(histtype="step", bins=50, normed=True,
+                    lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
+                    ec=mpl.cm.Blues(1.,1.)),
+                    **kwargs)
+        
+        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2),
+                    **propmodel)
+        # -------------
+        # - Samplers
+        if not self.has_samplers():
+            warnings.warn("Samplers created for the plot method")
+            self.draw_samplers()
+            
+        h = ax.hist(self.samplers,**prop)
+        
+        med,highmed,lowmed = self.get_estimate()
+        # - show estimate
+        x = np.linspace(med-lowmed*10,med+highmed*10,10000)
+        pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_)
+        ax.axvline(med, color="0.5", zorder=2)
+        ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
+        ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
+        
+        self._plot["figure"] = fig
+        self._plot["ax"] = ax
+        self._plot["plot"] = [h,pl]
+        
+        fig.figout(savefile=savefile,show=show)
+        
+        return self._plot
+    
+    # =================== #
+    #   Properties        #
+    # =================== #
+    @property
+    def rvdist(self):
+        """
+        distribution of the samplers
+        
+        Return
+        ------
+        scipy's stats.rv_continuous initialized (frozen)
+
+        Example
+        -------
+        get the pdf of the distribution: self.rvdist.pdf(x)
+        """
+        if self._derived_properties['rvdist'] is None or \
+          np.any(self._samplers10_rvdist != self.samplers[:10]):
+            # Test if the samplers did not changed, based on the first 10
+            self._derived_properties['rvdist'] = self._set_rvdist_()
+            self._samplers10_rvdist = self.samplers[:10].copy()
+            
+        return self._derived_properties['rvdist']
+
+    def _set_rvdist_(self):
+        """ set the rvdistribution.
+        This method defines which kind of rv_continuous distribution you use
+        """
+        return stats.loggamma(*stats.loggamma.fit(self.samplers,
+                                        loc=np.median(self.samplers))) 
+    # -------------- #
+    #   Samplers   - #
+    # -------------- #
+    @property
+    def samplers(self):
+        return self._derived_properties["samplers"]
+    
+    def has_samplers(self):
+        return self.samplers is not None
+    
+    @property
+    def nsamplers(self, default=10000):
+        if self._properties["nsamplers"] is None:
+            self._properties["nsamplers"] = default
+        return self._properties["nsamplers"]
+    
+    @nsamplers.setter
+    def nsamplers(self, value):
+        """ Set the number of random drawing used to build the mass pdf """
+        if value<10:
+            raise ValueError("set a value greater than 10!")
+        self._properties["nsamplers"] = value
+
+
+
+        
+
     
 class AstroTarget( BaseObject ):
     """
