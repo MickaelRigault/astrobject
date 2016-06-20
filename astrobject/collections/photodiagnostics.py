@@ -191,7 +191,11 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         This method defines which kind of rv_continuous distribution you use
         """
         return stats.loggamma(*stats.loggamma.fit(self.samplers,
-                                        loc=np.median(self.samplers))) 
+                                        loc=np.median(self.samplers)))
+    @property
+    def rvdist_info(self):
+        """ information about the rvdistribution """
+        return r"$\mathrm{loggamma(%.1e, %.1e, %.1e)}$"%(self.rvdist.args)
     # =================== #
     # = Properties      = #
     # =================== #

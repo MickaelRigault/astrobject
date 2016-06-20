@@ -172,6 +172,22 @@ class Spectrum( BaseObject ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
+    def set_target(self,newtarget):
+        """ Attach an object to the spectrum.
+        Return
+        ------
+        Void
+        """
+        if newtarget is None:
+            self._side_properties['target'] = None
+            return
+        
+        # -- Input Test -- #
+        if newtarget.__nature__ != "AstroTarget":
+            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
+        
+        self._side_properties["target"] = newtarget.copy()
+        
     # ----------------------- #
     # - Affect the Spectrum - #
     # ----------------------- #
@@ -516,6 +532,17 @@ class Spectrum( BaseObject ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
+    # --------------------
+    # - Target
+    @property
+    def target(self):
+        """ object associated to the spectrum, has ra,dec,z etc. if setted"""
+        return self._side_properties["target"]
+
+    def has_target(self):
+        """ Test if the current instance has a target setted. True means yes """
+        return self.target is not None
+    
     # --------------------
     # - Files In
     @property

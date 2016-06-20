@@ -213,7 +213,7 @@ class Samplers( BaseObject ):
     def set_samplers(self, samplers):
         """ Set the samplers to use """
         self._derived_properties["samplers"] = samplers
-        
+        self.nsamplers = len(self.samplers)
     # --------- #
     #  GETTER   #
     # --------- #
@@ -237,7 +237,8 @@ class Samplers( BaseObject ):
     #  PLOT     #
     # --------- #
     def show(self, savefile=None, show=True, ax=None,
-             propmodel={}, xlabel="",**kwargs):
+             propmodel={}, xlabel="", fancy_xticklabel=True,
+             show_legend=True, **kwargs):
         """ Show the samplers and the derived rv_distribution (scipy.stats)
 
         Parameters
@@ -255,8 +256,8 @@ class Samplers( BaseObject ):
         # -------------
         # - Input
         if ax is None:
-            fig = mpl.figure(figsize=[8,6])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            fig = mpl.figure(figsize=[7,5])
+            ax  = fig.add_axes([0.15,0.15,0.73,0.73])
             ax.set_xlabel(xlabel ,fontsize = "x-large")
             ax.set_ylabel(r"$\mathrm{frequency}$",fontsize = "x-large")
         elif "imshow" not in dir(ax):
@@ -271,7 +272,8 @@ class Samplers( BaseObject ):
                     ec=mpl.cm.Blues(1.,1.)),
                     **kwargs)
         
-        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2),
+        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2,
+                                        label=self.rvdist_info),
                     **propmodel)
         # -------------
         # - Samplers
@@ -283,16 +285,33 @@ class Samplers( BaseObject ):
         
         med,highmed,lowmed = self.get_estimate()
         # - show estimate
-        x = np.linspace(med-lowmed*10,med+highmed*10,10000)
+        xrange = self.samplers.min()-lowmed,self.samplers.max()+highmed
+        x = np.linspace(xrange[0],xrange[1],10000)
         pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_)
         ax.axvline(med, color="0.5", zorder=2)
         ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
         ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
         
-        self._plot["figure"] = fig
-        self._plot["ax"] = ax
-        self._plot["plot"] = [h,pl]
+        # - Legend
+        if show_legend:
+            legend_ = ax.legend(loc="upper left", frameon=False, fontsize="large")
+
+        # -- out
+            
+        ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1]*1.2) # for the legend
+        # - Fancy
         
+        if fancy_xticklabel:
+            fig.canvas.draw()
+            ax.set_xticklabels(["{:.1e}".format(float(a_)) if a_ is not None and a_ !="" else "" for a_ in
+                                        [t_.get_text() for t_ in ax.get_xticklabels()]],
+                                rotation=30, ha="right")
+            
+        self._plot["figure"] = fig
+        self._plot["ax"]     = ax
+        self._plot["plot"]   = [h,pl]
+        if show_legend:
+            self._plot["legend"] = legend_
         fig.figout(savefile=savefile,show=show)
         
         return self._plot
@@ -326,7 +345,12 @@ class Samplers( BaseObject ):
         This method defines which kind of rv_continuous distribution you use
         """
         return stats.loggamma(*stats.loggamma.fit(self.samplers,
-                                        loc=np.median(self.samplers))) 
+                                        loc=np.median(self.samplers)))
+    @property
+    def rvdist_info(self):
+        """ information about the rvdistribution """
+        return ""
+        
     # -------------- #
     #   Samplers   - #
     # -------------- #
@@ -351,10 +375,6 @@ class Samplers( BaseObject ):
         self._properties["nsamplers"] = value
 
 
-
-        
-
-    
 class AstroTarget( BaseObject ):
     """
     This is the default astrophysical object that has basic
@@ -493,6 +513,13 @@ class AstroTarget( BaseObject ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
+    @property
+    def data(self):
+        """ dictionary containing the target information """
+        return  dict(name=self.name, ra=self.ra, dec=self.dec,
+                     type_=self.type, cosmo= (self.cosmo.name if self.cosmo is not None else None),
+                     zcmb = self.zcmb, zcmb_err=self.zcmb_err)
+    
     # ------------------ #
     # - Object Name    - #
     # ------------------ #
