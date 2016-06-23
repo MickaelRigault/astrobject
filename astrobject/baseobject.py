@@ -69,7 +69,7 @@ def get_target(name=None,zcmb=None, ra=None, dec=None,
     return AstroTarget(name=name,zcmb=zcmb,ra=ra,dec=dec,
                        type_=type_,
                        forced_mwebmv=forced_mwebmv,
-                       empty=empty).copy()    
+                       empty=empty,**kwargs).copy()    
 
 
 
@@ -474,6 +474,7 @@ class AstroTarget( BaseObject ):
         if cosmo is None:
             from astropy.cosmology import Planck15
             cosmo = Planck15
+            print "Planck 2015 cosmology used by default"
             warnings.warn("Planck 2015 cosmology used by default")
             
         self.set_cosmo(cosmo)
