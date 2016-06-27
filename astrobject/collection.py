@@ -170,8 +170,9 @@ class Collection( BaseCollection ):
     
     @property
     def list_id(self):
-        """This is the list of the known data id (equivalent to list_sources)"""
-        return self.list_sources
+        """This is the list of the known data id (equivalent to list_sources). Empty list return if not data"""
+        return [] if not self.has_sources() else \
+          self.list_sources 
     # ---------------------
     # - Target
     @property
@@ -232,7 +233,7 @@ class ImageCollection( Collection ):
                                    shall we set the target to the image ?
         """
         super(ImageCollection,self).set_target(newtarget)
-        if set_to_images:
+        if set_to_images and self.has_data():
             for id_ in self.list_id:
                 if self.images[id_]["image"] is not None:
                     try:
