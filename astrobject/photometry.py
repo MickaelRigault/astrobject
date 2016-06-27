@@ -1803,6 +1803,14 @@ class PhotoPoint( BaseObject ):
     # = Properties and Settings = #
     # =========================== #
     @property
+    def data(self):
+        """ dictionary containing the basic information of the PhotoPoint (potential meta data *not* returned)"""
+        dico = {}
+        for d_ in ["flux","var","lbda","mjd","bandname","zp","zpsys"]:
+            dico[d_] = self.get(d_)
+        return dico
+    
+    @property
     def lbda(self):
         if self._properties['lbda'] is None and self.bandname is not None:
             try:

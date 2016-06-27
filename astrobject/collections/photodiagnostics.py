@@ -195,10 +195,18 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     @property
     def rvdist_info(self):
         """ information about the rvdistribution """
-        return r"$\mathrm{loggamma(%.1e, %.1e, %.1e)}$"%(self.rvdist.args)
+        return r"$\mathrm{loggamma(%.1e,\, %.1e,\, %.1e)}$"%(self.rvdist.args)
     # =================== #
     # = Properties      = #
     # =================== #
+    @property
+    def data(self):
+        """ PhotoPoint Collections and samplers data """
+        return {
+            "estimate" : self.get_estimate(),
+            "samplers" : self.samplers,
+            "g": self.photopoints["g"].data,
+            "i": self.photopoints["i"].data}
     @property
     def target(self):
         if self.has_data():

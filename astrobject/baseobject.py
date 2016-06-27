@@ -302,9 +302,8 @@ class Samplers( BaseObject ):
         # - Fancy
         
         if fancy_xticklabel:
-            fig.canvas.draw()
-            ax.set_xticklabels(["{:.1e}".format(float(a_)) if a_ is not None and a_ !="" else "" for a_ in
-                                        [t_.get_text() for t_ in ax.get_xticklabels()]],
+            ax.set_xticklabels(["{:.1e}".format(float(a_)) if a_ is not None and a_ !="" else ""
+                                for a_ in ax.get_xticks()],
                                 rotation=30, ha="right")
             
         self._plot["figure"] = fig
@@ -319,6 +318,12 @@ class Samplers( BaseObject ):
     # =================== #
     #   Properties        #
     # =================== #
+    @property
+    def data(self):
+        """ dictionary containing the basic information about the instance """
+        return {"estimate":self.get_estimate(),
+                "samplers":self.samplers}
+
     @property
     def rvdist(self):
         """
