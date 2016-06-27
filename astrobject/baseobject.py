@@ -256,8 +256,8 @@ class Samplers( BaseObject ):
         # -------------
         # - Input
         if ax is None:
-            fig = mpl.figure(figsize=[7,5])
-            ax  = fig.add_axes([0.15,0.15,0.73,0.73])
+            fig = mpl.figure(figsize=[8,6])
+            ax  = fig.add_axes([0.16,0.16,0.73,0.73])
             ax.set_xlabel(xlabel ,fontsize = "x-large")
             ax.set_ylabel(r"$\mathrm{frequency}$",fontsize = "x-large")
         elif "imshow" not in dir(ax):
