@@ -11,7 +11,7 @@ from .baseobject import BaseObject
 from .photometry import get_photopoint
 from .instruments import instrument as inst
 from .utils.tools import kwargs_update
-from .utils.shape import draw_polygon
+from .utils.shape import draw_polygon, HAS_SHAPELY
 
 __all__ = ["ImageCollection"]
 
@@ -503,7 +503,7 @@ class ImageCollection( Collection ):
         PhotoPointCollection
         """
         if not onflight:
-            ids = self.get_target_ids(target=target)
+            ids = self.get_target_ids(target=target) if HAS_SHAPELY else self.list_id
             images = [self.get_image(_id,load_catalogue=False)
                       for _id in ids]
         else:
