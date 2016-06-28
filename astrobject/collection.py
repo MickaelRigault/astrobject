@@ -324,7 +324,7 @@ class ImageCollection( Collection ):
         # ---------------
         # Target
         if not im.has_target() and self.has_target():
-            im.set_target(self.target)
+            im.set_target(self.target, test_inclusion=HAS_SHAPELY)
         # ---------------
         # Catalogue
         if load_catalogue and self.has_catalogue() and not im.has_catalogue():
