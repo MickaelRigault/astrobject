@@ -286,10 +286,10 @@ class Image( BaseObject ):
         # -------------------------- #
         #  fits file and wcs         #
         # -------------------------- #
-        try:
-            fits = pf.open(filename,memmap=True)
-        except:
-            raise TypeError("'filename' cannot be open by pyfits.")
+        #try:
+        fits = pf.open(filename,memmap=True)
+       # except:
+       #     raise TypeError("'filename' cannot be open by pyfits.")
 
         try:
             wcs_ = astrometry.wcs(filename,extension=index)

@@ -9,7 +9,7 @@ from sncosmo import get_bandpass
 from astropy import coordinates,units
 from astropy.table.table import Table,TableColumns, Column
 from astropy.io import fits as pf
-
+from astropy.io import ascii
 # - local
 from .. import astrometry
 from ..photometry import Image,get_photopoint
