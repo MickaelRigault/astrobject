@@ -308,10 +308,14 @@ class Catalogue( BaseObject ):
         self._derived_properties["contours"] = self.contours.union(catalogue_.contours)
         
             
-    def writeto(self,savefile,format="ascii",force_it=True,**kwargs):
+    def writeto(self,savefile,format="ascii",force_it=True,
+                fill_values=[(ascii.masked, "nan"), ("--","nan"),("","nan")],
+                **kwargs):
         """
         The catalogue will be saved as pkl or fits files. The fits wil be used if this
         has a header, the pkl otherwise
+
+        If loaded as 
         """
         # -- First file
         if not self.header is None and len(self.header.keys())>0 and format=="fits":
