@@ -210,15 +210,15 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     
     @property
     def target(self):
-        if self.has_data():
-            return self.photopoints["i"].target if self.photopoints["i"].has_target() \
-            else self.photopoints["g"].target
-        return None
+        
+        if self._side_properties["target"] is None and self.has_data():
+            if self.photopoints["i"].has_target():
+                self.set_target(self.photopoints["i"].target)
+            elif self.photopoints["g"].has_target():
+                self.set_target(self.photopoints["g"].target)
+                
+        return self._side_properties["target"]
     
-    def has_target(self):
-        """ test if the instance has a target (via the photopoints) """
-        return self.target is not None
-
     # --------------
     # - Taylor Stuff
     @property

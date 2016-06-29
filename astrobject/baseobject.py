@@ -302,7 +302,7 @@ class Samplers( BaseObject ):
         # - Fancy
         
         if fancy_xticklabel:
-            ax.set_xticklabels(["{:.1e}".format(float(a_)) if a_ is not None and a_ !="" else ""
+            ax.set_xticklabels(["{:.2e}".format(float(a_)) if a_ is not None and a_ !="" else ""
                                 for a_ in ax.get_xticks()],
                                 rotation=30, ha="right")
             
