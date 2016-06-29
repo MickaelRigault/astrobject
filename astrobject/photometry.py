@@ -14,7 +14,8 @@ from astropy     import units,coordinates
 from astropy.table import Table
 
 from . import astrometry
-from .baseobject import BaseObject 
+from .baseobject import  TargetHandler #, BaseObject
+
 from .utils.tools import kwargs_update,flux_to_mag
 
 __all__ = ["get_image","get_photopoint"]
@@ -176,13 +177,13 @@ def dictsource_2_photopoints(dictsource,**kwargs):
 # Base Object Classes: Image          #
 #                                     #
 #######################################
-class Image( BaseObject ):
+class Image( TargetHandler ):
     """
     """
     __nature__ = "Image"
 
     PROPERTIES         = ["filename","rawdata","header","var","background"]
-    SIDE_PROPERTIES    = ["wcs","datamask","target","catalogue","exptime"] # maybe Exptime should just be on flight
+    SIDE_PROPERTIES    = ["wcs","datamask","catalogue","exptime"] # maybe Exptime should just be on flight
     DERIVED_PROPERTIES = ["fits","data","sepobjects","backgroundmask","apertures_photos","fwhm"]
 
     # -------------------- #
@@ -1437,16 +1438,6 @@ class Image( BaseObject ):
         return self.pixel_size_deg.to("arcsec")
 
     # ----------------      
-    # -- target tools
-    @property
-    def target(self):
-        return self._side_properties["target"]
-    
-    def has_target(self):
-        return False if self.target is None \
-          else True
-
-    # ----------------      
     # -- SEP OUTPUT
     @property
     def sepobjects(self):
@@ -1595,14 +1586,14 @@ class Image( BaseObject ):
 # Base Object Classes: PhotoPoint     #
 #                                     #
 #######################################
-class PhotoPoint( BaseObject ):
+class PhotoPoint( TargetHandler ):
     """This Class hold the basic information associated to
     a photometric point"""
 
     __nature__ = "PhotoPoint"
     
     PROPERTIES         = ["lbda","flux","var","mjd","bandname","zp"]
-    SIDE_PROPERTIES    = ["source","intrument_name","target","zpsys","meta"]
+    SIDE_PROPERTIES    = ["source","intrument_name","zpsys","meta"]
     DERIVED_PROPERTIES = ["flux_normal","maglognorm_param"] 
     
     # =========================== #
@@ -1746,26 +1737,6 @@ class PhotoPoint( BaseObject ):
         self._plot["plot"] = pl
         self._plot["prop"] = prop
         return self._plot
-
-    def set_target(self,newtarget):
-        """
-        Change (or create) an object associated to the given image.
-        This function will test if the object is withing the image
-        boundaries (expect if *test_inclusion* is set to False).
-        Set newtarget to None to remove the association between this
-        object and a target
-        """
-        if newtarget is None:
-            self._side_properties['target'] = None
-            return
-        
-        # -- Input Test -- #
-        if newtarget.__nature__ != "AstroTarget":
-            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
-        
-        # -- Seems Ok -- #
-        self._side_properties["target"] = newtarget.copy()
-
 
     def get(self, key, safeexit=False):
         """ Generic method to access information of the instance.
@@ -1917,15 +1888,6 @@ class PhotoPoint( BaseObject ):
     @instrument_name.setter
     def instrument_name(self,value):
         self._side_properties["instrument_name"] = value
-        
-    # -- Target
-    @property
-    def target(self):
-        return self._side_properties['target']
-
-    def has_target(self):
-        return False if self.target is None \
-          else True
 
     # -- Meta
     @property

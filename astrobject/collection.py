@@ -7,7 +7,7 @@ import numpy as np
 import warnings
 from astropy import coordinates, table
 
-from .baseobject import BaseObject
+from .baseobject import BaseObject, TargetHandler
 from .photometry import get_photopoint
 from .instruments import instrument as inst
 from .utils.tools import kwargs_update
@@ -119,11 +119,11 @@ class BaseCollection(BaseObject):
 #  Astro-oriented BaseCollection  #
 #                                 #
 # =============================== #
-class Collection( BaseCollection ):
+class Collection( TargetHandler, BaseCollection ):
     """
     """
     PROPERTIES         = []
-    SIDE_PROPERTIES    = ["target"]
+    SIDE_PROPERTIES    = []
     DERIVED_PROPERTIES = []
 
     
@@ -132,27 +132,6 @@ class Collection( BaseCollection ):
         """
         super(Collection,self).__build__(*args,**kwargs)
         self._build_properties = {}
-    # ----------------- #
-    # - Setter        - #
-    # ----------------- #
-    def set_target(self,newtarget):
-        """
-        Change (or create) an object associated to the given image.
-        This function will test if the object is withing the image
-        boundaries (expect if *test_inclusion* is set to False).
-        Set newtarget to None to remove the association between this
-        object and a target
-        """
-        if newtarget is None:
-            self._side_properties['target'] = None
-            return
-        
-        # -- Input Test -- #
-        if newtarget.__nature__ != "AstroTarget":
-            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
-        
-        # -- Seems Ok -- #
-        self._side_properties["target"] = newtarget.copy()
 
     def _test_id_(self,id_):
         """
@@ -173,15 +152,6 @@ class Collection( BaseCollection ):
         """This is the list of the known data id (equivalent to list_sources). Empty list return if not data"""
         return [] if not self.has_sources() else \
           self.list_sources 
-    # ---------------------
-    # - Target
-    @property
-    def target(self):
-        """The associated target if loaded"""
-        return self._side_properties['target']
-    
-    def has_target(self):
-        return self.target is not None
 
 #######################################
 #                                     #

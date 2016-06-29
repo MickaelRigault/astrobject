@@ -5,11 +5,10 @@
 import numpy  as np
 from astropy.io import fits as pf
 
-from .baseobject import BaseObject
+from .baseobject import TargetHandler
 
 
-__all__ = ["get_spectrum",#"cube",
-           "merge_spectra"]
+__all__ = ["get_spectrum"]
 
 
 def get_spectrum(filename,**kwargs):
@@ -127,11 +126,11 @@ def headerparameter2lbda(npix,step,start):
 # Spectro Object Classes              #
 #                                     #
 #######################################
-class Spectrum( BaseObject ):
+class Spectrum( TargetHandler ):
     """
     """
     PROPERTIES         = ["y","var","header","name","filename","npix","step","start"]
-    SIDE_PROPERTIES    = ["target"]
+    SIDE_PROPERTIES    = []
     DERIVED_PROPERTIES = ["fits","lbda","raw_lbda"]
 
     # =========================== #
@@ -172,22 +171,6 @@ class Spectrum( BaseObject ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
-    def set_target(self,newtarget):
-        """ Attach an object to the spectrum.
-        Return
-        ------
-        Void
-        """
-        if newtarget is None:
-            self._side_properties['target'] = None
-            return
-        
-        # -- Input Test -- #
-        if newtarget.__nature__ != "AstroTarget":
-            raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
-        
-        self._side_properties["target"] = newtarget.copy()
-        
     # ----------------------- #
     # - Affect the Spectrum - #
     # ----------------------- #
@@ -532,16 +515,6 @@ class Spectrum( BaseObject ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
-    # --------------------
-    # - Target
-    @property
-    def target(self):
-        """ object associated to the spectrum, has ra,dec,z etc. if setted"""
-        return self._side_properties["target"]
-
-    def has_target(self):
-        """ Test if the current instance has a target setted. True means yes """
-        return self.target is not None
     
     # --------------------
     # - Files In
@@ -767,32 +740,3 @@ class Spectrum( BaseObject ):
         else:
             self._derived_properties['lbda'] = \
               self._derived_properties['rawlbda']
-
-
-
-
-
-              
-class Cube( BaseObject ):
-    """
-    """
-    _properties = dict(
-        lbda= None,
-        data= None,
-        var = None,
-        header= None,
-        name= None,
-        )
-    
-    _side_properties = dict(
-        target= None # an target
-        )
-    
-    _derived_properties = dict(
-        )
-
-    
-    def __init__(self):
-        """
-        """
-        raise NotImplementedError("Ongoing")

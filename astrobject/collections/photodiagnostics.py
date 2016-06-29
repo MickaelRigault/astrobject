@@ -6,7 +6,7 @@
 import warnings
 import numpy   as np
 from scipy import stats
-from ..baseobject  import Samplers
+from ..baseobject  import Samplers, TargetHandler
 from ..collection  import PhotoPointCollection
 from ..utils.tools import kwargs_update
 
@@ -207,6 +207,7 @@ class MassEstimate( Samplers, PhotoPointCollection ):
             "samplers" : self.samplers,
             "g": self.photopoints["g"].data,
             "i": self.photopoints["i"].data}
+    
     @property
     def target(self):
         if self.has_data():

@@ -15,7 +15,7 @@ from .utils.tools import load_pkl, dump_pkl, kwargs_update
 
 
 __version__ = 0.1
-__all__     = ["BaseObject","Samplers","get_target"]
+__all__     = ["BaseObject","get_target"]
 
 def get_target(name=None,zcmb=None, ra=None, dec=None,
                type_=None,mwebmv=None,zcmberr=None,**kwargs):
@@ -378,8 +378,7 @@ class Samplers( BaseObject ):
         if value<10:
             raise ValueError("set a value greater than 10!")
         self._properties["nsamplers"] = value
-
-
+        
 class AstroTarget( BaseObject ):
     """
     This is the default astrophysical object that has basic
@@ -716,3 +715,54 @@ class AstroTarget( BaseObject ):
         """Do nothing so far since the distance are derived on the fly"""
         pass
           
+
+
+
+# ============================ #
+#                              #
+#    TOOLBOX METHOD CLASSES    #
+#                              #
+# ============================ #
+class TargetHandler( BaseObject ):
+    """ Virtual Class to deal with targets """
+    
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = ["target"]
+    DERIVED_PROPERTIES = []
+
+    def set_target(self, newtarget):
+        """ set a target to the object. This target will be accessible as
+        self.target. (test if a target is already set using self.has_target() )
+
+        Parameters
+        ----------
+        newtarget: [AstroTarget]:
+            The target object you want to attach to the object.
+
+        Return
+        ------
+        Void
+        """
+        if newtarget is None:
+            self._side_properties['target'] = None
+            return
+        
+        # -- Input Test -- #
+        if AstroTarget not in newtarget.__class__.__mro__:
+            raise TypeError("'newtarget' should be (or inherite of) an AstroTarget")
+        
+        # -- Seems Ok -- #
+        self._side_properties["target"] = newtarget.copy()
+
+    # ================= #
+    # = Property      = #
+    # ================= #
+    @property
+    def target(self):
+        """ target containing the basic object information such as:
+        coordinates, redshift etc """
+        return self._side_properties["target"]
+    
+    def has_target(self):
+        """ Test if a target has been set. True means yes """
+        return self.target is not None

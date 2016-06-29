@@ -13,8 +13,9 @@ __version__ = "0.3.3"
 
 from baseobject   import *
 
-from spectroscopy import *
+
 from photometry   import *
+from spectroscopy import *
 
 # don't invert collections and collection
 from collections import *
