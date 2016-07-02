@@ -96,7 +96,7 @@ def get_massestimator(photopoints=None,samplers=None,dist_param=None,
 # Mass Measurements                      #
 #                                        #
 ##########################################
-def taylor_mass_relation(mag_i,mag_g, distmpc):
+def taylor_mass_relation(mag_i, gi_color, distmpc):
     """ Estimate the stellar-mass of a galaxy based on its i and g bands.
     
     This fuction uses the eq. 8 of Taylor et al 2011
@@ -111,8 +111,8 @@ def taylor_mass_relation(mag_i,mag_g, distmpc):
     Parameters
     ----------
     
-    mag_i, mag_g: [(array of) float,(array of) float]
-        Restframe magnitude in "i" and "g" band respectively (calibrated for sdss)
+    mag_i, gi_color: [(array of) float,(array of) float]
+        Restframe magnitude in "i" band and "g-i" color respectively (calibrated for sdss)
 
     distmpc: [float]
         Distance in Mega parsec of the galaxy
@@ -125,7 +125,118 @@ def taylor_mass_relation(mag_i,mag_g, distmpc):
     # Mi = i - 5*(np.log10(ppoint_i.target.distmpc*1.e6) - 1)
     #      1.15 + 0.70*(g - i) - 0.4*i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
     #      1.15 + 0.70*g - 1.1*i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
-    return 1.15 + 0.70*mag_g - 1.1*mag_i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
+
+    return 1.15 + 0.70*(gi_color) - 0.4*mag_i + (0.4*5*(np.log10(distmpc*1.e6) - 1))
+
+######################
+#                    #
+#   G-I PRIOR        #
+#                    #
+######################
+def g_i_prior(x, image_norm=False):
+    """ prior pdf distribution following The g-i distribution
+    given by Rebecca Lange et al 2014 (GAMA).
+
+    See details in the PriorGmI class.
+    
+    Return
+    ------
+    array
+    """
+    p = PriorGmI()
+    coef = 1. if not image_norm else p._Lange_plotamp
+    return p.pdf(x) * coef
+
+LANGE_ETAL_IMAGE_LOC = '/Users/mrigault/Desktop/these/code_source/Data/Literature_Images/Lange14_g_i_distrib_019_124.png'
+class PriorGmI( Samplers ):
+    """ Samplers object as Prior.
+    From Lange et al 2014"""
+
+    # =============== #
+    #  Main Methods   #
+    # =============== #
+    def pdf(self, x):
+        """ the probability distrubution function for the binormal prior model. """
+        return self.coef_blue * stats.norm.pdf(x, **self.prop_blue ) +\
+          (1-self.coef_blue) * stats.norm.pdf(x, **self.prop_red)
+
+    def show(self, ax=None, savefile=None, **kwargs):
+        """ """
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        # - Setting - #
+        if ax is None:
+            fig = mpl.figure(figsize=[8,8])
+            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            ax.set_xlabel(r"$\mathrm{g-i\ [mag]}$",fontsize = "x-large")
+            ax.set_ylabel(r"$\mathrm{frequency}$",fontsize = "x-large")
+            ax.set_title(r"$\mathrm{Image\ from\ Lange\,et\,al\ 2014}$",fontsize = "x-large")
+        elif "imshow" not in dir(ax):
+            raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
+                             "No imshow available")
+        else:
+            fig = ax.figure
+        
+        prop = kwargs_update(dict(ls="-", color="k", lw=2, label=r"$\mathrm{prior\ reconstruction}$"),**kwargs)
+        # ---
+        ax.imshow(self.image, extent=(0.162, 1.14, -45, 800), aspect='auto')
+        x = np.linspace(0,1.2, 1000)
+        
+        ax.plot(x,self._Lange_plotamp * self.pdf(x), **kwargs )
+        fig.figout(savefile=savefile)
+        
+    def draw_samplers(self, nsamplers=None):
+        """ draw sampler and set then to self.samplers based on the binormal
+        distributions. """
+        if nsamplers is not None:
+            self.nsamplers = nsamplers
+            
+        s =  np.concatenate([stats.norm.rvs(size=self.nsamplers * self.blue_to_red_ratio,**self.prop_blue),
+                            stats.norm.rvs(size=self.nsamplers ,**self.prop_red)])
+        np.random.shuffle(s)
+        self.set_samplers(s[:self.nsamplers])
+
+
+
+    # ================= #
+    #   Properties      #
+    # ================= #
+    # ================= #
+    #   Properties      #
+    # ================= #
+    @property
+    def image(self):
+        """ """
+        import matplotlib.image as mpimg
+        return mpimg.imread(LANGE_ETAL_IMAGE_LOC)
+    
+    @property
+    def prop_blue(self):
+        """ """
+        return dict(loc=0.49, scale=0.11)
+    
+    @property
+    def prop_red(self):
+        """ """
+        return dict(loc=0.85, scale=0.15)
+
+    @property
+    def coef_blue(self):
+        return 1-1./(self.blue_to_red_ratio + 1)
+
+    
+    @property
+    def blue_to_red_ratio(self):
+        """ """
+        return 2.5
+    @property
+    def _Lange_plotamp(self):
+        return 50 * (self.blue_to_red_ratio + 1)
+    
+    
+    
 
 # ==================================== #
 #                                      #
@@ -137,7 +248,7 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     """
     PROPERTIES = []
     SIDE_PROPERTIES = ["relation_magdisp"]
-    DERIVED_PROPERTIES = []
+    DERIVED_PROPERTIES = ["gi_samplers"]
     
     def __init__(self, ppoint_g=None, ppoint_i=None,
                  nsamplers=10000, relation_dispersion=0.1, empty=False):
@@ -172,10 +283,25 @@ class MassEstimate( Samplers, PhotoPointCollection ):
             raise AttributeError("You need 'i' and 'g' photopoints to be able to draw the samplers")
         if nsamplers is not None:
             self.nsamplers = nsamplers
-        nodisp_sampler = \
-          taylor_mass_relation(self.photopoints["i"].magdist.rvs(self.nsamplers),
-                               self.photopoints["g"].magdist.rvs(self.nsamplers),
-                               self.target.distmpc)
+
+        self.photopoints["i"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
+        self.photopoints["g"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2)
+        neff = np.min([self.photopoints["g"].magsamplers.nsamplers,self.photopoints["i"].magsamplers.nsamplers, self.nsamplers])
+        if neff != self.nsamplers:
+            warnings.warn("Reduced effective number of sampler (%d -> %d)for the mass because of too many nans"%(self.nsamplers, neff))
+            self.nsamplers = neff
+
+        # -- g and i samplers
+        g_ = self.photopoints["g"].magsamplers.samplers[:self.nsamplers]
+        i_ = self.photopoints["i"].magsamplers.samplers[:self.nsamplers]
+        
+        # -- Set the gi_sampler consequently
+        self.gi_samplers.set_samplers(g_ - i_)
+        
+        # -- Convert that to masses    
+        nodisp_sampler   = taylor_mass_relation(i_,
+                                                self.gi_samplers.resample(self.nsamplers,prior=g_i_prior,xrange=[-0.5,2]),
+                                                self.target.distmpc)
         addon_dispersion = np.random.normal(loc=0, scale=self.taylordispersion,
                                             size=self.nsamplers)
         
@@ -218,7 +344,15 @@ class MassEstimate( Samplers, PhotoPointCollection ):
                 self.set_target(self.photopoints["g"].target)
                 
         return self._side_properties["target"]
-    
+
+
+    @property
+    def gi_samplers(self):
+        """ Samplers of the g-i color """
+        if self._derived_properties["gi_samplers"] is None:
+            self._derived_properties["gi_samplers"] = Samplers()
+        
+        return self._derived_properties["gi_samplers"]
     # --------------
     # - Taylor Stuff
     @property

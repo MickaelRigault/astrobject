@@ -18,7 +18,7 @@ __version__ = 0.1
 __all__     = ["BaseObject","get_target"]
 
 def get_target(name=None,zcmb=None, ra=None, dec=None,
-               type_=None,mwebmv=None,zcmberr=None,**kwargs):
+               type_=None,mwebmv=None,zcmb_err=None,**kwargs):
     """ Create an AstroTarget
 
     Parameters:
@@ -28,7 +28,7 @@ def get_target(name=None,zcmb=None, ra=None, dec=None,
     name: [string]
         name of the astro-object
 
-    zcmb,zcmberr: [float,float]
+    zcmb,zcmb_err: [float,float]
         redshift and its error in the cmb frame. This will be used
         to derive distances etc. given the used cosmology
 
@@ -207,6 +207,61 @@ class Samplers( BaseObject ):
     # =================== #
     #   Main Methods      #
     # =================== #
+    def pdf(self, x, **kwargs):
+        """ Probability distribution function based on the estimated rvdist (gaussian_kde by default) """
+        return self.rvdist.pdf(x, **kwargs)
+    
+    def resample(self, size, prior=None,
+                 xrange=None, rand_nsample=1e3, **kwargs):
+        """ draw and return a new set on samplers given the estimated rvdist.
+
+        Prior: You can add a prior distribution. The resampling will then
+               combine the Samplers.pdf and the prior function to randomly
+               draw samplers
+
+        Parameters:
+        -----------
+
+        size: [int]
+            Size of the sample you want to create from the rvdist (uses rvdist.rvs)
+            (of resample for gaussian_kde)
+
+        // Prior functionality -optional-
+        
+        prior: [function] -optional-
+            Probability Distribution Function (pdf) for the prior. Its first argument
+            should be 'x', the absysce where the pdf is estimated [pdf(x)].
+
+        xrange: [2-array (min, max)] -optional-
+            If you set a prior, the random sampling will be estimated within this interval
+            If nothing provided, the sampling will be that of the current sampler
+
+        rand_nsample: [int] -optional-
+            number of value used for the random sampling. This should typically
+            an order of magnitude larger than the typical plot bining you are using
+            (1000 by default)
+        
+        **kwargs are any option to the prior function: this uses prior(x, **kwargs)
+        """
+        if prior is None:
+            return self.rvdist.rvs(size) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
+              else self.rvdist.rvs(size, xrange=xrange, nsample=rand_nsample)
+
+        # -----------
+        # - Inputs
+        if xrange is None or len(xrange) != 2:
+            # -- it is not a kde
+            dataset = self.rvdist.rvs(1000) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
+              else self.rvdist.dataset
+            scale = np.nanmax(dataset) - np.nanmin(dataset)
+            xrange = [np.nanmin(dataset) - scale*0.1, np.nanmax(dataset) + scale*0.1]
+            
+        # - The random sampler seed
+        x = np.linspace(xrange[0],xrange[1],rand_nsample)
+        # the new pdf
+        pdf = self.pdf(x) * prior(x, **kwargs)
+        return np.random.choice(x, p= pdf / pdf.sum(), size=size)
+    
     # --------- #
     #  SETTER   #
     # --------- #
@@ -214,6 +269,7 @@ class Samplers( BaseObject ):
         """ Set the samplers to use """
         self._derived_properties["samplers"] = samplers
         self.nsamplers = len(self.samplers)
+        
     # --------- #
     #  GETTER   #
     # --------- #
@@ -349,16 +405,34 @@ class Samplers( BaseObject ):
         """ set the rvdistribution.
         This method defines which kind of rv_continuous distribution you use
         """
-        return stats.loggamma(*stats.loggamma.fit(self.samplers,
-                                        loc=np.median(self.samplers)))
+        from astrobject.utils.decorators import make_method
+        kde = stats.gaussian_kde(self.samplers)
+        
+        @make_method(stats.kde.gaussian_kde)
+        def cdf(kde, value):
+            return kde.integrate_box(-np.inf, value)
+        
+        @make_method(stats.kde.gaussian_kde)
+        def rvs(kde, size, xrange=None, nsample=1e3):
+            """ random distribution following the estimated pdf.
+            random values drawn from a finite sampling of `nsample` points
+            """
+            if xrange is None:
+                scale = np.nanmax(kde.dataset) - np.nanmin(kde.dataset)
+                xrange = np.nanmin(kde.dataset) - scale*0.1, np.nanmax(kde.dataset) + scale*0.1
+            
+            x = np.linspace(xrange[0], xrange[1], nsample)
+            return np.random.choice(x, p= kde.pdf(x) / kde.pdf(x).sum(), size=size)
+            
+        return kde
     @property
     def rvdist_info(self):
         """ information about the rvdistribution """
         return ""
-        
+    
     # -------------- #
     #   Samplers   - #
-    # -------------- #
+    # -------------- #    
     @property
     def samplers(self):
         return self._derived_properties["samplers"]
@@ -404,7 +478,7 @@ class AstroTarget( BaseObject ):
     # =========================== #
     # = Initialization          = #
     # =========================== #
-    def __init__(self,name=None,zcmb=None,zcmberr=None,
+    def __init__(self,name=None,zcmb=None,zcmb_err=None,
                  ra=None,dec=None,
                  type_=None,cosmo=None,
                  load_from=None,empty=False,sfd98_dir=None,
@@ -417,7 +491,7 @@ class AstroTarget( BaseObject ):
         
         name: [string]             name of the astro-object
 
-        zcmb,zcmberr: [float]      redshift/error in the cmb frame. This will be used
+        zcmb,zcmb_err: [float]      redshift/error in the cmb frame. This will be used
                                    to derive distmeter etc. depending on the cosmology
 
         ra: [float]                right-ascention of the object. (degree favored).
@@ -466,13 +540,13 @@ class AstroTarget( BaseObject ):
     # =========================== #
     def define(self,name,zcmb,ra,dec,
                cosmo=None,type_=None,sfd98_dir=None,
-               forced_mwebmv=None,zcmberr=None):
+               forced_mwebmv=None,zcmb_err=None):
         """
         This function enables you to define the fundamental object parameter
         upon which the entire object will be defined.
         """
         self.name = name
-        self.set_zcmb(zcmb,zcmberr)
+        self.set_zcmb(zcmb,zcmb_err)
         self.radec = ra,dec
         self.type  = type_
         if cosmo is None:

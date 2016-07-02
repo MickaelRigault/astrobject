@@ -14,7 +14,7 @@ from astropy     import units,coordinates
 from astropy.table import Table
 
 from . import astrometry
-from .baseobject import  TargetHandler #, BaseObject
+from .baseobject import  TargetHandler, Samplers #, BaseObject
 
 from .utils.tools import kwargs_update,flux_to_mag
 
@@ -1586,6 +1586,68 @@ class Image( TargetHandler ):
 # Base Object Classes: PhotoPoint     #
 #                                     #
 #######################################
+class MagSamplers( Samplers ):
+    """ Object used to accurately estimate the magnitude in the PhotoPoint Class """
+    PROPERTIES = ["flux", "fluxerror", "lbda"]
+
+    def __init__(self, flux=None, fluxerr=None, lbda=None, empty=False ):
+        """ Initialize the Samplers. Remark that all flux, fluxerr and lbda
+        are requested to draw the samplers"""
+        self.__build__()
+        if empty:
+            return
+        if flux is not None: self._properties["flux"] = flux
+        if fluxerr is not None: self._properties["fluxerr"] = fluxerr
+        if lbda is not None: self._properties["lbda"] = lbda
+            
+            
+    def draw_samplers(self, nsamplers=None):
+        """ draw new samplers """
+        if self.lbda is None:
+            raise AttributeError("Unknown 'lbda' cannot go from flux to magnitude")
+        if self.flux is None or self.fluxerr is None:
+            raise AttributeError("Unknown 'flux' or 'fluxerr' cannot draw magnitudes")
+        
+        if nsamplers is not None:
+            self.nsamplers = nsamplers
+            
+        mags = flux_to_mag(np.random.normal(loc=self.flux, scale=self.fluxerr,
+                                       size=self.nsamplers),
+                            None,self.lbda)[0]
+        
+        mags = mags[mags==mags]
+        self.nsamplers = len(mags)
+        self._derived_properties['samplers'] = mags
+
+    def _set_rvdist_(self):
+        """ set the rvdistribution.
+        This method defines which kind of rv_continuous distribution you use
+        """
+        return stats.lognorm( *stats.lognorm.fit(self.samplers, self.samplers.std(),
+                                                scale=1, loc=np.median(self.samplers)))
+    @property
+    def rvdist_info(self):
+        """ information about the rvdistribution """
+        return "lognormal distribution"
+
+    # ================ #
+    #   Properties     #
+    # ================ #
+    @property
+    def flux(self):
+        """ """
+        return self._properties["flux"]
+
+    @property
+    def fluxerr(self):
+        """ """
+        return self._properties["fluxerr"]
+    
+    @property
+    def lbda(self):
+        """ """
+        return self._properties["lbda"]
+    
 class PhotoPoint( TargetHandler ):
     """This Class hold the basic information associated to
     a photometric point"""
@@ -1594,7 +1656,7 @@ class PhotoPoint( TargetHandler ):
     
     PROPERTIES         = ["lbda","flux","var","mjd","bandname","zp"]
     SIDE_PROPERTIES    = ["source","intrument_name","zpsys","meta"]
-    DERIVED_PROPERTIES = ["flux_normal","maglognorm_param"] 
+    DERIVED_PROPERTIES = ["magsamplers"] 
     
     # =========================== #
     # = Constructor             = #
@@ -1762,13 +1824,61 @@ class PhotoPoint( TargetHandler ):
                 raise ValueError("No instance or meta key %s "%key)
             warnings.warn("No instance or meta key %s. NaN returned"%key)
             return np.NaN
+
+    # ----------- #
+    #  PLOTTING   #
+    # ----------- #
+    def show(self, savefile=None,axes=None, propmodel={}, **kwargs):
+        """ display the flux and magnitude distribution
+        as well as its associated modeling
         
+        Parameters
+        ----------
+
+        Return
+        ------
+        dict (containing the relevent plot data)
+        """
+        # -- Setting -- #
+        from .utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        
+        if axes is None or len(axes) != 2:
+            fig = mpl.figure(figsize=[10,5])
+            axf  = fig.add_axes([0.1,0.1,0.8,0.8])
+            axm  = fig.add_axes([0.1,0.1,0.8,0.8])
+            
+            axf.set_xlabel(r"$\mathrm{flux\ []}$",      fontsize = "x-large")
+            axm.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize = "x-large")
+            axf.set_ylabel(r"$\mathrm{frequency}$",     fontsize = "x-large")
+            
+        elif "hist" not in dir(axes[0]):
+            raise TypeError("The given 'axes' most likely are not a matplotlib axes. "+\
+                             "No hist available")
+        else:
+            axf, axm = axes
+            fig = axf.figure
+
+        # -- properties -- #
+        prop = kwargs_update(dict(histtype="step", bins=50, normed=True,
+                    lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
+                    ec=mpl.cm.Blues(1.,1.)),
+                    **kwargs)
+        
+        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2,
+                                        label=self.rvdist_info),
+                    **propmodel)
+        
+        # -- Da Plots -- #
+        
+            
     # =========================== #
     # = Internal Methods        = #
     # =========================== #
     def _reset_derived_prop_(self):
-        """ reset the derived and recorded properties like flux_normal"""
-        self._derived_properties["maglognorm_param"] = None
+        """ reset the derived and recorded properties """
+        self._derived_properties["magsamplers"] = None
         
     # =========================== #
     # = Properties and Settings = #
@@ -1898,30 +2008,36 @@ class PhotoPoint( TargetHandler ):
     
     # ------------
     # - Derived
-
-    @property
-    def _mag_lognorm_param(self, testsize=5000): 
-        """ the parameter to get the magnitude lognormal distribution.
-        To get the pdf 'p' of the magnitude at x simply do:
-        ```python
-        p = stats.lognorm(*self._mag_lognorm_param)
-        ```
-        the value is recorded at the first call
-        """
-        if self._derived_properties["maglognorm_param"] is None:
-            from .utils.tools import flux_to_mag
-            mag =  flux_to_mag(np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=testsize),None,self.lbda)[0]
-            self._derived_properties["maglognorm_param"] =  stats.lognorm.fit(mag[mag==mag], mag[mag==mag].std(),
-                                                                              fscale=1,
-                                                                              loc = np.median(mag[mag==mag]))
-        return self._derived_properties["maglognorm_param"]
-
     
-    # magnitudes
+    # magnitudes - Might be moved to sampler dependency
     @property
     def mag(self):
         return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[0]
+    @property
+    def magvar(self):
+        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2    
 
+    @property
+    def mag_asymerr(self):
+        """ this returns non assumetric errors around the magnitude:
+        mag-mag_from_flux+err
+        """
+        return [flux_to_mag(self.flux-np.sqrt(self.var),None,self.lbda)[0]-self.mag,
+                self.mag-flux_to_mag(self.flux+np.sqrt(self.var),None,self.lbda)[0] ]
+
+
+    
+    # - Magnitude based on sampler
+    @property
+    def magsamplers(self, testsize=5000):
+        """ Samplers used to derive the magnitude law. This is based on Sampling draw based on flux measurements """
+        if self._derived_properties["magsamplers"] is None:
+            m = MagSamplers(self.flux, np.sqrt(self.var), self.lbda )
+            m.draw_samplers(testsize)
+            self._derived_properties["magsamplers"] = m
+            
+        return  self._derived_properties["magsamplers"]
+        
     @property
     def magdist(self):
         """ distribution (lognormal) of the magnitude.
@@ -1935,19 +2051,7 @@ class PhotoPoint( TargetHandler ):
         -------
         get the pdf of the magnitude distribution: self.magdist.pdf(x)
         """
-        return stats.lognorm(*self._mag_lognorm_param)
-    
-    @property
-    def magvar(self):
-        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2    
-
-    @property
-    def mag_asymerr(self):
-        """ this returns non assumetric errors around the magnitude:
-        mag-mag_from_flux+err
-        """
-        return [flux_to_mag(self.flux-np.sqrt(self.var),None,self.lbda)[0]-self.mag,
-                self.mag-flux_to_mag(self.flux+np.sqrt(self.var),None,self.lbda)[0] ]
+        return self.magsamplers.rvdist
     
     @property
     def magabs(self):
