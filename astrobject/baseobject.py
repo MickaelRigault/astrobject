@@ -251,16 +251,21 @@ class Samplers( BaseObject ):
         # - Inputs
         if xrange is None or len(xrange) != 2:
             # -- it is not a kde
-            dataset = self.rvdist.rvs(1000) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
-              else self.rvdist.dataset
-            scale = np.nanmax(dataset) - np.nanmin(dataset)
-            xrange = [np.nanmin(dataset) - scale*0.1, np.nanmax(dataset) + scale*0.1]
+            xrange = self._default_sampling_xrange
             
         # - The random sampler seed
         x = np.linspace(xrange[0],xrange[1],rand_nsample)
         # the new pdf
         pdf = self.pdf(x) * prior(x, **kwargs)
         return np.random.choice(x, p= pdf / pdf.sum(), size=size)
+
+    @property
+    def _default_sampling_xrange(self):
+        """ usefule tools for plotting """
+        dataset = self.rvdist.rvs(1000) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
+              else self.rvdist.dataset
+        scale = np.nanmax(dataset) - np.nanmin(dataset)
+        return [np.nanmin(dataset) - scale*0.05, np.nanmax(dataset) + scale*0.05]
     
     # --------- #
     #  SETTER   #
@@ -288,12 +293,12 @@ class Samplers( BaseObject ):
             
         v = np.percentile(self.samplers, [16, 50, 84])
         return v[1], v[2]-v[1], v[1]-v[0]
-
+    
     # --------- #
     #  PLOT     #
     # --------- #
     def show(self, savefile=None, show=True, ax=None,
-             propmodel={}, xlabel="", fancy_xticklabel=True,
+             propmodel={}, xlabel="", fancy_xticklabel=False,
              show_legend=True, **kwargs):
         """ Show the samplers and the derived rv_distribution (scipy.stats)
 
@@ -305,7 +310,7 @@ class Samplers( BaseObject ):
         dict (plot information)
         """
         
-        from astrobject.utils.mpladdon import figout
+        from .utils.mpladdon import figout
         import matplotlib.pyplot as mpl
         self._plot = {}
         
@@ -323,7 +328,7 @@ class Samplers( BaseObject ):
             fig = ax.figure
         # -------------
         # - Prop
-        prop = kwargs_update(dict(histtype="step", bins=50, normed=True,
+        prop = kwargs_update(dict(histtype="step", bins=40, normed=True,
                     lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
                     ec=mpl.cm.Blues(1.,1.)),
                     **kwargs)
@@ -342,7 +347,8 @@ class Samplers( BaseObject ):
         med,highmed,lowmed = self.get_estimate()
         # - show estimate
         xrange = self.samplers.min()-lowmed,self.samplers.max()+highmed
-        x = np.linspace(xrange[0],xrange[1],10000)
+        
+        x = np.linspace(xrange[0],xrange[1],1e4)
         pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_)
         ax.axvline(med, color="0.5", zorder=2)
         ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
@@ -370,7 +376,16 @@ class Samplers( BaseObject ):
         fig.figout(savefile=savefile,show=show)
         
         return self._plot
-    
+
+    # --------- #
+    #  I/O      #
+    # --------- #
+    def writeto(self, fileout):
+        """ dump the data property inside the given file """
+        
+        dump_pkl(self.data, fileout)
+
+        
     # =================== #
     #   Properties        #
     # =================== #

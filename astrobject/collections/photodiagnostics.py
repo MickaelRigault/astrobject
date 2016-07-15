@@ -6,9 +6,10 @@
 import warnings
 import numpy   as np
 from scipy import stats
+from ..photometry  import get_photopoint
 from ..baseobject  import Samplers, TargetHandler
 from ..collection  import PhotoPointCollection
-from ..utils.tools import kwargs_update
+from ..utils.tools import kwargs_update, load_pkl
 
 
 __all__ = ["get_massestimator"]
@@ -160,7 +161,7 @@ class PriorGmI( Samplers ):
         return self.coef_blue * stats.norm.pdf(x, **self.prop_blue ) +\
           (1-self.coef_blue) * stats.norm.pdf(x, **self.prop_red)
 
-    def show(self, ax=None, savefile=None, **kwargs):
+    def show(self, ax=None, savefile=None, show_legend=False, **kwargs):
         """ """
         from ..utils.mpladdon import figout
         import matplotlib.pyplot as mpl
@@ -168,8 +169,8 @@ class PriorGmI( Samplers ):
         
         # - Setting - #
         if ax is None:
-            fig = mpl.figure(figsize=[8,8])
-            ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            fig = mpl.figure(figsize=[8,5])
+            ax  = fig.add_axes([0.1,0.13,0.8,0.8])
             ax.set_xlabel(r"$\mathrm{g-i\ [mag]}$",fontsize = "x-large")
             ax.set_ylabel(r"$\mathrm{frequency}$",fontsize = "x-large")
             ax.set_title(r"$\mathrm{Image\ from\ Lange\,et\,al\ 2014}$",fontsize = "x-large")
@@ -179,12 +180,16 @@ class PriorGmI( Samplers ):
         else:
             fig = ax.figure
         
-        prop = kwargs_update(dict(ls="-", color="k", lw=2, label=r"$\mathrm{prior\ reconstruction}$"),**kwargs)
+        prop = kwargs_update(dict(ls="-", color="k", lw=2, label=r"$\mathrm{Prior}(g-i)$"),**kwargs)
         # ---
         ax.imshow(self.image, extent=(0.162, 1.14, -45, 800), aspect='auto')
         x = np.linspace(0,1.2, 1000)
         
         ax.plot(x,self._Lange_plotamp * self.pdf(x), **kwargs )
+        # -- 0 line
+        ax.axhline(0, ls="--", color="k", alpha=0.5, zorder=6 )
+        if show_legend:
+            ax.legend(loc="upper right", fontsize="large")
         fig.figout(savefile=savefile)
         
     def draw_samplers(self, nsamplers=None):
@@ -197,8 +202,6 @@ class PriorGmI( Samplers ):
                             stats.norm.rvs(size=self.nsamplers ,**self.prop_red)])
         np.random.shuffle(s)
         self.set_samplers(s[:self.nsamplers])
-
-
 
     # ================= #
     #   Properties      #
@@ -243,12 +246,20 @@ class PriorGmI( Samplers ):
 #      Da Class for Mass Estimate      #
 #                                      #
 # ==================================== #
+class GmISamplers( Samplers ):
+    """ """
+    @property
+    def _default_sampling_xrange(self):
+        """ """
+        noprior_xrange = super(GmISamplers,self)._default_sampling_xrange
+        return [np.nanmax([noprior_xrange[0], -0.5]), np.nanmin([noprior_xrange[1], 1.4])]
+    
 class MassEstimate( Samplers, PhotoPointCollection ):
     """
     """
     PROPERTIES = []
     SIDE_PROPERTIES = ["relation_magdisp"]
-    DERIVED_PROPERTIES = ["gi_samplers"]
+    DERIVED_PROPERTIES = ["gi_samplers", "gi_priored_sample", "samplers_noprior"]
     
     def __init__(self, ppoint_g=None, ppoint_i=None,
                  nsamplers=10000, relation_dispersion=0.1, empty=False):
@@ -272,6 +283,19 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     # --------- #
     #  GETTER   #
     # --------- #
+    def get_estimate(self, noprior=False):
+        """ Estimation of the mass based on the current samplers.
+        You can get the mass without the g-i prior by setting noprior to True
+        """
+        if not noprior:
+            return super(MassEstimate, self).get_estimate()
+        
+        v = np.percentile(self.samplers_noprior, [16, 50, 84])
+        return v[1], v[2]-v[1], v[1]-v[0]
+    
+    # --------- #
+    #  OTHERS   #
+    # --------- #
     def draw_samplers(self, nsamplers=None):
         """ Return a monte-carlo distribution of the masses
         based on Taylor et al. 2011 relation and the given
@@ -286,7 +310,9 @@ class MassEstimate( Samplers, PhotoPointCollection ):
 
         self.photopoints["i"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
         self.photopoints["g"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2)
-        neff = np.min([self.photopoints["g"].magsamplers.nsamplers,self.photopoints["i"].magsamplers.nsamplers, self.nsamplers])
+        
+        neff = np.min([self.photopoints["g"].magsamplers.nsamplers,
+                       self.photopoints["i"].magsamplers.nsamplers,self.nsamplers])
         if neff != self.nsamplers:
             warnings.warn("Reduced effective number of sampler (%d -> %d)for the mass because of too many nans"%(self.nsamplers, neff))
             self.nsamplers = neff
@@ -297,16 +323,123 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         
         # -- Set the gi_sampler consequently
         self.gi_samplers.set_samplers(g_ - i_)
+        # -- and draw the priored sampling (could be done automatically be here it is explicit)
+        self._derived_properties["gi_priored_sample"] = \
+          self.gi_samplers.resample(self.nsamplers, prior=g_i_prior,
+                                    xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=1e3)
+
         
         # -- Convert that to masses    
-        nodisp_sampler   = taylor_mass_relation(i_,
-                                                self.gi_samplers.resample(self.nsamplers,prior=g_i_prior,xrange=[-0.5,2]),
+        nodisp_sampler   = taylor_mass_relation(i_,self.gi_priored_sample,
                                                 self.target.distmpc)
+        
+        nodisp_samplernp = taylor_mass_relation(i_,self.gi_samplers.samplers,
+                                                self.target.distmpc)
+        
         addon_dispersion = np.random.normal(loc=0, scale=self.taylordispersion,
                                             size=self.nsamplers)
         
         self.set_samplers( nodisp_sampler + addon_dispersion)
+        
+        self._derived_properties["samplers_noprior"] = nodisp_samplernp + addon_dispersion
     
+    # ----------- #
+    #   PLOTTER   #
+    # ----------- #
+    def show_magnitudes(self, savefile=None, show=True, propmodel= {},
+                          **kwargs):
+        """ Display and advanced figure showing the details on
+        how the mass estimate is drawn
+        """
+        from ..utils.mpladdon import figout
+        import matplotlib.pyplot as mpl
+        self._plot = {}
+        # - Settings - #
+        fig = mpl.figure(figsize=[12,5])
+        axcolor = fig.add_axes([0.40,0.15,0.5,0.75])
+        axcolor_prior = axcolor.twinx()
+        axg     = fig.add_axes([0.1,0.55,0.25,0.35])
+        axi     = fig.add_axes([0.1,0.15,0.25,0.35])
+        # - Prop     - #
+        prop = kwargs_update(dict(histtype="step", bins=30, normed=True,
+                            lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
+                            ec=mpl.cm.Blues(1.,1.), zorder=6),
+                            **kwargs)
+        
+        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2, zorder=7),
+                            **propmodel)
+
+        # - Plots    - #
+        _ = self.photopoints["i"].magsamplers.show(ax=axi, fancy_xticklabel=False,
+                                                   show_legend=False)
+        _ = self.photopoints["g"].magsamplers.show(ax=axg, fancy_xticklabel=False,
+                                                   show_legend=False)
+        # - Main g-i
+        x = np.linspace(-1,1.5,1e3)
+
+        # - sample
+        axcolor.hist(self.gi_priored_sample, **prop)
+
+        # - measured and prior
+        axcolor_prior.plot(x, self.gi_samplers.pdf(x)/self.gi_samplers.pdf(x).max(),
+                           "k--", alpha=0.7, lw=2,
+                           scalex=False, label=r"$\mathrm{Likelihood}$")
+        
+        axcolor_prior.plot(x, g_i_prior(x)/g_i_prior(x).max(),
+                           "k-", alpha=0.7, lw=2, scalex=False, zorder=3,
+                           label=r"$\mathrm{Prior}$")
+        
+        # -- infor and fancy
+        axg.text(0.85,0.85, r"$g$", bbox={"edgecolor":"0.7","facecolor":"None"},
+                 transform=axg.transAxes, fontsize="x-large")
+        axi.text(0.85,0.85, r"$i$", bbox={"edgecolor":"0.7","facecolor":"None"},
+                 transform=axi.transAxes, fontsize="x-large")
+        
+        axi.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize="xx-large")
+        axcolor.set_xlabel(r"$g-i\ \mathrm{color\ [mag]}$", fontsize="xx-large")
+        axcolor.set_xlim(0.,1.3)
+        
+        axcolor_prior.legend(loc="upper right", fontsize="x-large", frameon=False)
+        axcolor_prior.set_ylim(0,1.1)
+        # -- out
+        fig.figout(savefile=savefile, show=show)
+
+    # --------- #
+    #  I/O      #
+    # --------- #
+    def load(self, data, set_samplers=True, **kwargs):
+        """ load and set the current Sampler.
+
+        Parameters
+        ----------
+        data: [dict or string]
+            Could be:
+            - a dictionary [dict] as formated by the self.data
+            - a filename [string] which contains the dictionary
+
+        set_samplers: [bool]
+            Set to the current instance the sampler saved in `data` (if any)
+            
+        Return
+        ------
+        Void
+        """
+        if type(data) is str:
+            data = load_pkl(data)
+        if type(data) is not dict:
+            raise ValueError("The given data is not a dictionary")
+
+        if "g" not in data or "i" not in data:
+            raise TypeError("The data does not contain 'g' and/or 'i' band data")
+        # -- loading g and i bands
+        g = get_photopoint(**data["g"])
+        i = get_photopoint(**data["i"])
+        self.__init__(g,i, **kwargs)
+        
+        if set_samplers and "samplers" in data:
+            self.set_samplers(data["samplers"])
+
+        
     # =================== #
     #  Internal           #
     # =================== #
@@ -333,7 +466,12 @@ class MassEstimate( Samplers, PhotoPointCollection ):
             "samplers" : self.samplers,
             "g": self.photopoints["g"].data,
             "i": self.photopoints["i"].data}
-    
+
+
+    @property
+    def samplers_noprior(self):
+        """ Samplers without prior applied on the g-i color"""
+        return self._derived_properties["samplers_noprior"]
     @property
     def target(self):
         
@@ -350,9 +488,23 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     def gi_samplers(self):
         """ Samplers of the g-i color """
         if self._derived_properties["gi_samplers"] is None:
-            self._derived_properties["gi_samplers"] = Samplers()
+            self._derived_properties["gi_samplers"] = GmISamplers()
         
         return self._derived_properties["gi_samplers"]
+
+    @property
+    def gi_priored_sample(self):
+        """ sample dranw fro the gi_samplers assuming the a g-i prior """
+        if self._derived_properties["gi_priored_sample"] is None:
+            if not self.gi_samplers.has_samplers():
+                raise AttributeError("Not sampler defined for the gi_samplers object. Might not have been initialized.")
+            
+            self._derived_properties["gi_priored_sample"] = \
+              self.gi_samplers.resample(self.nsamplers,prior=g_i_prior,xrange=self.gi_samplers._default_sampling_xrange)
+              
+        return self._derived_properties["gi_priored_sample"]
+
+    
     # --------------
     # - Taylor Stuff
     @property

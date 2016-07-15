@@ -1628,7 +1628,7 @@ class MagSamplers( Samplers ):
     @property
     def rvdist_info(self):
         """ information about the rvdistribution """
-        return "lognormal distribution"
+        return r"$\mathrm{lognormal}$"
 
     # ================ #
     #   Properties     #
@@ -1871,7 +1871,7 @@ class PhotoPoint( TargetHandler ):
                     **propmodel)
         
         # -- Da Plots -- #
-        
+        print "TO BE FINISHED"
             
     # =========================== #
     # = Internal Methods        = #
