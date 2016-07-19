@@ -209,7 +209,8 @@ class Samplers( BaseObject ):
     # =================== #
     def pdf(self, x, **kwargs):
         """ Probability distribution function based on the estimated rvdist (gaussian_kde by default) """
-        return self.rvdist.pdf(x, **kwargs)
+        return self.rvdist.pdf(x, **kwargs) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
+          else self.rvdist.evaluate(x, **kwargs)
     
     def resample(self, size, prior=None,
                  xrange=None, rand_nsample=1e3, **kwargs):
