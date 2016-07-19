@@ -3,10 +3,11 @@
 """This module gather the spectral-objects and there associated tools"""
 
 import numpy  as np
+import warnings
 from astropy.io import fits as pf
 
 from .baseobject import TargetHandler
-
+from .utils.tools import shape_ajustment
 
 __all__ = ["get_spectrum"]
 
@@ -33,6 +34,8 @@ def get_cube():
 # -------------------- #
 # - Useful tools     - #
 # -------------------- #
+
+    
 def merge_spectra(spectrum1,spectrum2):
     """This will merge the two given spectra. They must be Spectrum-object"""
     #
@@ -194,7 +197,6 @@ class Spectrum( TargetHandler ):
         ------
         Voids
         """
-        from .utils.tools import shape_ajustment
         newy = shape_ajustment(self.lbda,self.y,x_model,k=k)
         newv = np.abs(shape_ajustment(self.lbda,self.v,x_model,k=k)) \
            if self.has_var() else None
@@ -381,38 +383,56 @@ class Spectrum( TargetHandler ):
         # ----------
         
     # - Main Methods that create the object. The others (load...) end up call it.
-    def create(self,lbda,flux,header=None,
-               variance=None,name=None,
-               force_it=False):
+    def create(self, lbda, flux, header=None,
+               variance=None, x_model=None,
+               name=None, force_it=False, 
+               fixformat=True, k=4):
         """
         This creates the object based on the fundamental parameter
 
         Parameters:
         -----------
 
-        lbda: [array]              The wavelength-array of the object. It could be
-                                   given in log scale (velocity_step).
+        lbda: [array]
+            The wavelength-array of the object. It could be
+            given in log scale (velocity_step).
+            The step should be constant. If not, it will be reformated
+            to be so (warning raised).
+            
+        flux: [array]
+            The flux of the given object. It will define *y*
 
-        flux: [array]              The flux of the given object. It will define *y*
 
-        - options -
-
-        header: [pyfits.Header]    Give the header of the object. This will be recorded
-                                   when you save the object ('writeto'). If None, this
-                                   will be converted in an empty header.
+        header: [pyfits.Header] -optional-
+            Give the header of the object. This will be recorded
+            when you save the object ('writeto'). If None, this
+            will be converted in an empty header.
         
-        variance: [array]          The variance associated to the object's flux (*y*).
-                                   It will set *v*
+        variance: [array] -optional-
+            The variance associated to the object's flux (*y*).
+            It will set *v*
 
-        name: [str]                The object's name. If None, this will fetch for the
-                                   keywork 'OBJECT' in the header and set name to it if
-                                   it finds it.
+        x_model: [array] -optional-
+            Force the shape of the wavelength to be the given x_model.
+
+        name: [str] -optional-
+            The object's name. If None, this will fetch for the
+            keywork 'OBJECT' in the header and set name to it if
+            it finds it.
         
-        force_it: [bool]           If the object already is loaded, it could be
-                                   hazardous to reload it. Hence this function will
-                                   raise an exception in that case except if
-                                   *force_it* is set to True.
-                                   
+        force_it: [bool] -optional-
+            If the object already is loaded, it could be hazardous to reload it.
+            Hence this function will raise an exception in that case except if
+            *force_it* is set to True.
+
+        fixformat: [bool] -optional-
+            If the given lbda does not have a constant step, this method will
+            create a new lbda with a constant step (and correct the flux and variance
+            correspondingly) except if fixformat is set to False. In that case, a
+            TypeError will be raised.
+
+        **kwargs goes to the shape_adjustment function (so to scipy's UniverseSpline:
+        k and s parameter e.g.)
         Return
         ------
         Void
@@ -428,7 +448,32 @@ class Spectrum( TargetHandler ):
         if self.y is not None and force_it is False:
             raise AttributeError("The object already is defined."+\
                     " Set force_it to True if you really known what you are doing")
-                    
+
+        # =============== #
+        # =  Modeling   = #
+        # =============== #
+        if x_model is not None:
+            if np.std(x_model[:-1]-x_model[1:])>1e-1:
+                if fixformat:
+                    warnings.warn("Non constant step on the given spectrum. Create one as such.")
+                    x_model = np.linspace(x_model[0],x_model[-1], len(x_model))
+                else:
+                    raise TypeError("The given wavelength array does not have a constant step.")
+                
+                
+        elif np.std(lbda[:-1]-lbda[1:])>1e-1:
+            if fixformat:
+                warnings.warn("Non constant step on the given spectrum. Create one as such.")
+                x_model = np.linspace(lbda[0],lbda[-1], len(lbda))
+            else:
+                raise TypeError("The given wavelength array does not have a constant step.")
+        
+        if x_model is not None: # test if similar step    
+            flux = shape_ajustment(lbda, flux, x_model, **kwargs)
+            variance = np.abs(shape_ajustment(lbda, variance, x_model, **kwargs)) \
+              if variance is not None else None
+            lbda = x_model
+            
         # ************************ #
         #  Creation of the Object  #
         # ************************ #
@@ -442,8 +487,8 @@ class Spectrum( TargetHandler ):
         self._properties['var']    = np.asarray(variance).copy() \
           if variance is not None else None
         # -- Name
-        self.name = header["OBJECT"] if name is None and "OBJECT" in header.keys() \
-          else name
+        self.name = self.header["OBJECT"] if name is None and "OBJECT" in header.keys() \
+          else str(name)
 
                 
     def writeto(self,savefile,saveerror=False,

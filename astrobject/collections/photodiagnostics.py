@@ -92,6 +92,7 @@ def get_massestimator(photopoints=None,samplers=None,dist_param=None,
     raise ValueError("You need to provide a setter (photopoints, samplers or dist_param) or to set empty=True")
 
 
+
 ##########################################
 #                                        #
 # Mass Measurements                      #
@@ -308,27 +309,8 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         if nsamplers is not None:
             self.nsamplers = nsamplers
 
-        self.photopoints["i"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
-        self.photopoints["g"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2)
-        
-        neff = np.min([self.photopoints["g"].magsamplers.nsamplers,
-                       self.photopoints["i"].magsamplers.nsamplers,self.nsamplers])
-        if neff != self.nsamplers:
-            warnings.warn("Reduced effective number of sampler (%d -> %d)for the mass because of too many nans"%(self.nsamplers, neff))
-            self.nsamplers = neff
-
-        # -- g and i samplers
-        g_ = self.photopoints["g"].magsamplers.samplers[:self.nsamplers]
+        self._set_color_samplers_()
         i_ = self.photopoints["i"].magsamplers.samplers[:self.nsamplers]
-        
-        # -- Set the gi_sampler consequently
-        self.gi_samplers.set_samplers(g_ - i_)
-        # -- and draw the priored sampling (could be done automatically be here it is explicit)
-        self._derived_properties["gi_priored_sample"] = \
-          self.gi_samplers.resample(self.nsamplers, prior=g_i_prior,
-                                    xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=1e3)
-
-        
         # -- Convert that to masses    
         nodisp_sampler   = taylor_mass_relation(i_,self.gi_priored_sample,
                                                 self.target.distmpc)
@@ -437,8 +419,9 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         self.__init__(g,i, **kwargs)
         
         if set_samplers and "samplers" in data:
+            self._set_color_samplers_()
             self.set_samplers(data["samplers"])
-
+            
         
     # =================== #
     #  Internal           #
@@ -455,6 +438,29 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     def rvdist_info(self):
         """ information about the rvdistribution """
         return r"$\mathrm{loggamma(%.1e,\, %.1e,\, %.1e)}$"%(self.rvdist.args)
+
+    def _set_color_samplers_(self):
+        """ """
+        self.photopoints["i"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
+        self.photopoints["g"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2)
+        
+        neff = np.min([self.photopoints["g"].magsamplers.nsamplers,
+                       self.photopoints["i"].magsamplers.nsamplers,self.nsamplers])
+        if neff != self.nsamplers:
+            warnings.warn("Reduced effective number of sampler (%d -> %d)for the mass because of too many nans"%(self.nsamplers, neff))
+            self.nsamplers = neff
+
+        # -- g and i samplers
+        g_ = self.photopoints["g"].magsamplers.samplers[:self.nsamplers]
+        i_ = self.photopoints["i"].magsamplers.samplers[:self.nsamplers]
+        
+        # -- Set the gi_sampler consequently
+        self.gi_samplers.set_samplers(g_ - i_)
+        # -- and draw the priored sampling (could be done automatically be here it is explicit)
+        self._derived_properties["gi_priored_sample"] = \
+          self.gi_samplers.resample(self.nsamplers, prior=g_i_prior,
+                                    xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=1e3)
+        
     # =================== #
     # = Properties      = #
     # =================== #
@@ -497,7 +503,7 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         """ sample dranw fro the gi_samplers assuming the a g-i prior """
         if self._derived_properties["gi_priored_sample"] is None:
             if not self.gi_samplers.has_samplers():
-                raise AttributeError("Not sampler defined for the gi_samplers object. Might not have been initialized.")
+                raise AttributeError("No sampler defined for the gi_samplers object. Might not have been initialized.")
             
             self._derived_properties["gi_priored_sample"] = \
               self.gi_samplers.resample(self.nsamplers,prior=g_i_prior,xrange=self.gi_samplers._default_sampling_xrange)

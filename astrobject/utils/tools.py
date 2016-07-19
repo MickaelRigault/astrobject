@@ -111,11 +111,12 @@ def hourangle_2_degree(ra_hours,dec_hours,obstime="J2000"):
 # --------------------------- #
 # - Array Tools             - #
 # --------------------------- #
-def shape_ajustment(X,Y,model_X,k=4,verbose=False):
+def shape_ajustment(X,Y,model_X,k=4,s=0,
+                    verbose=False):
     """ DOC TO BE DONE
     return  Y /w the same binning as model_X  in their commun wavelength
     """
-    def  commun_wavelength(x1,x2):
+    def commun_wavelength(x1,x2):
         """
         """
         flagx1 = (x1>=x2.min()) & (x1<=x2.max())
@@ -124,7 +125,7 @@ def shape_ajustment(X,Y,model_X,k=4,verbose=False):
         
     from scipy.interpolate import UnivariateSpline
     flagX,flagmodel = commun_wavelength(X,model_X)
-    Yrebin = UnivariateSpline(X[flagX], Y[flagX],k=k,s=0)(model_X)
+    Yrebin = UnivariateSpline(X[flagX], Y[flagX],k=k,s=s)(model_X)
     
     if len(Yrebin)==len(model_X):
         return Yrebin
