@@ -419,7 +419,7 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         self.__init__(g,i, **kwargs)
         
         if set_samplers and "samplers" in data:
-            self._set_color_samplers_()
+            #self._set_color_samplers_()
             self.set_samplers(data["samplers"])
             
         
@@ -478,6 +478,7 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     def samplers_noprior(self):
         """ Samplers without prior applied on the g-i color"""
         return self._derived_properties["samplers_noprior"]
+
     @property
     def target(self):
         
@@ -503,10 +504,11 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         """ sample dranw fro the gi_samplers assuming the a g-i prior """
         if self._derived_properties["gi_priored_sample"] is None:
             if not self.gi_samplers.has_samplers():
-                raise AttributeError("No sampler defined for the gi_samplers object. Might not have been initialized.")
+                self._set_color_samplers_()
             
             self._derived_properties["gi_priored_sample"] = \
-              self.gi_samplers.resample(self.nsamplers,prior=g_i_prior,xrange=self.gi_samplers._default_sampling_xrange)
+              self.gi_samplers.resample(self.nsamplers,prior=g_i_prior,
+                                        xrange=self.gi_samplers._default_sampling_xrange)
               
         return self._derived_properties["gi_priored_sample"]
 
