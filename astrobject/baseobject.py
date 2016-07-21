@@ -168,9 +168,10 @@ class BaseObject( object ):
         """returns an independent copy of the current object"""
         
         # Create an empty object
-        newobject = self.__class__(empty=True)
+        newobject = self.__new__(self.__class__)
         if empty:
             return
+        
         # And fill it !
         for prop in ["_properties","_side_properties",
                      "_derived_properties","_build_properties"
