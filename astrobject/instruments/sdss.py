@@ -29,8 +29,7 @@ def sdss(*args,**kwargs):
 
 def is_sdss_file(filename):
     """This test if the input file is a SDSS one"""
-    return True if pf.getheader(filename).get("ORIGIN") == "SDSS" \
-      else False
+    return pf.getheader(filename).get("ORIGIN") == "SDSS"
 
 def which_band_is_file(filename):
     """This resuts the band of the given file if it is a
@@ -39,10 +38,25 @@ def which_band_is_file(filename):
         return None
     return pf.getheader(filename).get("FILTER")
 
-    
+def which_obs_mjd(filename):
+    """ read the sdss-filename and return the
+    modified julian date """
+    if not is_sdss_file(filename):
+        return None
+    return get_mjd(pf.getheader(filename))
+
 # -------------------- #
 # - Inside tools     - #
 # -------------------- #
+def get_mjd(sdssheader):
+    """ read the header of the sdss file and return the
+    correct modified julian date"""
+    from astropy import time
+    dateobs = sdssheader["DATE-OBS"] if "/" not in sdssheader["DATE-OBS"]\
+      else "19"+"-".join(sdssheader["DATE-OBS"].split("/")[::-1])
+    return time.Time("%sT%s"%(dateobs,sdssheader["TAIHMS"])).mjd
+    
+    
 def get_darkvariance(camcol,band,run=None):
     """
     data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
@@ -227,11 +241,7 @@ class SDSS( Instrument ):
     def mjd(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
-        from astropy import time
-        dateobs = self.header["DATE-OBS"] if "/" not in self.header["DATE-OBS"]\
-          else "19"+"-".join(self.header["DATE-OBS"].split("/")[::-1])
-            
-        return time.Time("%sT%s"%(dateobs,self.header["TAIHMS"])).mjd
+        return get_mjd(self.header)
         
 
     # -- Derived values

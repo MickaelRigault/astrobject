@@ -431,6 +431,10 @@ class ImageCollection( Collection ):
         """
         im = ImageCollection([self.images[id_]["file"]
                               for id_ in self.get_target_ids(target)])
+        
+        if self.has_catalogue():
+            im.set_catalogue(self.catalogue)
+            
         im.set_target(target)
         return im
 
@@ -478,9 +482,8 @@ class ImageCollection( Collection ):
                       for _id in ids]
         else:
             target_imcoll = self.get_target_collection(target=target)
-            images = [target_imcoll(_id,load_catalogue=False)
+            images = [target_imcoll.get_image(_id,load_catalogue=False)
                       for _id in target_imcoll.list_id]
-
         
         photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius=radius,runits=runits,
                                             **kwargs) for image_ in images])
@@ -492,6 +495,63 @@ class ImageCollection( Collection ):
             del target_imcoll
             
         return photopoints
+
+    def get_host_photopoints(self, scaleup=2.5, target=None, onflight=False,**kwargs):
+        """
+        This modules enables to get a new ImageCollection containing only
+        the images corresponding to the given target (target in the image FoV).
+
+        Parameters:
+        -----------
+
+        target: [None/ AstroTarget]   If no target is given and a target has been set
+                                      (set_target) the current target will be used.
+                                      If you give here a target, it will use it *without*
+                                      changing the current target.
+                                      -> Error
+                                      This method raise a ValueError is no target accessible.
+                                      (see self.get_target_ids)
+
+        onflight: [bool]              Use this to avoid to load the images in the current instance
+                                      If True, this will instead load a copy of the current instance
+                                      using 'get_target_collection' which will then be delaited.
+                                      -> Use this to save cach-memory once the method is finished.
+        
+        -- other options --
+        
+        kwargs goes to get_thost_photopoints (-> get_aperture), including notably:
+               aptype, subpix, ellipse_args, annular_args
+
+           
+        Return:
+        -------
+        PhotoPointCollection
+        """
+        if not self.has_catalogue():
+            self.download_catalogue()
+
+        if not onflight:
+            ids = self.get_target_ids(target=target) if HAS_SHAPELY else self.list_id
+            images = [self.get_image(_id,load_catalogue=True)
+                      for _id in ids]
+        else:
+            target_imcoll = self.get_target_collection(target=target)
+            images = [target_imcoll.get_image(_id,load_catalogue=True)
+                      for _id in target_imcoll.list_id]
+
+        [image_.sep_extract() for image_ in images if not image_.has_sepobjects()]
+
+        photopoints = PhotoPointCollection(photopoints=[image_.get_host_photopoint(scaleup=scaleup,**kwargs)
+                                                        for image_ in images])
+        photopoints.set_target(self.target)
+        # ------------------------------
+        # - Shall we delete the files ?
+        if onflight:
+            del images
+            del target_imcoll
+            
+        return photopoints
+
     # ========================== #
     # = Set                    = #
     # ========================== #
@@ -512,7 +572,7 @@ class ImageCollection( Collection ):
         # --------
         # - set it
         self._side_properties["catalogue"] = catalogue
-
+        
 
     def download_catalogue(self,id_=None,
                            source="sdss",
@@ -758,6 +818,9 @@ class PhotoPointCollection( Collection ):
         """
         # --------------
         # - Define ID
+        if photopoint is None:
+            return
+        
         ID = id_ if id_ is not None else photopoint.bandname
         if self.has_data():
             if ID in self.list_id:

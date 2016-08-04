@@ -13,7 +13,7 @@ from astropy.io import ascii
 # - local
 from .. import astrometry
 from ..photometry import Image,get_photopoint
-from ..__init__ import BaseObject
+from ..baseobject import BaseObject, WCSHandler
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update,mag_to_flux,load_pkl,dump_pkl
 from ..utils import shape
@@ -29,17 +29,10 @@ class Instrument( Image ):
 
     # ---------------- #
     #  PhotoPoints     #
-    # ---------------- #        
-    @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
-    def get_photopoint(self,x,y,radius=None,runits="pixels",
-                       aptype="circle",wcs_coords=False,
-                       **kwargs):
-        #
-        # Be returns a PhotoPoint
-        #
-        count,err,flag  = self.get_aperture(x,y,radius=radius,runits=runits,
-                                            aptype=aptype,wcs_coords=wcs_coords,
-                                           **kwargs)
+    # ---------------- #
+    def _aperture_to_photopoint_(self,count,err,flag):
+        """ convert the aperture output to a photopoints """
+        
         flux = self.count_to_flux(count)
         var  = self.count_to_flux(err)**2
         
@@ -52,11 +45,30 @@ class Instrument( Image ):
                             instrument_name=self.instrument_name)
         # -----------------------
         # - Several Photopoints\
-        pps = [get_photopoint(self.lbda,flux_,var_,
+        return [get_photopoint(self.lbda,flux_,var_,
                             source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
                             for flux_,var_ in zip(flux,var)]
+    
+        
+    @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
+    def get_photopoint(self,x,y,radius=None,runits="pixels",
+                       aptype="circle",wcs_coords=False,
+                       **kwargs):
+        #
+        # Be returns a PhotoPoint
+        #
+        pp = self._aperture_to_photopoint_(*self.get_aperture(x,y,radius=radius,runits=runits,
+                                                            aptype=aptype,wcs_coords=wcs_coords,
+                                                            **kwargs))
+        # ------------------
+        # - One Photopoint
+        if "__iter__" not in dir(pp):
+            return pp
+        
+        # -----------------------
+        # - Several Photopoints\
         from ..collections import get_photomap
         return get_photomap(pps,np.asarray([x,y]).T,
                         wcs=self.wcs,
@@ -79,6 +91,24 @@ class Instrument( Image ):
                                    aptype="circle",**kwargs)
         pp.set_target(self.target)
         return pp
+
+    
+    @_autogen_docstring_inheritance(Image.get_host_aperture,
+                                    "Image.get_host_aperture")
+    def get_host_photopoint(self,scaleup=2.5,**kwargs):
+        #
+        # Be returns a PhotoPoint
+        #
+        if not self.has_target():
+            return AttributeError("No 'target' loaded")
+        ap_output = self.get_host_aperture(scaleup=scaleup,**kwargs)
+        if ap_output is None:
+            return None
+        
+        pp = self._aperture_to_photopoint_(*ap_output)
+        pp.set_target(self.target)
+        return pp
+
     
     # =========================== #
     # = Main Methods            = #
@@ -131,14 +161,14 @@ class Instrument( Image ):
 #                                          #
 ############################################
 
-class Catalogue( BaseObject ):
+class Catalogue( WCSHandler ):
     """
     """
     __nature__ = "Catalogue"
     source_name = "_not_defined_"
 
     PROPERTIES         = ["filename","data","header"]
-    SIDE_PROPERTIES    = ["wcs","fovcontours","fovmask","matchedmask",
+    SIDE_PROPERTIES    = ["fovcontours","fovmask","matchedmask",
                           "lbda","excluded_list"]
     DERIVED_PROPERTIES = ["fits","naround","naround_nofovcut","contours"]
 
@@ -362,11 +392,7 @@ class Catalogue( BaseObject ):
     def set_wcs(self,wcs,force_it=False,update_fovmask=True):
         """
         """
-        if self.has_wcs() and force_it is False:
-            raise AttributeError("'wcs' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-                    
-        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
+        super(Catalogue, self).set_wcs(wcs, force_it=force_it)
         
         if update_fovmask:
             if self.has_wcs():
@@ -426,10 +452,10 @@ class Catalogue( BaseObject ):
             self._side_properties["matchedmask"] = \
               np.asarray([i in matchedmask for i in range(len(self.ra))],dtype=bool)
             return
+        
         raise TypeError("the format of the given 'matchedmask' is not recongnized. "+\
                 "You could give a booleen mask array or a list of accepted index")
-
-                        
+                     
     def set_ingalaxymask(self, galaxycontours, reset=False):
         """
         The will update the current ingalaxy mask with the given contours.
@@ -519,7 +545,7 @@ class Catalogue( BaseObject ):
 
     def get_mask(self,catmag_range=[None,None],stars_only=False,
                  isolated_only=False, nonstars_only=False,
-                 contours=None, notingalaxy=False,
+                 contours=None, notingalaxy=False, matched=False,
                  fovmask=True):
         """ This returns a bolean mask following the argument cuts. """
         
@@ -537,6 +563,14 @@ class Catalogue( BaseObject ):
         if isolated_only:
             mask *= self.isolatedmask if fovmask else self._isolatedmask
 
+        if matched:
+            if not self.has_matchedmask():
+                raise AttributeError("No matching set. See set_matchedmask()")
+            if not fovmask:
+                raise AttributeError("Matching association only made in combination with fovmask=True")
+            
+            mask *= self.matchedmask
+            
         # - not in galaxy
         if notingalaxy:
             if not self.has_ingalaxymask():
@@ -583,6 +617,50 @@ class Catalogue( BaseObject ):
                                                           infov=infov)
         return maskaround * maskbase
         
+
+    def get_nearest_idx(self, ra, dec, wcs_coords=True, mask=None, infov=True):
+        """ get the index of the nearest (masked-)catalogue entry
+        
+        Parameters
+        ----------
+        ra, dec : [float (or array-of), float (or array-of)]
+            Coordinates that should be matched
+
+        wcs_coords: [bool] -optional-
+            True if the ra and dec are given in degree. Set to False
+            if you provided the pixel coordinates.
+
+        mask: [bool-array] -optional-
+            Mask the catalogue to only given the nearest entry after of the given
+            selection.
+            ===
+            **CAUTION** The idx will then be that of the **mask-catalogue**
+            ===
+            (use np.argwhere(mask)[get_nearest_idx(..)[0]] to get the index
+            of the unmasked catalogue)
+            
+        Returns
+        -------
+        idx, sep2d
+        """
+        # --------------
+        # - Input 
+        if not wcs_coords and not self.has_wcs():
+            raise AttributeError("Needs a wcs solution to get pixel coordinates")
+        if not wcs_coords:
+            ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
+        if "__iter__" not in dir(ra):
+            ra = [ra]
+            dec = [dec]
+        skytarget = coordinates.SkyCoord(ra*units.degree,dec*units.degree)
+        
+        # -------------
+        # - Cat matching
+        catsky = self.sky_radec if infov else self._sky_radec
+        if mask is not None:
+            catsky = catsky[mask]
+            
+        return coordinates.match_coordinates_sky(skytarget, catsky)[:2]
         
     def get_idx_around(self,ra,dec,radius,runits="arcsec",wcs_coords=True,
                        infov=True):
@@ -832,14 +910,6 @@ class Catalogue( BaseObject ):
         return self._properties["header"]
     
     @property
-    def wcs(self):
-        return self._side_properties["wcs"]
-        
-    def has_wcs(self):
-        return False if self.wcs is None\
-          else True
-        
-    @property
     def fovmask(self):
         if self._side_properties["fovmask"] is None:
             self._load_default_fovmask_()
@@ -1059,8 +1129,7 @@ class Catalogue( BaseObject ):
         self._derived_properties["naround_nofovcut"] = np.bincount(_idxcatalogue)
         
     def _is_around_defined(self):
-        return False if self._derived_properties["naround"] is None\
-          else True
+        return self._derived_properties["naround"] is not None
         
     @property
     def nobjects_around(self):

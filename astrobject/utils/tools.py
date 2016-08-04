@@ -38,6 +38,12 @@ def kwargs_extract(default,**kwargs):
 # --------------------------- #
 # - I/O Tools               - #
 # --------------------------- #
+def ipython_info():
+    import sys
+    return 'notebook' if 'ipykernel' in sys.modules \
+      else "terminal" if 'Ipython' in sys.modules \
+      else None
+
 def load_pkl(filename):
     """
     """

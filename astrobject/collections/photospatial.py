@@ -6,6 +6,7 @@ import numpy as np
 
 from astropy        import coordinates, units
 
+from ..baseobject   import WCSHandler
 from ..photometry   import get_photopoint
 from ..collection   import PhotoPointCollection
 from ..utils.tools import kwargs_update
@@ -44,6 +45,7 @@ def get_photomap(photopoints=None,coords=None,wcs_coords=True,**kwargs):
 
 
 def get_sepobject(sepoutput, ppointkwargs={},
+                  use_peakposition=False,
                    **kwargs):
     """ Create a Spectial collection of photopoints dedicated
     to the SEP's output.
@@ -66,14 +68,16 @@ def get_sepobject(sepoutput, ppointkwargs={},
     ------
     SepObject (Child of PhotoMap)
     """
+    xkey,ykey = ["x","y"] if not use_peakposition else ["xpeak","ypeak"]
     if is_sepoutput(sepoutput):
         inputphotomap = parse_sepoutput(sepoutput,**ppointkwargs)
         pmap = SepObject(photopoints=inputphotomap["ppoints"],
                          coords=inputphotomap["coords"],
                          wcs_coords=False, **kwargs)
         ids_sorting = [pmap.coords_to_id(x,y)
-                       for x,y in zip(inputphotomap["meta"]["x"].data,
-                                      inputphotomap["meta"]["y"].data)]
+                       for x,y in zip(inputphotomap["meta"][xkey].data,
+                                      inputphotomap["meta"][ykey].data)]
+        
         [pmap.set_meta(k,inputphotomap["meta"][k].data, ids=ids_sorting)
          for k in inputphotomap["meta"].keys()]
         
@@ -123,13 +127,13 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
 #                                    #
 ######################################
 
-class PhotoMap( PhotoPointCollection ):
+class PhotoMap( PhotoPointCollection, WCSHandler ):
     """
     """
     #__nature__ = "PhotoMap"
 
     PROPERTIES         = []
-    SIDE_PROPERTIES    = ["refmap","wcs","catalogue"]
+    SIDE_PROPERTIES    = ["refmap","catalogue"]
     DERIVED_PROPERTIES = ["catmatch"]
 
     
@@ -160,6 +164,14 @@ class PhotoMap( PhotoPointCollection ):
     # =============================== #
     # = Building Methods            = #
     # =============================== #
+    # ---------- #
+    #  GETTER    #
+    # ---------- #
+    def get_skycoords(self):
+        """ """
+        ra,dec = self.radec.T
+        return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
+    
     # ---------------- #
     # - SUPER THEM   - #
     # ---------------- #
@@ -230,9 +242,6 @@ class PhotoMap( PhotoPointCollection ):
         # - Get Photometry  - #
         # ------------------- #        
         return catindex,index
-
-    
-
     
     # -- Id <-> Coords
     def coords_to_id(self,x,y):
@@ -243,14 +252,20 @@ class PhotoMap( PhotoPointCollection ):
         """ convert photopoint's id into coordinates. Only reading here, see radec, xy """
         return np.asarray(id.split(","),dtype="float")
 
-
     # -- Catalogue <-> PhotoMap
     def match_catalogue(self,catalogue=None,
-                        force_it=False, deltadist=1*units.arcsec):
+                        force_it=False, deltadist=1*units.arcsec,
+                        **kwargs):
         """
         This methods enable to attached a given sepobject entry
         to a catalog value.
         You can set a catalogue.
+
+        **kwargs goes to the get_skycoords() method.
+        
+        Returns
+        -------
+        Void
         """
         # --------------
         # - input 
@@ -262,8 +277,7 @@ class PhotoMap( PhotoPointCollection ):
         
         if self.has_wcs():
             # -- matching are made in degree space
-            ra,dec = self.radec.T
-            skyradec = coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
+            skyradec = self.get_skycoords(**kwargs)
             idxcatalogue, idxsepobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, deltadist)
         else:
             raise NotImplementedError("You currently need a wcs solution in the SepObject to match a catalogue")
@@ -288,7 +302,7 @@ class PhotoMap( PhotoPointCollection ):
         
         bool_ = np.in1d( index, self.catmatch["idx"] )
         if not np.all(bool_) and  not cleanindex:
-            raise ValueError("Unknown photomap index(es):"+","%join(index[bool_]))
+            raise ValueError("Unknown photomap index(es):"+", ".join(index[bool_]))
             
         return np.concatenate(self.catmatch["idx_catalogue"][\
                         np.argwhere(np.in1d(self.catmatch["idx"], index[bool_]))])
@@ -305,7 +319,7 @@ class PhotoMap( PhotoPointCollection ):
         
         bool_ = np.in1d( catindex, self.catmatch["idx_catalogue"] )
         if not np.all(bool_) and not cleanindex:
-            raise ValueError("Unknown catalogue index(es):"+","%join(catindex[bool_]))
+            raise ValueError("Unknown catalogue index(es):"+", ".join(catindex[bool_]))
             
         return np.concatenate(self.catmatch["idx"][\
                         np.argwhere(np.in1d(self.catmatch["idx_catalogue"], catindex[bool_]))])
@@ -314,16 +328,6 @@ class PhotoMap( PhotoPointCollection ):
     # ------------- #
     # - SETTER    - #
     # ------------- #
-    def set_wcs(self,wcs,force_it=False):
-        """
-        """
-        if self.has_wcs() and force_it is False:
-            raise AttributeError("'wcs' is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-                    
-        from ..astrometry import get_wcs
-        self._side_properties["wcs"] = get_wcs(wcs,verbose=True)
-
     def set_refmap(self, photomap,force_it=False):
         """
         Set here the reference map associated to the current one.
@@ -384,6 +388,34 @@ class PhotoMap( PhotoPointCollection ):
     # - GETTER    - #
     # ------------- #
     # -- Access Index
+    def get_nearest_idx(self, ra, dec, wcs_coords=True,
+                        catmatch=True, catalogue_idx=False,
+                        **kwargs):
+        """ get the index of the nearest object
+
+        **kwargs goes to the catalogue's get_mask() method:
+            Aviablable masking with there default values:
+                - catmag_range=[None, None],
+                - stars_only=False,
+                - isolated_only=False,
+                - nonstars_only=False,
+                - contours=None,
+                - notingalaxy=False
+        """
+        if not catmatch:
+            raise NotImplementedError("only catalogue based associated so far")
+
+        elif not self.has_catalogue():
+            raise AttributeError("No catalogue set.")
+        else:
+            masking = kwargs_update({"matched":True},**kwargs)
+            mask = self.catalogue.get_mask(**masking)
+            id_, dist_  = self.catalogue.get_nearest_idx(ra, dec, wcs_coords=wcs_coords, mask=mask)
+            if mask is not None:
+                id_ = np.argwhere(mask)[id_[0]]
+            
+            return id_ if catalogue_idx else self.catindex_to_index(id_), dist_
+        
     def get_idx_around(self, ra, dec, radius,runits="arcmin", catalogue_idx=False):
         """
         Parameters:
@@ -409,6 +441,7 @@ class PhotoMap( PhotoPointCollection ):
             ra_,dec_ = self.radec.T
             return coordinates.SkyCoord(ra=ra_*units.degree,
                         dec=dec_*units.degree).search_around_sky(sky, radius)[1:3]
+        
         if not self.has_catalogue():
             raise ValueError("no catalogue loaded, do not set catalogue_idx to True.")
             
@@ -513,14 +546,6 @@ class PhotoMap( PhotoPointCollection ):
             self._build_properties["wcsid"] = True
         return self._build_properties["wcsid"]
     
-    # -------------
-    # - WCS
-    @property
-    def wcs(self):
-        return self._side_properties['wcs']
-    
-    def has_wcs(self):
-        return self.wcs is not None
     
     # -------------
     # - RefMap
@@ -589,7 +614,7 @@ class SepObject( PhotoMap ):
           self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
                             catmag_range=catmag_range, cat_indexes=False)
                 
-        ells = self.get_detected_ellipses(scaleup=5, mask=mask,
+        ells = self.get_detected_ellipses(scaleup=2.5, mask=mask,
                                           contours=False)
         for ell in ells:
             ell.set_clip_box(ax.bbox)
@@ -680,6 +705,15 @@ class SepObject( PhotoMap ):
         fig.figout(savefile=savefile,show=show)
 
 
+    # ----------- #
+    #   GETTER    #
+    # ----------- #
+    def get_skycoords(self, use_peakposition=True):
+        """ """
+        xkey,ykey = ["x","y"] if not use_peakposition else ["xpeak","ypeak"]
+        ra,dec = self.pixel_to_coords(*self.get([xkey,ykey]).T).T
+        return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
+
     # -------------------------- #
     # Super It                 - #
     # -------------------------- #
@@ -749,14 +783,14 @@ class SepObject( PhotoMap ):
         return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
         [psf_t,np.std(t_clipped)/m]
         
-    def get_detected_ellipses(self,scaleup=5,mask=None, contours=False):
+    def get_detected_ellipses(self,scaleup=2.5,mask=None, contours=False):
         """
         Get the matplotlib Patches (Ellipse) defining the detected object. You can
         select the returned ellipses using the apply_catmask, stars_only,
         isolated_only and catmag_range cuts.
 
-        'scaleup' scale the radius used of the ellipses. 5 means that most of the
-        visible light will be within the inside the returned ellipses.
+        'scaleup' scale the radius used of the ellipses.
+        2.5 means that most of the visible light will be within the inside the returned ellipses.
 
         'contours' means that the returned value is a shapely MultiPolgon not a list of patches
         Return
@@ -772,7 +806,7 @@ class SepObject( PhotoMap ):
             
         # -------------
         # - Properties
-        ells = [Ellipse([x,y],a*scaleup,b*scaleup,
+        ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
                         t*units.radian.in_units("degree"))
                 for x,y,a,b,t in self.get(["x","y","a","b","theta"],mask=mask)]
         if not contours:
@@ -817,7 +851,7 @@ class SepObject( PhotoMap ):
     # = properties                  = #
     # =============================== #
     @property
-    def galaxy_contours(self, scaleup=10):
+    def galaxy_contours(self, scaleup=5):
         """ """
         if self._derived_properties["galaxy_contours"] is None:
             self._derived_properties["galaxy_contours"] = \

@@ -17,8 +17,9 @@ from .utils.tools import load_pkl, dump_pkl, kwargs_update
 __version__ = 0.1
 __all__     = ["BaseObject","get_target"]
 
-def get_target(name=None,zcmb=None, ra=None, dec=None,
-               type_=None,mwebmv=None,zcmb_err=None,**kwargs):
+def get_target(name=None,zcmb=None, ra=None, dec=None, mjd=None,
+               type_=None,mwebmv=None,zcmb_err=None, 
+               **kwargs):
     """ Create an AstroTarget
 
     Parameters:
@@ -35,7 +36,9 @@ def get_target(name=None,zcmb=None, ra=None, dec=None,
     ra, dec: [float, float]
         right-ascention / declination of the object. (degree favored).
                                    
-                               
+    mjd: [float]:
+        Modified Julian Date associated to the target
+        
     type_:[string]
         type of the astro-object (galaxy, sn, Ia, Ibc...)
         (no predifined list type so far, but this could append)
@@ -66,14 +69,11 @@ def get_target(name=None,zcmb=None, ra=None, dec=None,
     ra = kwargs.pop("Ra",ra)
     empty = kwargs.pop("empty",False)
     
-    return AstroTarget(name=name,zcmb=zcmb,ra=ra,dec=dec,
+    return AstroTarget(name=name,zcmb=zcmb,
+                       ra=ra,dec=dec,mjd=mjd,
                        type_=type_,
                        forced_mwebmv=forced_mwebmv,
                        empty=empty,**kwargs).copy()    
-
-
-
-
 
 #######################################
 #                                     #
@@ -182,6 +182,7 @@ class BaseObject( object ):
                 newobject.__dict__[prop] = copy.deepcopy(self.__dict__[prop])
             except:
                 newobject.__dict__[prop] = copy.copy(self.__dict__[prop])
+                
         # This be sure things are correct
         newobject._update_()
         # and return it
@@ -205,6 +206,13 @@ class Samplers( BaseObject ):
     PROPERTIES = ["nsamplers"]
     DERIVED_PROPERTIES = ["samplers","rvdist"]
 
+    def __init__(self, sampler=None, empty=False):
+        """ """
+        self.__build__()
+        if empty:
+            return
+        if sampler is not None:
+            self.set_samplers(sampler)
     # =================== #
     #   Main Methods      #
     # =================== #
@@ -301,7 +309,7 @@ class Samplers( BaseObject ):
     # --------- #
     def show(self, savefile=None, show=True, ax=None,
              propmodel={}, xlabel="", fancy_xticklabel=False,
-             show_legend=True, **kwargs):
+             show_legend=True, logscale=False, **kwargs):
         """ Show the samplers and the derived rv_distribution (scipy.stats)
 
         Parameters
@@ -344,17 +352,24 @@ class Samplers( BaseObject ):
             warnings.warn("Samplers created for the plot method")
             self.draw_samplers()
             
-        h = ax.hist(self.samplers,**prop)
+        h = ax.hist(self.samplers if not logscale else np.log10(self.samplers), **prop)
         
         med,highmed,lowmed = self.get_estimate()
         # - show estimate
         xrange = self.samplers.min()-lowmed,self.samplers.max()+highmed
         
         x = np.linspace(xrange[0],xrange[1],1e4)
-        pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_)
-        ax.axvline(med, color="0.5", zorder=2)
-        ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
-        ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
+
+        if not logscale:
+            pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_)
+            ax.axvline(med, color="0.5", zorder=2)
+            ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
+            ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
+        else:
+            pl = None
+            ax.axvline(np.log10(med), color="0.5", zorder=2)
+            ax.axvline(np.log10(med-lowmed), color="0.6", ls="--", zorder=2)
+            ax.axvline(np.log10(med+highmed), color="0.6", ls="--", zorder=2)
         
         # - Legend
         if show_legend:
@@ -373,6 +388,7 @@ class Samplers( BaseObject ):
         self._plot["figure"] = fig
         self._plot["ax"]     = ax
         self._plot["plot"]   = [h,pl]
+        self._plot["prop"]   = prop
         if show_legend:
             self._plot["legend"] = legend_
         fig.figout(savefile=savefile,show=show)
@@ -469,7 +485,12 @@ class Samplers( BaseObject ):
         if value<10:
             raise ValueError("set a value greater than 10!")
         self._properties["nsamplers"] = value
-        
+
+###########################
+#                         #
+#   AstroTarget           #
+#                         #
+###########################
 class AstroTarget( BaseObject ):
     """
     This is the default astrophysical object that has basic
@@ -486,7 +507,8 @@ class AstroTarget( BaseObject ):
     __nature__ = "AstroTarget"
 
     PROPERTIES         = ["zcmb","ra","dec","name","zcmb.err"]
-    SIDE_PROPERTIES    = ["cosmology","literature_name","type","mwebmv","sfd98_dir"]
+    SIDE_PROPERTIES    = ["cosmology","literature_name",
+                          "type","mwebmv","sfd98_dir","mjd"]
     DERIVED_PROPERTIES = ["distmeter","distmpc","arc_per_kpc"]
 
     # -------------------- #
@@ -496,7 +518,7 @@ class AstroTarget( BaseObject ):
     # = Initialization          = #
     # =========================== #
     def __init__(self,name=None,zcmb=None,zcmb_err=None,
-                 ra=None,dec=None,
+                 ra=None,dec=None, mjd=None,
                  type_=None,cosmo=None,
                  load_from=None,empty=False,sfd98_dir=None,
                  **kwargs):
@@ -516,7 +538,9 @@ class AstroTarget( BaseObject ):
                                    
         dec: [float]               declination of the object. (degree favored)
                                    *ra* and *dec* must have the same unit.
-
+                                   
+        mjd: [float]               modified Julian Date associated to the target
+        
         type_:[string]             type of the astro-object (galaxy, sn, Ia, Ibc...)
                                    (no predifined list type so far. It could append)
 
@@ -547,7 +571,7 @@ class AstroTarget( BaseObject ):
             self.load(load_from,**kwargs)
             return
 
-        self.define(name,zcmb,ra,dec,
+        self.define(name,zcmb,ra,dec,mjd=mjd,
                     cosmo=cosmo,type_=type_,sfd98_dir=sfd98_dir,
                     **kwargs)
         return
@@ -555,7 +579,7 @@ class AstroTarget( BaseObject ):
     # =========================== #
     # = Main Methods            = #
     # =========================== #
-    def define(self,name,zcmb,ra,dec,
+    def define(self,name,zcmb,ra,dec,mjd=None,
                cosmo=None,type_=None,sfd98_dir=None,
                forced_mwebmv=None,zcmb_err=None):
         """
@@ -565,6 +589,8 @@ class AstroTarget( BaseObject ):
         self.name = name
         self.set_zcmb(zcmb,zcmb_err)
         self.radec = ra,dec
+
+        self._side_properties["mjd"] = mjd
         self.type  = type_
         if cosmo is None:
             from astropy.cosmology import Planck15
@@ -601,6 +627,7 @@ class AstroTarget( BaseObject ):
         cosmo = candidatepkl.pop("cosmo")
         self.define(candidatepkl["name"],candidatepkl["zcmb"],
                     candidatepkl["ra"],candidatepkl["dec"],
+                    mjd=candidatepkl.pop("mjd",None),
                     cosmo = cosmo,
                     type_ = candidatepkl.pop("type",None),
                     forced_mwebmv = candidatepkl.pop("mwebmv",None))
@@ -612,7 +639,7 @@ class AstroTarget( BaseObject ):
     @property
     def data(self):
         """ dictionary containing the target information """
-        return  dict(name=self.name, ra=self.ra, dec=self.dec,
+        return  dict(name=self.name, ra=self.ra, dec=self.dec, mjd=self.mjd,
                      type_=self.type, cosmo= (self.cosmo.name if self.cosmo is not None else None),
                      zcmb = self.zcmb, zcmb_err=self.zcmb_err)
     
@@ -647,6 +674,7 @@ class AstroTarget( BaseObject ):
     @property
     def zcmb_err(self):
         return self._properties["zcmb.err"]
+    
     # ------------------ #
     # - Coordinate     - #
     # ------------------ #
@@ -668,6 +696,10 @@ class AstroTarget( BaseObject ):
         self._properties["ra"],self._properties["dec"] = value
         self._side_properties["mwebmv"] = None
 
+    @property
+    def mjd(self):
+        """ Modified Julian date associated to the target """
+        return self._side_properties["mjd"]
     # ------------------ #
     # - MW Extinction  - #
     # ------------------ #
@@ -748,13 +780,13 @@ class AstroTarget( BaseObject ):
           self.cosmo.luminosity_distance(self.zcmb-self.zcmb_err).value-self.distmpc,
           self.distmpc-self.cosmo.luminosity_distance(self.zcmb+self.zcmb_err).value])
                 
-    
     @property
     def _distance(self):
         """ astropy based distance """
         if self.cosmo is None or self.zcmb is None:
             raise AttributeError("'cosmo' and 'redshift' required.")
         return self.cosmo.luminosity_distance(self.zcmb)
+
     @property
     def arcsec_per_kpc(self):
         if self.cosmo is None or self.zcmb is None:
@@ -808,12 +840,72 @@ class AstroTarget( BaseObject ):
           
 
 
+###########################
+#                         #
+#   Handlers              #
+#                         #
+###########################
+class WCSHandler( BaseObject ):
+    """  Virtual Class to deal with wcs solutions """
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = ["wcs"]
+    DERIVED_PROPERTIES = []
 
-# ============================ #
-#                              #
-#    TOOLBOX METHOD CLASSES    #
-#                              #
-# ============================ #
+    # ================ #
+    #   Main Class     #
+    # ================ #
+    # ---------- #
+    # CONVERTION #
+    # ---------- #
+    def units_to_pixels(self,units_, target=None):
+        """units should be a parsable string or a astropy units. Uses the wcs method units_to_pixels()
+        In addition, you have access to the 'psf [==fwhm]' unit"""
+        if self.has_wcs() is False:
+            raise AttributeError("no wcs solution loaded.")
+            
+        return self.wcs.units_to_pixels(units_,target=target)
+    
+    def pixel_to_coords(self,pixel_x,pixel_y):
+        """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
+        if self.has_wcs() is False:
+            raise AttributeError("no wcs solution loaded.")
+        #pixelsoffset = self._dataoffset
+        return self.wcs.pix2world(pixel_x,pixel_y)
+
+    def coords_to_pixel(self,ra,dec):
+        """Return the pixel (x,y) associated to the given ra,dec (degree) coordinate"""
+        if self.has_wcs() is False:
+            raise AttributeError("no wcs solution loaded.")
+        # Remark the np.asarray are only required by the astLib wcs solution
+        return np.asarray(self.wcs.world2pix(ra,dec))
+    
+    # ---------- #
+    #  SETTER    #
+    # ---------- #
+    def set_wcs(self, wcs, force_it=False):
+        """ Attach a wcs solution to the current object """
+        if self.has_wcs() and not force_it:
+            raise AttributeError("A wcs solution is already loaded."\
+                    " Set force_it to True if you really known what you are doing")
+
+        from .astrometry import _MotherWCS_,get_wcs
+        if _MotherWCS_ not in wcs.__class__.__mro__:
+            raise TypeError("The given wcs solution is not a astrobject WCS instance")
+        
+        self._side_properties["wcs"] = get_wcs(wcs)
+        
+    # ================ #
+    #    Properties    #
+    # ================ #
+    @property
+    def wcs(self):
+        """ wcs class """
+        return self._side_properties["wcs"]
+    
+    def has_wcs(self):
+        """ Test if the current object has a wcs solution loaded """
+        return self.wcs is not None
+
 class TargetHandler( BaseObject ):
     """ Virtual Class to deal with targets """
     

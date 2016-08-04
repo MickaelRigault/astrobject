@@ -14,7 +14,7 @@ from astropy     import units,coordinates
 from astropy.table import Table
 
 from . import astrometry
-from .baseobject import  TargetHandler, Samplers #, BaseObject
+from .baseobject import  TargetHandler, WCSHandler, Samplers #, BaseObject
 
 from .utils.tools import kwargs_update,flux_to_mag
 
@@ -177,13 +177,13 @@ def dictsource_2_photopoints(dictsource,**kwargs):
 # Base Object Classes: Image          #
 #                                     #
 #######################################
-class Image( TargetHandler ):
+class Image( TargetHandler, WCSHandler ):
     """
     """
     __nature__ = "Image"
 
     PROPERTIES         = ["filename","rawdata","header","var","background"]
-    SIDE_PROPERTIES    = ["wcs","datamask","catalogue","exptime"] # maybe Exptime should just be on flight
+    SIDE_PROPERTIES    = ["datamask","catalogue","exptime"] # maybe Exptime should just be on flight
     DERIVED_PROPERTIES = ["fits","data","sepobjects","backgroundmask","apertures_photos","fwhm"]
 
     # -------------------- #
@@ -353,7 +353,7 @@ class Image( TargetHandler ):
                         variance=variance,
                         background=background)
         # - WCS solution
-        self.set_wcs(wcs)
+        self.set_wcs(wcs, force_it=True)
         
     def reload_data(self, dataslice0, dataslice1,
                     variance=None,background=None,mask=None):
@@ -417,17 +417,10 @@ class Image( TargetHandler ):
                                                                     newtarget.dec))
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
-        
-    def set_wcs(self,wcs,force_it=False):
-        """
-        """
-        if self.has_wcs() and not force_it:
-            raise AttributeError("A wcs solution is already loaded."\
-                    " Set force_it to True if you really known what you are doing")
 
-        if "__nature__" not in dir(wcs) or wcs.__nature__ != "WCS":
-            raise TypeError("The given wcs solution is not a astrobject WCS instance")
-        self._side_properties["wcs"] = astrometry.get_wcs(wcs)
+    def set_wcs(self,wcs,force_it=False):
+        """ Attach a wcs solution to the current object """
+        super(Image, self).set_wcs(wcs, force_it=force_it)
         self.wcs.set_offset(*self._dataslicing)
         
     def set_catalogue(self,catalogue,force_it=False):
@@ -633,6 +626,73 @@ class Image( TargetHandler ):
                                  aptype=aptype,
                                  subpix=subpix,**kwargs)
 
+    def get_host_aperture(self, scaleup=2.5,
+                          maxradius=30, runits="kpc",
+                          
+                          **kwargs):
+        """ if a target is loaded, this get the aperture of the
+        nearest galaxy following. The aperture photometry follows the
+        shape derived by sep. (see show(show_sepobjects=True))
+        
+        Parameters:
+        ----------
+        scaleup: [float] -optional-
+            blow up of the sep radius to incapsulate the entire galaxy.
+            2.5 is what is displayed in the show(show_sepobjects=True)
+            method.
+
+        // limit about host
+
+        maxradius: [float/None] -optional-
+            Maximum allowed distance for the nearest galaxy to be the "host"
+            If None, no distance test will be made
+            
+        runits: [string, astropy.units] -optional-
+            unit of the maxradius.
+            In addition to the usual astropy units, and kpc,
+            you can use the unit: 'galradius'. which is 'scaleup'*'a'
+            where 'a' is the major axis of the sep object. Remark that
+            5*a is the typical 95% light raduis.
+            
+        Returns
+        -------
+        (float, float, float)
+        """
+        if not self.has_target():
+            raise AttributeError("No 'target' loaded")
+        if not self.has_catalogue():
+            raise AttributeError("No 'catalogue' loaded (check the download_catalogue() method)")
+        if not self.has_sepobjects():
+            raise AttributeError("No 'sepobjects' loaded (check the sep_extract() method)")
+
+        
+        idx, dist_ = self.sepobjects.get_nearest_idx(self.target.ra, self.target.dec,
+                                              catalogue_idx=False)
+        if maxradius is not None:
+            if runits in ["eff_radius","effradius","galradius","gal_radius","galaxy_radius"]:
+                r_pixels = self.sepobjects.get(["a"],mask=idx)*scaleup*maxradius
+            else:
+                r_pixels = maxradius*self.units_to_pixels(runits)
+            
+            if dist_.value*self.units_to_pixels(dist_.unit) > r_pixels:
+                print "No nearby host identified for %s"%(self.target.name)
+                print " Maximum allowed pixel distance %.1f ; closest detected galaxy %.1f"%(r_pixels, dist_.value*self.units_to_pixels(dist_.unit))
+                return None
+        
+        return np.concatenate(self.get_idx_aperture(idx, scaleup=scaleup, **kwargs))
+    
+    def get_idx_aperture(self, idx, scaleup=2.5, **kwargs):
+        """ give the index [list of] of an sep's object(s)
+        and extract the aperture at this location.
+        
+        """
+        if not self.has_sepobjects():
+            raise AttributeError("sepobjects has not been set. Run sep_extract()")
+        x, y, a, b, theta = self.sepobjects.get(["x","y","a","b","theta"], mask=idx).T
+        return self.get_aperture(x,y, radius=scaleup, runits="pixels",
+                                 ellipse_args=dict(a=a, b=b, theta=theta),
+                                 aptype="ellipse", **kwargs)
+        
     def get_aperture(self,x,y,radius=None,
                      runits="pixels",wcs_coords=False,
                      aptype="circle",subpix=5,
@@ -755,7 +815,7 @@ class Image( TargetHandler ):
             if np.asarray([k is None for k in ellipse_args.values()]).any():
                 raise ValueError("You must set the ellipse arguments 'ellipse_arg'")
             
-            a,b,theta = [annular_args[k] for k in ["a","b","theta"]]
+            a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
             sepout= sep.sum_ellipse(self.data,x,y,a,b,theta,
                                     r_pixels,subpix=subpix,
                                     var=var,gain=gain,**kwargs)
@@ -793,23 +853,8 @@ class Image( TargetHandler ):
         In addition, you have access to the 'psf [==fwhm]' unit"""
         if type(units_) == str and units_.lower() in ["fwhm","psf"]:
             units_ = self.fwhm
-            
-        return self.wcs.units_to_pixels(units_,target=self.target)
-    
-            
-    def pixel_to_coords(self,pixel_x,pixel_y):
-        """get the coordinate (ra,dec; degree) associated to the given pixel (x,y)"""
-        if self.has_wcs() is False:
-            raise AttributeError("no wcs solution loaded.")
-        pixelsoffset = self._dataoffset
-        return self.wcs.pix2world(pixel_x,pixel_y)
 
-    def coords_to_pixel(self,ra,dec):
-        """Return the pixel (x,y) associated to the given ra,dec (degree) coordinate"""
-        if self.has_wcs() is False:
-            raise AttributeError("no wcs solution loaded.")
-        # Remark the np.asarray are only required by the astLib wcs solution
-        return np.asarray(self.wcs.world2pix(ra,dec))
+        return super(Image, self).units_to_pixels(units_, target=self.target)
 
     # ------------------- #
     # - SEP Tools       - #
@@ -1412,16 +1457,6 @@ class Image( TargetHandler ):
     def has_var(self):
         return False if self.var is None \
           else True
-
-    # ------------      
-    # -- wcs tools
-    @property
-    def wcs(self):
-        return self._side_properties["wcs"]
-    
-    def has_wcs(self):
-        return False if self.wcs is None \
-          else True
           
     @property
     def pixel_size_deg(self):
@@ -1462,7 +1497,6 @@ class Image( TargetHandler ):
     def has_catalogue(self):
         return False if self.catalogue is None\
           else True
-
     
     # FWHM
     @property
