@@ -81,7 +81,7 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5.
     
     cat = SDSSCatalogue(empty=True)
     cat.create(t.columns,None,
-               key_class="cl",value_star=6,
+               key_class="cl",value_star=6,key_id="objID",
                key_ra="RAJ2000",key_dec="DEJ2000")
     return cat
 
@@ -99,7 +99,7 @@ class SDSSCatalogue( Catalogue ):
         """
         """
         self.__build__(data_index=2,key_mag=key_mag,
-                       key_magerr=key_magerr,
+                       key_magerr=key_magerr,key_id="objID",
                        key_ra=key_ra,key_dec=key_dec)
         if empty:
             return

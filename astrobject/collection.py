@@ -5,7 +5,8 @@
 """This module contain the collection of astrobject"""
 import numpy as np
 import warnings
-from astropy import coordinates, table
+from astropy import coordinates, table, units
+import matplotlib.pyplot as mpl
 
 from .baseobject import BaseObject, TargetHandler
 from .photometry import get_photopoint
@@ -67,7 +68,10 @@ class BaseCollection(BaseObject):
     # ----------------- #
     # - Getter        - #
     # ----------------- #
-
+    def get_id(self, containing):
+        """ returns all the id containing the 'containing'
+        part within their text """
+        return [id_ for id_ in self.list_sources if containing in id_]
     # ----------------- #
     # - Setter        - #
     # ----------------- #
@@ -162,7 +166,7 @@ class ImageCollection( Collection ):
     """
     """
     PROPERTIES         = []
-    SIDE_PROPERTIES    = ["catalogue"]
+    SIDE_PROPERTIES    = ["catalogue", "hostcollection"]
     DERIVED_PROPERTIES = []
     
     def __init__(self,images=None,empty=False,catalogue=None):
@@ -365,12 +369,6 @@ class ImageCollection( Collection ):
     # --------------------- #
     # - Get Extraction    - #
     # --------------------- #
-    def get_photopoints(self,ra,dec,radius, runits="arcsec",
-                        ids=None):
-        """
-        """
-        idused = self.list_id if ids is None else\
-          [ids] if "__iter__" not in dir(ids) else ids
             
           
     # --------------------- #
@@ -476,14 +474,7 @@ class ImageCollection( Collection ):
         -------
         PhotoPointCollection
         """
-        if not onflight:
-            ids = self.get_target_ids(target=target) if HAS_SHAPELY else self.list_id
-            images = [self.get_image(_id,load_catalogue=False)
-                      for _id in ids]
-        else:
-            target_imcoll = self.get_target_collection(target=target)
-            images = [target_imcoll.get_image(_id,load_catalogue=False)
-                      for _id in target_imcoll.list_id]
+        images = self.get_target_images(target=target, onflight=onflight)
         
         photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius=radius,runits=runits,
                                             **kwargs) for image_ in images])
@@ -496,7 +487,42 @@ class ImageCollection( Collection ):
             
         return photopoints
 
-    def get_host_photopoints(self, scaleup=2.5, target=None, onflight=False,**kwargs):
+    def get_target_images(self, target=None, onflight=False):
+        """
+
+        Parameters
+        ----------
+        target: [None/ AstroTarget]   If no target is given and a target has been set
+                                      (set_target) the current target will be used.
+                                      If you give here a target, it will use it *without*
+                                      changing the current target.
+                                      -> Error
+                                      This method raise a ValueError is no target accessible.
+                                      (see self.get_target_ids)
+
+        onflight: [bool]              Use this to avoid to load the images in the current instance
+                                      If True, this will instead load a copy of the current instance
+                                      using 'get_target_collection' which will then be delaited.
+                                      -> Use this to save cach-memory once the method is finished.
+
+        Returns
+        -------
+        list of images
+        """
+        if not onflight:
+            ids = self.get_target_ids(target=target) if HAS_SHAPELY else self.list_id
+            images = [self.get_image(_id,load_catalogue=False)
+                      for _id in ids]
+        else:
+            target_imcoll = self.get_target_collection(target=target)
+            images = [target_imcoll.get_image(_id,load_catalogue=False)
+                      for _id in target_imcoll.list_id]
+            del target_imcoll
+        return images
+
+    def get_host_photopoints(self, scaleup=2.5, reference_id=None,
+                             target=None, prop_hostsearch={},
+                             verbose=False,**kwargs):
         """
         This modules enables to get a new ImageCollection containing only
         the images corresponding to the given target (target in the image FoV).
@@ -512,11 +538,15 @@ class ImageCollection( Collection ):
                                       This method raise a ValueError is no target accessible.
                                       (see self.get_target_ids)
 
-        onflight: [bool]              Use this to avoid to load the images in the current instance
-                                      If True, this will instead load a copy of the current instance
-                                      using 'get_target_collection' which will then be delaited.
-                                      -> Use this to save cach-memory once the method is finished.
+        idx_hostprop: [idx / None] -optional-
         
+              TO BE DONE
+        
+        prop_hostsearch: [dict] -optional-
+
+              TO BE DONE
+
+                      
         -- other options --
         
         kwargs goes to get_thost_photopoints (-> get_aperture), including notably:
@@ -527,31 +557,14 @@ class ImageCollection( Collection ):
         -------
         PhotoPointCollection
         """
-        if not self.has_catalogue():
-            self.download_catalogue()
-
-        if not onflight:
-            ids = self.get_target_ids(target=target) if HAS_SHAPELY else self.list_id
-            images = [self.get_image(_id,load_catalogue=True)
-                      for _id in ids]
-        else:
-            target_imcoll = self.get_target_collection(target=target)
-            images = [target_imcoll.get_image(_id,load_catalogue=True)
-                      for _id in target_imcoll.list_id]
-
-        [image_.sep_extract() for image_ in images if not image_.has_sepobjects()]
-
-        photopoints = PhotoPointCollection(photopoints=[image_.get_host_photopoint(scaleup=scaleup,**kwargs)
-                                                        for image_ in images])
-        photopoints.set_target(self.target)
-        # ------------------------------
-        # - Shall we delete the files ?
-        if onflight:
-            del images
-            del target_imcoll
+        if target is not None:
+            self.set_target(target)
             
-        return photopoints
-
+        if reference_id is not None:
+            self.host.set_reference_image(reference_id, fetch_hostid=True, **prop_hostsearch)
+            
+        return self.host.get_photopoints(scaleup=scaleup, verbose=verbose, **kwargs)
+    
     # ========================== #
     # = Set                    = #
     # ========================== #
@@ -698,11 +711,15 @@ class ImageCollection( Collection ):
             }
         return ID
         
-    def _load_image_(self,id,**kwargs):
+    def _load_image_(self,id,set_target=True, set_catalogue=True, **kwargs):
         """
         """
         self.images[id]["image"] = inst.get_instrument(self.images[id]["file"],**kwargs)
-        
+        if self.has_target():
+            self.images[id]["image"].set_target(self.target)
+        if self.has_catalogue():
+            self.images[id]["image"].set_catalogue(self.catalogue.copy())
+            
     # ========================== #
     # = Properties             = #
     # ========================== #    
@@ -725,6 +742,23 @@ class ImageCollection( Collection ):
     def has_catalogue(self):
         return not self.catalogue is None 
 
+    # ------------------ #
+    # - Host Tricks    - #
+    # ------------------ #
+    @property
+    def host(self):
+        """ HostImageCollection linked to the current instance.
+        It requires that this istance has a target set."""
+        if self._side_properties["hostcollection"] is None:
+            if not self.has_target():
+                raise AttributeError(" You need to set a target to have access to the host collection")
+            if not self.has_catalogue():
+                self.download_catalogue()
+                
+            host = HostImageCollection(empty=True)
+            host.link_to(self)
+            self._side_properties["hostcollection"] = host
+        return self._side_properties["hostcollection"]
     # ------------------ #
     # - On flight prop - #
     # ------------------ #
@@ -754,6 +788,308 @@ class ImageCollection( Collection ):
             fov = d["wcs"].contours if i == 0 else\
               fov.union(d["wcs"].contours)
         return fov
+
+#######################################
+#                                     #
+# Host Associated Image collection    #
+#                                     #
+#######################################
+class HostImageCollection( ImageCollection ):
+    """ """
+    PROPERTIES         = ["refid"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = ["ref_ellipsedata","hostcatid","host_catindex"]
+
+    # ================== #
+    # = Main Methods   = #
+    # ================== #
+    def link_to(self, imagecollection):
+        """ anchor an Image collection to this object """
+        if ImageCollection not in imagecollection.__class__.__mro__:
+            raise ValueError("The given imagecollection must be (or inherite from) an astrobject's ImageCollection")
+        
+        self._properties["handler"]     = imagecollection._handler
+        if imagecollection.target is not None:
+            self.set_target(imagecollection.target)
+        if imagecollection.catalogue is not None:
+            self.set_catalogue(imagecollection.catalogue)
+        
+    # ---------- #
+    # - SETTER - #
+    # ---------- #
+    def set_reference_image(self, id_, fetch_hostid=False, **kwargs):
+        """
+        **kwargs goes to the fetch_catalogue_id() method
+        """
+        if id_ not in self.list_id:
+            raise ValueError("%s is not a known id. These are: "+", ".join(self.list_id))
+        
+        self._properties["refid"] = id_
+        if fetch_hostid:
+            self.fetch_catalogue_id(**kwargs)
+
+    def fetch_catalogue_id(self, refid=None,
+                          radius=30, runits="kpc",
+                          max_galdist=2.5, verbose=True):
+        """ look inside the reference image for the host ID.
+        Once identified, access it throught the property 'host_catid'
+
+        Parameters
+        ----------
+        refid: [None or any image id] -optional-
+            Directly change/set the reference id.
+            this will only be made if this is not None
+
+        // host search optional
+        
+        radius: [float/None] -optional-
+            Distance used for the first galaxy search.
+            
+        runits: [string, astropy.units] -optional-
+            unit of the radius.
+
+        max_galdist: [float/None] -optional-
+            Size (in ellipse radius) above which the target is
+            assumed too far away for the nearest host and is consequently
+            assumed hostless.
+            Set this to None to ignore this test.
+            
+        Returns
+        -------
+        """
+        if refid is not None:
+            self.set_reference_image(refid)
+        
+        # refimage will load automatically
+        # raise AttributeError if id not set
+        if not self.refimage.has_sepobjects():
+            self.refimage.sep_extract()
+            
+        host_idx = self.refimage.sepobjects.get_host_idx(self.target,
+                                                         radius=radius, runits=runits,
+                                                         max_galdist=max_galdist)
+        # = No Host
+        if host_idx is None:
+            message = "No host identified for %s. Used reference ID %s"%(self.target.name, self.refid)
+            if verbose: print(message)
+            warnings.warn(message)
+            return
+        
+        # = Fetch catalog index
+        catidx  = self.refimage.sepobjects.index_to_catindex([host_idx])
+        if len(catidx)>0:
+            catidx = [[id_] for id_ in catidx if not self.refimage.catalogue.starmask[id_]][0]
+        if len(catidx)==0:
+            # - this should not happen
+            raise ValueError("No galaxy associated to the target in image band %s"%band_hostprop)
+
+        self._derived_properties["host_catindex"] = catidx
+        self._derived_properties["hostcatid"]     = self.refimage.catalogue.idx_to_id(catidx)
+        
+    # ---------- #
+    # - GETTER - #
+    # ---------- #
+    def get_host_ellipse(self, id_):
+        """
+        Returns
+        -------
+        [x,y,a,b,theta], bool (False means used default a,b,theta)
+        """
+        self._test_id_(id_)
+
+        if not self.has_refid():
+            raise AttributeError("No reference image has been set. Do so.")
+        if self.host_catid is None:
+            raise AttributeError("No host has been found in the reference image.")
+        
+        
+        if self.images[id_]["image"] is None:
+            self._load_image_(id_)
+        if not self.images[id_]["image"].has_sepobjects():
+            self.images[id_]["image"].sep_extract()
+            
+        
+        catidx = self.images[id_]["image"].catalogue.id_to_idx(self.host_catid)
+        # = has the data
+        if catidx not in self.images[id_]["image"].sepobjects.catmatch["idx_catalogue"]:
+            x,y = self.images[id_]["image"].coords_to_pixel(*np.asarray(self.images[id_]["image"].catalogue.get(["ra","dec"],
+                                                                            mask= catidx)).T[0]
+                                            )
+            return np.concatenate([[x],[y],self.ref_host_ellipse[2:]]), False
+        
+        # = has the data
+        idx = self.images[id_]["image"].sepobjects.catindex_to_index(catidx)
+        return self.images[id_]["image"].sepobjects.get(["x","y","a","b","theta"], mask=idx)[0], True
+    
+    def get_photopoints(self, scaleup=2.5,refid=None,
+                        verbose=False,**kwargs):
+        """
+        This modules enables to get a new ImageCollection containing only
+        the images corresponding to the given target (target in the image FoV).
+
+        Parameters:
+        -----------
+
+
+        onflight: [bool]              Use this to avoid to load the images in the current instance
+                                      If True, this will instead load a copy of the current instance
+                                      using 'get_target_collection' which will then be delaited.
+                                      -> Use this to save cach-memory once the method is finished.
+                      
+        -- other options --
+        
+        kwargs goes to get_thost_photopoints (-> get_aperture), including notably:
+               aptype, subpix, ellipse_args, annular_args
+
+           
+        Return:
+        -------
+        PhotoPointCollection
+        """
+        # ---------------------
+        # - Is instance ready?
+        # Catalogue
+        if not self.has_catalogue():
+            self.download_catalogue()
+        # Reference ID
+        if refid is not None:
+            self.set_reference_image(refid)
+        if not self.has_refid():
+            raise AttributeError("You need to set (or provide) a reference image")
+
+        
+        # ---------------------
+        # - Get the PhotoPoints
+        # No Host identified
+        if self.host_catid is None:
+            photopoints = PhotoPointCollection(empty=True)
+        # Host identified
+        else:
+            pps= []
+            for id_ in self.list_id:
+                [x,y,a,b,theta], notforced = self.get_host_ellipse(id_)
+                if verbose:
+                    print "x,y position", x,y
+                    print "a,b,theta, ",a,b,theta
+                    print "band, ", self.images[id_]["image"].bandname
+                    print "ellipse param from reference image", not notforced
+    
+                pps.append(self.images[id_]["image"].get_photopoint(x, y, radius=scaleup, runits="pixels",
+                                                     ellipse_args=dict(a=a, b=b, theta=theta),
+                                                     aptype="ellipse", getlist=True,**kwargs))
+                
+            photopoints = PhotoPointCollection(photopoints=pps)
+        
+        # - Set the target
+        photopoints.set_target(self.target)
+        
+        return photopoints
+
+    # ------------ #
+    # - PLOTTER  - #
+    # ------------ #
+    def show(self, fig=None, savefile=None, show=True,
+             scaleup=2.5, ellipse_prop={}, id_to_show=None,
+              **kwargs):
+        """
+        """
+        from matplotlib.patches import Ellipse
+        from astrobject.utils.mpladdon import figout
+        
+        def add_ellipse(ax, host_ellipse, scaleup=2.5, draw=True,**kwargs_):
+            x,y,a,b,theta = host_ellipse
+            prop = kwargs_update({"facecolor":"None", "edgecolor":"k"},**kwargs_)
+            ell= Ellipse([x,y],a*scaleup*2,b*scaleup*2,
+                    theta*units.radian.in_units("degree"),
+                    **prop)
+            ell.set_clip_box(ax.bbox)
+            ax.add_patch(ell)
+            if draw:
+                ax.figure.canvas.draw()
+            return ell
+
+        # -------------
+        # - Input
+        if id_to_show is None:
+            id_to_show = self.list_id
+        ndata = len(id_to_show)
+        # -------------
+        # - Fig & Axes
+        if fig is None:
+            fig = mpl.figure(figsize=[18,10])
+
+        axes = [fig.add_subplot(1,ndata,i+1) for i in range(ndata)]
+
+        # -------------
+        # - Properties
+        show_prop = kwargs_update(dict(show_catalogue=True,show_sepobjects=False,\
+                                       zoomon="target", zoom=30, zunits="kpc"),
+                                       **kwargs)
+        
+        for id_,ax in zip(id_to_show,axes):
+            if self.images[id_]["image"] is None: self._load_image_(id_)
+                
+            self.images[id_]["image"].show(ax =ax, show=False, **show_prop)
+            ellip_data, notforced = self.get_host_ellipse(id_)
+            add_ellipse(ax, ellip_data, ls= "-" if notforced else "--",
+                        **kwargs_update({"lw":2},**ellipse_prop))
+
+            ax.text(0.05,0.95, "band: %s"% self.images[id_]["image"].bandname, 
+                    fontsize="large",va="top",ha="left",
+                    transform=ax.transAxes, bbox=dict(facecolor='w', alpha=0.9))
+            
+        # = Titles
+        fig.suptitle("%s ID of %s-host: %s"%(self.catalogue.source_name, self.target.name, self.host_catid[0]), 
+                    y=0.90, va="top",fontsize="x-large")
+        
+        fig.figout(savefile=savefile, show=show)
+        
+    # ================== #
+    # =  Properties    = #
+    # ================== #
+
+    # = Reference
+    
+    @property
+    def refid(self):
+        """ The id defined as reference image. """
+        return self._properties["refid"]
+
+    def has_refid(self):
+        """ test if a reference id has been set."""
+        return self.refid is not None
+
+    @property
+    def ref_host_ellipse(self):
+        """ """
+        return self.get_host_ellipse(self.refid)[0]
+    
+    @property
+    def refimage(self):
+        """ """
+        if not self.has_refid():
+            raise AttributeError("You did not set the refid")
+        if self.images[self.refid]["image"] is None:
+            self._load_image_(self.refid)
+            
+        return self.images[self.refid]["image"]
+
+    @property
+    def host_catid(self):
+        """ """
+        return self._derived_properties["hostcatid"]
+    
+    @property
+    def _ref_ellipsedata(self):
+        """ """
+        if self._derived_properties["ref_ellipsedata"] is None:
+            self._derived_properties["ref_ellipsedata"] = {}
+                
+        return self._derived_properties["ref_ellipsedata"]
+    
+
+    
+
     
 #######################################
 #                                     #
@@ -943,7 +1279,6 @@ class PhotoPointCollection( Collection ):
 
         # -- Setting -- #
         from .utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
         self._plot = {}
         
         if ax is None:
@@ -974,7 +1309,6 @@ class PhotoPointCollection( Collection ):
                 cmap="jet",show=True,**kwargs):
         """
         """
-        import matplotlib.pyplot as mpl
         from .utils.mpladdon import figout
         self._plot = {}
         # --------------------

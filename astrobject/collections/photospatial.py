@@ -254,7 +254,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
 
     # -- Catalogue <-> PhotoMap
     def match_catalogue(self,catalogue=None,
-                        force_it=False, deltadist=1*units.arcsec,
+                        force_it=False, deltadist=5*units.arcsec,
                         **kwargs):
         """
         This methods enable to attached a given sepobject entry
@@ -388,6 +388,87 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
     # - GETTER    - #
     # ------------- #
     # -- Access Index
+    def get_host_idx(self, target=None, coords=None, 
+                     radius=30, runits="kpc",
+                     max_galdist=2.5):
+
+        """
+        It first searches galaxies in a given radius and then returns
+        the index of the one minimizing the elliptical radius (not necesseraly
+        the nearest in angular distance).
+
+        Parameters
+        ----------
+
+        // location
+        
+        target or coords: [astrobject.Target or [ra,dec]] -one required-
+             provide the target location
+             
+        // search options
+        
+        radius: [float/None] -optional-
+            Distance used for the first galaxy search.
+            
+        runits: [string, astropy.units] -optional-
+            unit of the radius.
+
+        max_galdist: [float/None] -optional-
+            Size (in ellipse radius) above which the target is
+            assumed too far away for the nearest host and is consequently
+            assumed hostless.
+            Set this to None to ignore this test.
+
+        Returns
+        -------
+        [int] / None # None if no host detected
+        """
+        # --- input test --- #
+        if target is None:
+            if coords is None:
+                raise ValueError("Both target and coords are None. Give one.")
+            ra,dec = coords
+        else:
+            ra,dec = target.ra,target.dec
+        if ra is None or dec is None:
+            raise ValueError("Ra and/or Dec are/is None")
+
+        # -- distances -- #
+        from scipy.spatial import distance
+        idxaround,idxaround_dist = self.get_idx_around(ra, dec,
+                                                       radius*self.units_to_pixels(runits, target=target)*self.wcs.pix_indeg.value,
+                                                       runits="degree")
+        # --- No host around --- #
+        if len(idxaround) == 0:
+            print("No detected host within the given search limits: ", radius, runits)
+            return None
+        
+        x,y,a,b,theta = self.get(["x","y","a","b","theta"], mask = idxaround).T
+        pix_x, pix_y = self.coords_to_pixel(ra,dec)
+
+        dist = np.asarray([[idx_,distance.pdist([[0,0],
+                                                             np.dot(np.asarray([[np.cos(theta[i]), -np.sin(theta[i])],[np.sin(theta[i]), np.cos(theta[i])]]).T,
+                                                                    [pix_x-x[i],pix_y-y[i]])], # coords_aligned = rotation matrix . coord_xy
+                                                            "wminkowski", w=[1/(a[i]*2.5),1/(b[i]*2.5)])]
+                                    for i,idx_ in enumerate(idxaround)
+                                        if idx_ in self.catmatch["idx"] and \
+                                        not (self.catalogue.has_starmask() and np.all(self.catalogue.starmask[self.index_to_catindex([idx_])]))
+                                    ]).T
+        if len(dist) == 0:
+            print("No detected host within the given search limits: ", radius, runits)
+            return None
+        
+        # this is the composition of dist
+        idx, dist_in_radius = dist
+
+        i_nearest = np.argmin(dist_in_radius)
+        if max_galdist is not None and dist_in_radius[i_nearest]>max_galdist:
+            print "No nearby host identified"+(" for %s"%(target.name) if target is not None else "")
+            print " Maximum allowed galaxy radius %.1f ; nearest galaxy [in its radius] %.1f"%(max_galdist, dist_in_radius[i_nearest])
+            return None
+        return idx[i_nearest]
+
+            
     def get_nearest_idx(self, ra, dec, wcs_coords=True,
                         catmatch=True, catalogue_idx=False,
                         **kwargs):
@@ -606,7 +687,8 @@ class SepObject( PhotoMap ):
     # -------------------------- #
     # -  Plotting tools        - #
     # -------------------------- #
-    def display(self,ax,draw=True,apply_catmask=True,
+    def display(self,ax, scaleup=2.5,draw=True,
+                apply_catmask=True,
                 stars_only=False, isolated_only=False,
                 catmag_range=[None,None]):
         """ Show the ellipses of the sep extracted sources """
@@ -614,7 +696,7 @@ class SepObject( PhotoMap ):
           self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
                             catmag_range=catmag_range, cat_indexes=False)
                 
-        ells = self.get_detected_ellipses(scaleup=2.5, mask=mask,
+        ells = self.get_detected_ellipses(scaleup=scaleup, mask=mask,
                                           contours=False)
         for ell in ells:
             ell.set_clip_box(ax.bbox)
@@ -708,10 +790,19 @@ class SepObject( PhotoMap ):
     # ----------- #
     #   GETTER    #
     # ----------- #
-    def get_skycoords(self, use_peakposition=True):
+    def get_skycoords(self, position="average"):
         """ """
-        xkey,ykey = ["x","y"] if not use_peakposition else ["xpeak","ypeak"]
-        ra,dec = self.pixel_to_coords(*self.get([xkey,ykey]).T).T
+        x,y,xpeak,ypeak = self.get(["x","y","xpeak","ypeak"]).T
+        if position.lower() == "center":
+            ra,dec = self.pixel_to_coords(x,y).T
+        elif position.lower() == "peak":
+            ra,dec =self.pixel_to_coords(xpeak,ypeak).T 
+        elif position.lower() in ["mean", "average"]:
+            ra,dec = self.pixel_to_coords(np.mean([x, xpeak], axis=0),np.mean([y, ypeak], axis=0)).T
+        else:
+            raise ValueError("Unknown matching position %s"%position)
+        
+            
         return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
 
     # -------------------------- #

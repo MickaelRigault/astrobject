@@ -627,12 +627,17 @@ class Image( TargetHandler, WCSHandler ):
                                  subpix=subpix,**kwargs)
 
     def get_host_aperture(self, scaleup=2.5,
-                          maxradius=30, runits="kpc",
-                          
+                          radius=30, runits="kpc",
+                          max_galdist=2.,
                           **kwargs):
         """ if a target is loaded, this get the aperture of the
-        nearest galaxy following. The aperture photometry follows the
-        shape derived by sep. (see show(show_sepobjects=True))
+        nearest galaxy. This is build upon the sepobject's get_host_idx() method.
+        It first searches galaxies in a given radius and then returns
+        the index of the one minimizing the elliptical radius (not necesseraly
+        the nearest in angular distance).
+        
+        The aperture photometry follows the shape derived by sep.
+        (see show(show_sepobjects=True))
         
         Parameters:
         ----------
@@ -641,18 +646,19 @@ class Image( TargetHandler, WCSHandler ):
             2.5 is what is displayed in the show(show_sepobjects=True)
             method.
 
-        // limit about host
+        // host search
 
-        maxradius: [float/None] -optional-
-            Maximum allowed distance for the nearest galaxy to be the "host"
-            If None, no distance test will be made
+        radius: [float/None] -optional-
+            Distance used for the first galaxy search.
             
         runits: [string, astropy.units] -optional-
-            unit of the maxradius.
-            In addition to the usual astropy units, and kpc,
-            you can use the unit: 'galradius'. which is 'scaleup'*'a'
-            where 'a' is the major axis of the sep object. Remark that
-            5*a is the typical 95% light raduis.
+            unit of the radius.
+
+        max_galdist: [float/None] -optional-
+            Size (in ellipse radius) above which the target is
+            assumed too far away for the nearest host and is consequently
+            assumed hostless.
+            Set this to None to ignore this test.
             
         Returns
         -------
@@ -666,18 +672,8 @@ class Image( TargetHandler, WCSHandler ):
             raise AttributeError("No 'sepobjects' loaded (check the sep_extract() method)")
 
         
-        idx, dist_ = self.sepobjects.get_nearest_idx(self.target.ra, self.target.dec,
-                                              catalogue_idx=False)
-        if maxradius is not None:
-            if runits in ["eff_radius","effradius","galradius","gal_radius","galaxy_radius"]:
-                r_pixels = self.sepobjects.get(["a"],mask=idx)*scaleup*maxradius
-            else:
-                r_pixels = maxradius*self.units_to_pixels(runits)
-            
-            if dist_.value*self.units_to_pixels(dist_.unit) > r_pixels:
-                print "No nearby host identified for %s"%(self.target.name)
-                print " Maximum allowed pixel distance %.1f ; closest detected galaxy %.1f"%(r_pixels, dist_.value*self.units_to_pixels(dist_.unit))
-                return None
+        idx = self.sepobjects.get_host_idx(self.target, radius=radius,
+                                            runits=runits, max_galdist=max_galdist)
         
         return np.concatenate(self.get_idx_aperture(idx, scaleup=scaleup, **kwargs))
     
@@ -688,6 +684,9 @@ class Image( TargetHandler, WCSHandler ):
         """
         if not self.has_sepobjects():
             raise AttributeError("sepobjects has not been set. Run sep_extract()")
+        if "__iter__" not in dir(idx):
+            idx = [idx]
+            
         x, y, a, b, theta = self.sepobjects.get(["x","y","a","b","theta"], mask=idx).T
         return self.get_aperture(x,y, radius=scaleup, runits="pixels",
                                  ellipse_args=dict(a=a, b=b, theta=theta),
@@ -946,7 +945,7 @@ class Image( TargetHandler, WCSHandler ):
             # is consistant between the sepobject and this instance (same catalogue)
             self.sepobjects.set_catalogue(self.catalogue, reset=False)
             if match_catalogue:
-                matchingdist = np.max([1,
+                matchingdist = np.max([3,
                                        1./self.units_to_pixels("arcsec").value])*units.arcsec \
                                        if matching_distance is None else matching_distance
                              

@@ -54,7 +54,7 @@ class Instrument( Image ):
         
     @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
     def get_photopoint(self,x,y,radius=None,runits="pixels",
-                       aptype="circle",wcs_coords=False,
+                       aptype="circle",wcs_coords=False,getlist=False,
                        **kwargs):
         #
         # Be returns a PhotoPoint
@@ -64,13 +64,13 @@ class Instrument( Image ):
                                                             **kwargs))
         # ------------------
         # - One Photopoint
-        if "__iter__" not in dir(pp):
+        if "__iter__" not in dir(pp) or len(pp)==1 or getlist:
             return pp
         
         # -----------------------
         # - Several Photopoints\
         from ..collections import get_photomap
-        return get_photomap(pps,np.asarray([x,y]).T,
+        return get_photomap(pp,np.asarray([x,y]).T,
                         wcs=self.wcs,
                         catalogue=self.catalogue.get_subcatalogue(fovmask=True, catmag_range=[1,30]) \
                           if self.has_catalogue() else None,
@@ -190,12 +190,13 @@ class Catalogue( WCSHandler ):
 
     def __build__(self,data_index=0,
                   key_mag=None,key_magerr=None,
-                  key_ra=None,key_dec=None):
+                  key_ra=None,key_dec=None, key_id=None):
         """
         """
         super(Catalogue,self).__build__()
         self._build_properties = dict(
             data_index = data_index,
+            key_id=key_id
             )
         self.set_mag_keys(key_mag,key_magerr)
         self.set_coord_keys(key_ra,key_dec)
@@ -500,9 +501,36 @@ class Catalogue( WCSHandler ):
                              rename_duplicate="ingalaxy" in self.data.keys())
         
     # --------------------- #
+    #  convertion methods   #
+    # --------------------- #
+    def id_to_idx(self, id_, mask=None, infov=True):
+        """ uses get_value_idx to return the idx of the given id.
+
+        development note: id entry depends on the catalogue source.
+
+        Returns
+        -------
+        [int]
+        """
+        if "key_id" not in self._build_properties.keys() or self._build_properties["key_id"] is None:
+            raise AttributeError("no 'key_id' set in the _build_properties for this catalogue")
+        
+        return self.get_value_idx(self._build_properties["key_id"], id_,
+                                  mask=mask, infov=infov)
+
+    def idx_to_id(self, idx, **kwargs):
+        """ """
+        if "key_id" not in self._build_properties.keys() or self._build_properties["key_id"] is None:
+            raise AttributeError("no 'key_id' set in the _build_properties for this catalogue")
+        if "__iter__" not in dir(idx):
+            idx = [idx]
+            
+        return self.get(self._build_properties["key_id"], idx, **kwargs)
+
+    # --------------------- #
     # Get Methods           #
     # --------------------- #
-    def get(self,key,mask=None):
+    def get(self, key, mask=None, infov=True):
         """
         get any 'key' known by the instance (self.`key`) or more generally
         in the data. You can mask the returned data (*CAUTION* some values
@@ -519,12 +547,33 @@ class Catalogue( WCSHandler ):
             return [self.get(key_,mask=mask) for key_ in key]
         
         if key in dir(self):
-            val_ = eval("self.%s"%key)
+            val_ = eval("self.%s"%key) if infov else eval("self._%s"%key)
         elif key in self.data.keys():
-            val_ = self.data[key]
+            val_ = self.data[key][self.fovmask] if infov else self.data[key]
         else:
             raise ValueError("Unknown key %s"%key)
+        
         return val_ if mask is None else val_[mask]
+    
+    def get_value_idx(self, key, value, mask=None, infov=True):
+        """ get the index of the entry for which `key`'s value is `value`
+        If you provide a mask, this will be the index of the mask entry that
+        are True.
+
+        Parameters
+        ----------
+        key: [string]
+            Entry to search
+        value: [any]
+            value that will be tested.
+        Returns
+        -------
+        int / None
+        """
+        values = self.get(key, mask=mask, infov=infov)
+        id_ = np.where(values==value)
+        
+        return None if len(id_)==0 else id_[0] if len(id_)==1 else id_
     
     def get_subcatalogue(self, contours=None, catmag_range=[None,None],
                          stars_only=False, isolated_only=False,

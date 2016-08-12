@@ -70,9 +70,9 @@ def get_massestimator(photopoints=None,samplers=None,dist_param=None,
     # ------------- #
     if photopoints is not None:
         photopoint_g, photopoint_i = photopoints
-        if "i" not in photopoint_i.bandname:
+        if photopoint_i is not None and "i" not in photopoint_i.bandname:
             warnings.warn("The PhotoPoint with the bandname %s is used as a 'i' band photopoint for the MassEstimator"%photopoint_i.bandname)
-        if "g" not in photopoint_g.bandname:
+        if photopoint_g is not None and "g" not in photopoint_g.bandname:
             warnings.warn("The PhotoPoint with the bandname %s is used as a 'g' band photopoint for the MassEstimator"%photopoint_g.bandname)
             
         return MassEstimate(photopoint_g, photopoint_i,**kwargs)
@@ -263,7 +263,8 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     DERIVED_PROPERTIES = ["gi_samplers", "gi_priored_sample", "samplers_noprior"]
     
     def __init__(self, ppoint_g=None, ppoint_i=None,
-                 nsamplers=10000, relation_dispersion=0.1, empty=False):
+                 nsamplers=10000, relation_dispersion=0.1,
+                 target=None,empty=False):
         """ """
         self.__build__()
         if empty:
@@ -273,7 +274,10 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         
         self.taylordispersion = relation_dispersion
         self.nsamplers = nsamplers
-        
+
+        if target is not None:
+            self.set_target(target)
+            
     # =================== #
     # = Main Methods    = #
     # =================== #
