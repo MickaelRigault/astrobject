@@ -2005,8 +2005,10 @@ class PhotoPoint( TargetHandler ):
         """
         if self.bandname is None:
             raise AttributeError("No bandname given")
-        
-        from sncosmo import get_bandpass
+        try:
+            from sncosmo import get_bandpass
+        except ImportError:
+            raise ImportError("sncosmo is not installed. Could not access the bandpass")
         return get_bandpass(self.bandname)
         
     # ------------

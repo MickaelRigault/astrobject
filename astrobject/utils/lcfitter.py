@@ -21,7 +21,12 @@ import os
 from itertools import combinations
 from collections import OrderedDict as odict
 
-import sncosmo
+try:
+    import sncosmo
+except ImportError:
+    warnings.warn("sncosmo is not installed. This will limit some functionalities.")
+    print("sncosmo is not installed. This will limit some functionalities.")
+    
 from astropy.cosmology import FlatLambdaCDM
 from astropy.table import Table, Column
 
@@ -99,6 +104,7 @@ class LCFitter( BaseObject ):
             # from hacked_sncosmo_fitting import fit_lc_hacked
             raise NotImplementedError("Model covariance coming soon.")
 
+        
         param0 = self._get_current_model_param_()
         self._derived_properties["raw_fit"] = []
         self._derived_properties["idx_good"] = []

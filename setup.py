@@ -13,7 +13,7 @@ MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/astrobject/'
 LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/astrobject/tarball/0.3'
-VERSION = '0.3.4'
+VERSION = '0.3.5'
 
 try:
     from setuptools import setup, find_packages
@@ -39,10 +39,6 @@ def check_dependencies():
        import sep
    except ImportError:
        install_requires.append('sep')
-   try:
-       import sncosmo
-   except ImportError:
-       install_requires.append('sncosmo')
 
    return install_requires
 

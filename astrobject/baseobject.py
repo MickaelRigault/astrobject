@@ -826,7 +826,7 @@ class AstroTarget( BaseObject ):
             m = SFD98Map(mapdir=self._sfd98_dir)
             self.set_mwebmv(m.get_ebv((self.ra, self.dec)), force_it=True)
         except IOError:
-            warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map driectory.")
+            warnings.warn("MW E(B-V) could not be fetched. Please set sfd98_dir to the map directory (and check that sncosmo is installed).")
                 
             
     def _check_literature_name_(self,verbose=False):
