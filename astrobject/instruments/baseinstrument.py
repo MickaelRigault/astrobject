@@ -432,7 +432,7 @@ class Catalogue( WCSHandler ):
         super(Catalogue, self).set_wcs(wcs, force_it=force_it)
         
         if update_fovmask:
-            if self.has_wcs():
+            if self.has_wcs() and shape.HAS_SHAPELY:
                 self.set_fovmask(wcs=self.wcs,update=False)
             else:
                 print "None wcs"
