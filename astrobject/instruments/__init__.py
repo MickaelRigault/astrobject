@@ -8,7 +8,9 @@ import hst
 import stella
 import ptf
 import ztf
+# import lris # to be finished
 import catalogues
+
 
 __all__ = ["instrument","baseinstrument",
            "catalogues",

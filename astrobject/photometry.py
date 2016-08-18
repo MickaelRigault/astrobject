@@ -51,23 +51,12 @@ def get_image(filename=None,astrotarget=None,**kwargs):
     return Image(filename,astrotarget=astrotarget,
                  **kwargs)
                  
-def photopoint(lbda=None,flux=None,var=None,
-               zp=None,bandname=None,
-               mjd=None,source=None,
-               instrument_name=None,**kwargs):
-    
-    print "DECREPATED: photopoint->get_photopoint"
-    return get_photopoint(lbda=lbda,flux=flux,var=var,
-                          zp=zp,bandname=bandname,
-                          mjd=mjd,source=source,
-                          instrument_name=instrument_name,**kwargs)
-
 def get_photopoint(lbda=None,flux=None,var=None,
                    zp=None,bandname=None,
                    mjd=None,source=None,
                    instrument_name=None,**kwargs):
-    """
-    Get the basic object containing  photometric point information
+    """ object containing photometric point information based on
+    flux and effective wavelength.
     
     Parameters
     ----------
@@ -1803,6 +1792,12 @@ class PhotoPoint( TargetHandler ):
         self.bandname = bandname
         self._update_()
 
+    def remove_flux(self, flux, var=None):
+        """ this flux quantity will be removed from the current flux"""
+        self._properties["flux"] = self._properties["flux"] - flux
+        if var is not None:
+            self._properties["var"] = self._properties["var"] - var
+        
     def display(self,ax,toshow="flux",function_of_time=False,**kwargs):
         """This method enable to display the current point
         in the given matplotlib axes"""

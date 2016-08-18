@@ -114,6 +114,7 @@ class Instrument( Image ):
     # = Main Methods            = #
     # =========================== #
     def count_to_flux(self,counts):
+        """ converts counts into flux """
         return counts* 10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2)
 
     # =========================== #
@@ -131,10 +132,12 @@ class Instrument( Image ):
     
     @property
     def bandpass(self):
+        """ bandpass object (from sncosmo) based on the bandname """
         return get_bandpass(self.bandname)
     
     @property
     def lbda(self):
+        """ effective wavelength """
         return self.bandpass.wave_eff
 
     # -- Derived values
@@ -148,7 +151,7 @@ class Instrument( Image ):
 
     @property
     def _dataunits_to_electron(self):
-        """The gain converts ADU->electron. The Data are in ADU/s"""
+        """The gain converts ADU->electron. The Data shouls be in ADU/s"""
         return self._gain * self.exposuretime
     
     @property
@@ -173,11 +176,39 @@ class Catalogue( WCSHandler ):
     DERIVED_PROPERTIES = ["fits","naround","naround_nofovcut","contours"]
 
 
-    def __init__(self, catalogue_file=None,empty=False,
+    def __init__(self, catalogue_file=None,
                  data_index=0,
                  key_mag=None,key_magerr=None,
-                 key_ra=None,key_dec=None):
-        """
+                 key_ra=None,key_dec=None, empty=False):
+        """ initialize the calalogue object
+
+        Parameters
+        ----------
+        
+        catalogue_file: [string] -optional-
+            location of a catalogue file.
+
+        empty: [bool] -optional-
+            get an empty object.
+            
+        // settings
+
+        data_index: [int] -optional-
+            the fits file entry where the header containing the data
+            is recorded.
+
+        key_mag, key_magerr: [string, string] -optional-
+            provide the keys associated to the magnitude of the object
+            in the given catalogue.
+            This is necessary to access 'mag'
+
+        key_ra, key_dec: [string, string] -optional-
+            proivde the keys associated to the location (ra and dec)
+            of the entries of the catalogue.
+            There is a default search (for DE/DEC etc.) that should catch
+            any typical case. If not, you should provide it here.
+
+        
         """
         self.__build__(data_index=data_index,
                        key_mag=key_mag,key_magerr=key_magerr,
@@ -209,7 +240,8 @@ class Catalogue( WCSHandler ):
     # - I/O Methods     - #
     # ------------------- #
     def load(self,catalogue_file,**kwargs):
-        """
+        """ load the given file and create the object.
+        
         kwargs can have any build option like key_ra, key_mag etc.
         """
         # ---------------------
@@ -247,19 +279,29 @@ class Catalogue( WCSHandler ):
 
         
     def create(self,data,header,force_it=True,**build):
-        """
-        This is a Central Method, this will set to the instance the fundamental
-        parameters data, header upon which most of the instance functionnality is
-        based.
+        """ builds the catalogue
 
         Parameters
         ----------
 
         data: [astropy.TableColumns, dictionnary or numpy.ndarray (withkey)]
-                                   the data associated to the catalogue. It must have
-                                   ra, dec, and magnitude entries. The keys associated
-                                   to these are set in _build_properties (key_ra,
-                                   key_dec, key_mag ...). See also set_mag_keys
+            the data associated to the catalogue. It must have
+            ra, dec, and magnitude entries. The keys associated
+            to these are set in _build_properties (key_ra,
+            key_dec, key_mag ...). See also set_mag_keys
+
+        header: [pyfits.Header / None]
+            Header containing the data for the catalogue (if any)
+
+
+        force_it: [bool] -optional-
+            if data already exists, set force_it to true to overwrite it.
+
+        **build goes to the build dictorty (key_mag, data_slice etc.)
+        
+        Returns
+        -------
+        Void
         """
         if self.has_data() and force_it is False:
             raise AttributeError("'data' is already defined."+\
@@ -281,9 +323,10 @@ class Catalogue( WCSHandler ):
         self._update_contours_()
 
     def set_starsid(self,key, value, testkey=True):
+        """ provide the information on how to identify a star.
+        A star will then be any entry for which its `key` equals to `value`
+        Set testkey to False to avoid checking if the given key exist in the catalogue
         """
-        """
-        
         if self.has_data() and key is not None and key not in self.data.keys() and testkey:
             raise ValueError("%s is not a known data entry. Set testkey to avoid the test"%key)
         if key is not None and value is None:
@@ -293,9 +336,7 @@ class Catalogue( WCSHandler ):
         self._build_properties['value_star'] = value
         
     def extract(self,contours):
-        """
-        This method enables to get a (potential) sub part of the existing catalogue
-        based on the given 'contours'.
+        """  get a subpart of the existing catalogue based on the given 'contours'.
         'contours' is a shapely.Polygon or a matplotlib.patches.Polygon
         (see shape.point_in_contours)
         """
@@ -306,8 +347,7 @@ class Catalogue( WCSHandler ):
 
     
     def join(self,datatable):
-        """
-        The Methods enable add data to the current catalogue.
+        """ add data to the current catalogue.
         This is based on astropy.Table join:
           "
             The join() method allows one to merge these two tables into a single table
@@ -330,7 +370,8 @@ class Catalogue( WCSHandler ):
         self._update_fovmask_()
 
     def merge(self,catalogue_):
-        """
+        """ Combing a given catalogue to the current instance.
+        This makes use of the join() method.
         """
         if "__nature__" not in dir(catalogue_) or catalogue_.__nature__ != "Catalogue":
             raise TypeError("the input 'catalogue' must be an astrobject catalogue")
@@ -342,11 +383,8 @@ class Catalogue( WCSHandler ):
     def writeto(self,savefile,format="ascii",force_it=True,
                 fill_values=[(ascii.masked, "nan"), ("--","nan"),("","nan")],
                 **kwargs):
-        """
-        The catalogue will be saved as pkl or fits files. The fits wil be used if this
-        has a header, the pkl otherwise
-
-        If loaded as 
+        """ save the catalogue as pkl or fits files.
+        The fits wil be used if this has a header, the pkl otherwise
         """
         # -- First file
         if not self.header is None and len(self.header.keys())>0 and format=="fits":
@@ -379,14 +417,12 @@ class Catalogue( WCSHandler ):
     # Set Methods           #
     # --------------------- #
     def set_mag_keys(self,key_mag,key_magerr):
-        """
-        """
+        """ provide the catalogue entry  associated with magnitude """
         self._build_properties["key_mag"] = key_mag
         self._build_properties["key_magerr"] = key_magerr
 
     def set_coord_keys(self,key_ra,key_dec):
-        """
-        """
+        """ provide the catalogue entry  associated with coordinates (Ra and Dec) """
         self._build_properties["key_ra"] = key_ra
         self._build_properties["key_dec"] = key_dec
         
@@ -410,15 +446,15 @@ class Catalogue( WCSHandler ):
         
         Parameters
         ----------
-
         fovcontours: [shapely polygon]
         
-        - options -
         
-        update: [bool]             True to have a consistent object. Set False
-                                   only if you know what you are doing
-        Return
-        ------
+        update: [bool] -optional-
+            True to have a consistent object. Set False
+            only if you know what you are doing
+            
+        Returns
+        -------
         Void
         """
         if wcs is not None:

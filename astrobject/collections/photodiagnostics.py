@@ -425,6 +425,10 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         if set_samplers and "samplers" in data:
             #self._set_color_samplers_()
             self.set_samplers(data["samplers"])
+
+        if "meta" in data.keys():
+            for k,v in self.data['meta']:
+                self.set_meta(k,v)
             
         
     # =================== #
@@ -474,9 +478,10 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         return {
             "estimate" : self.get_estimate(),
             "samplers" : self.samplers,
-            "g": self.photopoints["g"].data,
-            "i": self.photopoints["i"].data}
-
+            "g": self.photopoints["g"].data if self.photopoints["g"].meta is None
+                 else kwargs_update(self.photopoints["g"].meta, **self.photopoints["g"].data),
+            "i": self.photopoints["i"].data if self.photopoints["i"].meta is None
+                 else kwargs_update(self.photopoints["i"].meta, **self.photopoints["i"].data)}
 
     @property
     def samplers_noprior(self):
