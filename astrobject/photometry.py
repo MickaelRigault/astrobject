@@ -15,7 +15,7 @@ from astropy.table import Table
 
 from . import astrometry
 from .baseobject import  TargetHandler, WCSHandler, Samplers #, BaseObject
-
+from .utils.shape import HAS_SHAPELY
 from .utils.tools import kwargs_update,flux_to_mag
 
 __all__ = ["get_image","get_photopoint"]
@@ -395,7 +395,9 @@ class Image( TargetHandler, WCSHandler ):
             raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
         
         if test_inclusion:
-            if self.has_wcs() is False:
+            if not HAS_SHAPELY:
+                print "WARNING: could not the target inclusion since you do not have SHAPELY"
+            elif self.has_wcs() is False:
                 print "WARNING: because there is no wcs solution, "+\
                   "I can't test the inclusion of the new astrotarget"
             else:
