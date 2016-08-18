@@ -916,10 +916,11 @@ class Catalogue( WCSHandler ):
         """
         if not shape.HAS_SHAPELY:
             self._derived_properties["contours"] = None
-        # -- This roughly take 0.2s for 1e4 objects
-        self._derived_properties["contours"] = \
-          shape.get_contour_polygon(np.asarray(self._ra),
-                                    np.asarray(self._dec))
+        else:
+            # -- This roughly take 0.2s for 1e4 objects
+            self._derived_properties["contours"] = \
+                shape.get_contour_polygon(np.asarray(self._ra),
+                                        np.asarray(self._dec))
         
     # ------------------
     # --  Key match

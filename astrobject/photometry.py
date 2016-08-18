@@ -396,7 +396,7 @@ class Image( TargetHandler, WCSHandler ):
         
         if test_inclusion:
             if not HAS_SHAPELY:
-                print "WARNING: could not test if the target is in the map since you do not have SHAPELY"
+                print "WARNING: could not test if the target is in the image since you do not have SHAPELY"
             elif self.has_wcs() is False:
                 print "WARNING: because there is no wcs solution, "+\
                   "I can't test the inclusion of the new astrotarget"
