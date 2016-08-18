@@ -1016,7 +1016,7 @@ class HostImageCollection( ImageCollection ):
         # -------------
         # - Fig & Axes
         if fig is None:
-            fig = mpl.figure(figsize=[18,10])
+            fig = mpl.figure(figsize=[12,6])
 
         axes = [fig.add_subplot(1,ndata,i+1) for i in range(ndata)]
 
