@@ -596,7 +596,7 @@ class ImageCollection( Collection ):
         for id_ in loop_id:
             # -- Loop over the images, check what is needed
             if not self.has_catalogue() or \
-              not self.catalogue.contours.contains(self.images[id_]["wcs"].contours):
+              (HAS_SHAPELY and not self.catalogue.contours.contains(self.images[id_]["wcs"].contours)):
                 print "Fetching a new catalogue"
                 new_cat = self._get_id_catalogue_(id_,source=source,**kwargs)
                 
