@@ -49,7 +49,30 @@ def stellar_density( catalogue, mask=None,
 #                               #
 #################################
 def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
-    """
+    """ query online sdss-catalogue in Vizier (V/139, DR9) using astroquery.
+    This function requieres an internet connection.
+    
+    Parameters
+    ----------
+    center: [string] 'ra dec'
+        position of the center of the catalogue to query.
+
+    radius: [string] 'value unit'
+        radius of the region to query. For instance '1d' means a
+        1 degree raduis
+
+    extracolums: [list-of-string] -optional-
+        Add extra column from the V/139 catalogue that will be added to
+        the basic query (default: position, ID, object-type, magnitudes)
+
+    column_filters: [dict] -optional-
+        Selection criterium for the queried catalogue.
+
+    **kwargs goes to astroquery.vizier.Vizier
+    
+    Returns
+    -------
+    SDSSCatalogue (child of Catalogue)
     """
     from .sdss import SDSS_INFO
     try:
@@ -123,7 +146,30 @@ class SDSSCatalogue( Catalogue ):
 #                               #
 #################################
 def fetch_2mass_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5..30"}):
-    """
+    """ query online 2mass-catalogue in Vizier (II/246) using astroquery.
+    This function requieres an internet connection.
+    
+    Parameters
+    ----------
+    center: [string] 'ra dec'
+        position of the center of the catalogue to query.
+
+    radius: [string] 'value unit'
+        radius of the region to query. For instance '1d' means a
+        1 degree raduis
+
+    extracolums: [list-of-string] -optional-
+        Add extra column from the II/246 catalogue that will be added to
+        the basic query (default: position, ID, magnitudes)
+
+    column_filters: [dict] -optional-
+        Selection criterium for the queried catalogue.
+
+    **kwargs goes to astroquery.vizier.Vizier
+    
+    Returns
+    -------
+    MASSCatalogue (child of Catalogue)
     """
     try:
         from astroquery import vizier
@@ -225,7 +271,30 @@ class MASSCatalogue( Catalogue ):
 #                               #
 #################################
 def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5..30"}):
-    """
+    """ query online wise-catalogue in Vizier (II/328) using astroquery.
+    This function requieres an internet connection.
+    
+    Parameters
+    ----------
+    center: [string] 'ra dec'
+        position of the center of the catalogue to query.
+
+    radius: [string] 'value unit'
+        radius of the region to query. For instance '1d' means a
+        1 degree raduis
+
+    extracolums: [list-of-string] -optional-
+        Add extra column from the II/328 catalogue that will be added to
+        the basic query (default: position, ID, magnitudes)
+
+    column_filters: [dict] -optional-
+        Selection criterium for the queried catalogue.
+
+    **kwargs goes to astroquery.vizier.Vizier
+    
+    Returns
+    -------
+    WISECatalogue (child of Catalogue)
     """
     try:
         from astroquery import vizier

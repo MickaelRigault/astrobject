@@ -258,10 +258,10 @@ class ImageCollection( Collection ):
             self.download_catalogue(id_=idloaded)
             
 
-    def load_images(self,verbose=True):
+    def load_images(self,verbose=True, **kwargs):
         """
         """
-        [self._load_image_(id_) for id_ in self.list_id
+        [self._load_image_(id_, **kwargs) for id_ in self.list_id
          if self.images[id_]["image"] is None]
         # - done
             
@@ -856,6 +856,7 @@ class HostImageCollection( ImageCollection ):
             
         Returns
         -------
+        Void (sets self.catalogue)
         """
         if refid is not None:
             self.set_reference_image(refid)
