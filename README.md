@@ -18,9 +18,9 @@ The required packages will be installed automatically if you install astrobject 
 - astropy (pip install astropy)
 - astroquery (pip install astroquery)
 - sep (pip install sep)
-- sncosmo (pip install sncosmo)
 
 _Optional_
+- sncosmo (pip install sncosmo) _for bandpasses and lightcurve fitting_
 - shapely (pip install shapely) _for spatial test and vizualisation; Might be required when using Catalogues_
 - astLib (pip install astlib) _for PTF-like SCAM astrometry_
 
