@@ -145,7 +145,8 @@ class SDSSCatalogue( Catalogue ):
 # BASIC 2MASS: Catalogue        #
 #                               #
 #################################
-def fetch_2mass_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5..30"}):
+def fetch_2mass_catalogue(center,radius,extracolums=[],
+                          column_filters={"Jmag":"5..30"}**kwargs):
     """ query online 2mass-catalogue in Vizier (II/246) using astroquery.
     This function requieres an internet connection.
     

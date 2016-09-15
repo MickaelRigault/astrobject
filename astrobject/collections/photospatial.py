@@ -692,7 +692,8 @@ class SepObject( PhotoMap ):
                 stars_only=False, isolated_only=False,
                 catmag_range=[None,None]):
         """ Show the ellipses of the sep extracted sources """
-        mask = None if not apply_catmask else\
+        
+        mask = None if not apply_catmask or not self.has_catalogue() else\
           self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
                             catmag_range=catmag_range, cat_indexes=False)
                 
