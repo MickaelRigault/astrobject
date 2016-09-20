@@ -112,3 +112,67 @@ def aicc(k,L,n,logL_given=False):
         AIC = 2*k - 2*np.log(L)
         
     return AIC + (2*k*(k+1))/(n-k-1)
+
+# ========================== #
+#
+#   Outlier Rejection        #
+#
+# ========================== #
+def chauvenet_criterium(npoints, p=0.5):
+    """ Equivalent, in sigma, of the Chauvenet's criterium.
+    
+    (https://en.wikipedia.org/wiki/Chauvenet%27s_criterion)
+    
+    By default the Chauvenet's criterium reject points you have that have
+    less than 50% chance to exist (p=0.5).
+    You can change this value by setting p to an other quantity.
+
+    This criterium is a 2-tailed rejection, multiply p by 2 to have a 1-tailed value.
+
+    Parameters
+    ----------
+    npoints: [int]
+        Number of points in you sample
+
+    p: [float] -optional-
+        value that defines the sigma cliping. (see above)
+    
+    Return
+    ------
+    float (number of sigma)
+    """
+    from scipy import stats
+    
+    return np.abs(stats.norm.ppf(p/(2.*npoints), loc=0., scale=1.))
+
+def chauvenet_rejection(mu_disp, sigma_disp, data, errors, npoints, p=0.5):
+    """ flag data following the Chauvenet's criterium.
+    
+    (https://en.wikipedia.org/wiki/Chauvenet%27s_criterion)
+    
+    By default the Chauvenet's criterium reject points you have that have
+    less than 50% chance to exist (p=0.5).
+    You can change this value by setting p to an other quantity.
+
+    This criterium is a 2-tailed rejection, multiply p by 2 to have a 1-tailed value.
+
+    Parameters
+    ----------
+    mu_disp, simga_disp: [float, float]
+        central value and dispersion of the model-gaussian that the data should follow
+
+    data, errors: [float, float] (or array of)
+        data and errors (without intrinsic dispersion) of the datapoint(s)
+
+    npoints: [int]
+        number of datapoint in your sample
+
+    p: [float] -optional-
+        value that defines the sigma cliping. (see above)
+    
+    Return
+    ------
+    bool (array of bool)
+    NB: False means 'not to be rejected'
+    """
+    return np.abs((data - mu_disp)/np.sqrt(sigma_disp**2+errors**2)) > chauvenet_criterium(npoints,p=p)    
