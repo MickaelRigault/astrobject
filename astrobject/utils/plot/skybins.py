@@ -17,6 +17,8 @@ import warnings
 import numpy as np
 from copy import copy
 
+from astropy.utils.console import ProgressBar
+
 from ...__init__ import BaseObject
 #import astrobject.astrobject import baseobject as b
 from .skyplot import rot_xz_sph
@@ -465,12 +467,20 @@ class SurveyFieldBins( BaseBins ):
         return np.array([np.sum(f.coord_in_field(ra, dec)) 
                          for f in self.fields])
 
-    def coord2field(self, ra, dec):
+    def coord2field(self, ra, dec, progress_bar=False):
         """
         Return the lists of fields in which a list of coordinates fall.
         Keep in mind that the fields will likely overlap.
         """
-        bo = [f.coord_in_field(ra, dec) for f in self.fields]
+        bo = []
+        gen = self.fields
+
+        if progress_bar:
+            print "Determining field IDs for all objects"
+            gen = ProgressBar(gen)
+
+        for f in gen:
+            bo.append(f.coord_in_field(ra, dec))
 
         # Handle the single coordinate case first
         if type(bo[0]) is np.bool_:
