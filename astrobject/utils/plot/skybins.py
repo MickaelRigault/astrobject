@@ -146,10 +146,10 @@ class SkyBins( BaseBins ):
     # Currently requires that bins do not cross the RA = 180 deg line
     # to work properly. (No warnings issued). Will fix this later.
     """
-    _properties_keys = ["ra_min", "ra_max", "dec_min", "dec_max",
-                        "max_stepsize"]
-
-    _derived_keys = ["nbins"]
+    PROPERTIES         = ["ra_min", "ra_max", "dec_min", "dec_max",
+                          "max_stepsize"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = ["nbins"]
 
     def __init__(self, ra_range=(-180, 180), dec_range=(-90, 90), 
                  ra_nbins=12, dec_nbins=6, dec_sin=True, empty=False,
@@ -333,9 +333,9 @@ class HealpixBins( BaseBins ):
     """
     HEALPix Binner
     """
-    _properties_keys = ["nside", "nest", "max_stepsize"]
-
-    _derived_keys = ["nbins"] 
+    PROPERTIES         = ["nside", "nest", "max_stepsize"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = ["nbins"] 
 
     def __init__(self, nside=8, nest=True, max_stepsize=5, empty=False):
         """
@@ -431,27 +431,42 @@ class SurveyFieldBins( BaseBins ):
     """
     Binner for SurveyField objects
     """
-    _properties_keys = ["ra", "dec", "width", "height", "max_stepsize"]
+    PROPERTIES         = ["ra", "dec", "width", "height", "max_stepsize",
+                          "field_id"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = ["nbins", "fields", "field_id_index"] 
 
-    _derived_keys = ["nbins", "fields"] 
-
-    def __init__(self, ra, dec, width=7., height=7., max_stepsize=5, 
-                 empty=False):
+    def __init__(self, ra, dec, width=6.86, height=6.86, max_stepsize=5, 
+                 field_id=None, empty=False):
         """
         """
         self.__build__()
         if empty:
             return
         self.create(ra, dec, width=width, height=height, 
-                    max_stepsize=max_stepsize)
+                    max_stepsize=max_stepsize, field_id=field_id)
 
-    def create(self, ra, dec, width=7., height=7., max_stepsize=5):
+    # ---------------------- #
+    # - Get Method         - #
+    # ---------------------- #
+    def __getitem__(self, k):
+        """
+        """
+        return self.fields[k]
+        
+    def create(self, ra, dec, width=6.86, height=6.86, max_stepsize=5,
+               field_id=None):
         """
         """
         self._properties["ra"] = np.array(ra)
         self._properties["dec"] = np.array(dec)
         self._properties["width"] = float(width)
         self._properties["height"] = float(height)
+
+        if field_id is None:
+            self._properties["field_id"] = range(len(ra))
+        else:
+            self._properties["field_id"] = np.array(field_id)
                          
         self._properties["max_stepsize"] = max_stepsize
 
@@ -473,7 +488,7 @@ class SurveyFieldBins( BaseBins ):
         Keep in mind that the fields will likely overlap.
         """
         bo = []
-        gen = self.fields
+        gen = self.fields.values()
 
         if progress_bar:
             print "Determining field IDs for all objects"
@@ -484,10 +499,11 @@ class SurveyFieldBins( BaseBins ):
 
         # Handle the single coordinate case first
         if type(bo[0]) is np.bool_:
-            return np.where(np.array(bo))[0]
+            return self.field_id[np.where(np.array(bo))[0]]
         
         bo = np.array(bo)
-        return [np.where(bo[:,k])[0] for k in xrange(bo.shape[1])]
+        return [self.field_id[np.where(bo[:,k])[0]]
+                for k in xrange(bo.shape[1])]
 
     # ========================== #
     # = Utilities for plotting = #
@@ -537,6 +553,11 @@ class SurveyFieldBins( BaseBins ):
         return self._properties["height"]
 
     @property
+    def field_id(self):
+        """field height"""
+        return self._properties["field_id"]
+        
+    @property
     def max_stepsize(self):
         """maximum stepsize for boundary in degrees"""
         return self._properties["max_stepsize"]
@@ -550,17 +571,26 @@ class SurveyFieldBins( BaseBins ):
 
     @property
     def fields(self):
-        """number of bins"""
-        return [SurveyField(r, d, self.width, self.height, self.max_stepsize) 
-                for r, d in zip(self.ra, self.dec)]
+        """dictionary of survey fields"""
+        return {i: SurveyField(r, d, self.width, self.height, self.max_stepsize) 
+                for i, r, d in zip(self.field_id, self.ra, self.dec)}
 
+    @property
+    def field_id_index(self):
+        """lookup array which list index corresponds to field_id"""
+        out = np.empty(self.field_id.max()+1, dtype=int)
+        out[:] = -999999999
+        out[self.field_id] = range(len(self.field_id))
+
+        return out
+        
 class SurveyField( BaseObject ):
     """
     SurveyField objects
     """
-    _properties_keys = ["ra", "dec", "width", "height"]
-
-    _derived_keys = [] 
+    PROPERTIES         = ["ra", "dec", "width", "height"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = [] 
 
     def __init__(self, ra, dec, width=7., height=7., max_stepsize=5, 
                  empty=False):
