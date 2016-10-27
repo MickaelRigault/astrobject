@@ -219,16 +219,17 @@ class PriorGmI( Samplers ):
     @property
     def prop_blue(self):
         """ """
-        return dict(loc=0.49, scale=0.11)
+        return dict(loc=0.85, scale=0.3) # dict(loc=0.49, scale=0.11)
     
     @property
     def prop_red(self):
         """ """
-        return dict(loc=0.85, scale=0.15)
+        return dict(loc=1.25, scale=0.1) # dict(loc=0.85, scale=0.15)
 
     @property
     def coef_blue(self):
-        return 1-1./(self.blue_to_red_ratio + 1)
+        return 0.9 # works well for local
+        #return 1-1./(self.blue_to_red_ratio + 1)
 
     
     @property
@@ -253,7 +254,7 @@ class GmISamplers( Samplers ):
     def _default_sampling_xrange(self):
         """ """
         noprior_xrange = super(GmISamplers,self)._default_sampling_xrange
-        return [np.nanmax([noprior_xrange[0], -0.5]), np.nanmin([noprior_xrange[1], 1.4])]
+        return [np.nanmax([noprior_xrange[0], -0.5]), np.nanmin([noprior_xrange[1], 2.])]
     
 class MassEstimate( Samplers, PhotoPointCollection ):
     """
@@ -332,36 +333,41 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     # ----------- #
     #   PLOTTER   #
     # ----------- #
-    def show_magnitudes(self, savefile=None, show=True, propmodel= {},
-                          **kwargs):
+
+    def show_delails(self, savefile=None, show=True, 
+                         **kwargs):
         """ Display and advanced figure showing the details on
         how the mass estimate is drawn
         """
-        from ..utils.mpladdon import figout
         import matplotlib.pyplot as mpl
-        self._plot = {}
-        # - Settings - #
-        fig = mpl.figure(figsize=[12,5])
-        axcolor = fig.add_axes([0.40,0.15,0.5,0.75])
+        from astrobject.utils.mpladdon import figout
+
+        # -- Axes settings 
+        fig     = mpl.figure(figsize=[14,5])
+        axcolor = fig.add_axes([0.05,0.12,0.56,0.78])
+        ax      = fig.add_axes([0.07,0.65,0.2,0.18],zorder=9)
         axcolor_prior = axcolor.twinx()
-        axg     = fig.add_axes([0.1,0.55,0.25,0.35])
-        axi     = fig.add_axes([0.1,0.15,0.25,0.35])
-        # - Prop     - #
-        prop = kwargs_update(dict(histtype="step", bins=30, normed=True,
-                            lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
-                            ec=mpl.cm.Blues(1.,1.), zorder=6),
-                            **kwargs)
+        axmass  = fig.add_axes([0.65,0.12,0.3,0.78])
         
-        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2, zorder=7),
-                            **propmodel)
+
+
+        prop = kwargs_update(dict(histtype="step", bins=20, normed=True, 
+                            lw="2",fill=True, fc=mpl.cm.binary(0.2,0.4),
+                            ec=mpl.cm.binary(0.8,1.), zorder=6), **kwargs)
+        
+
 
         # - Plots    - #
-        _ = self.photopoints["i"].magsamplers.show(ax=axi, fancy_xticklabel=False,
-                                                   show_legend=False)
-        _ = self.photopoints["g"].magsamplers.show(ax=axg, fancy_xticklabel=False,
-                                                   show_legend=False)
+        _ = self.photopoints["i"].magsamplers.show(ax=ax, fancy_xticklabel=False,
+                                            show_legend=False, show_model=False, show=False,
+                                            ec=mpl.cm.copper(0.5),fc=mpl.cm.copper(0.5,0.2),
+                                          bins=prop["bins"], show_estimate=False)
+        _ = self.photopoints["g"].magsamplers.show(ax=ax, fancy_xticklabel=False,
+                                            show_legend=False,show_model=False,show=False,
+                                            ec=mpl.cm.Greens(0.8),fill=False,
+                                          bins=prop["bins"], show_estimate=False)
         # - Main g-i
-        x = np.linspace(-1,1.5,1e3)
+        x = np.linspace(-1,3,1e3)
 
         # - sample
         axcolor.hist(self.gi_priored_sample, **prop)
@@ -374,21 +380,29 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         axcolor_prior.plot(x, g_i_prior(x)/g_i_prior(x).max(),
                            "k-", alpha=0.7, lw=2, scalex=False, zorder=3,
                            label=r"$\mathrm{Prior}$")
-        
+        # - Derived Mass
+        self.show(ax=axmass, fancy_xticklabel=False,
+                show_legend=False, show_model=False,show=False,
+                show_estimate=True, **prop)
+
         # -- infor and fancy
-        axg.text(0.85,0.85, r"$g$", bbox={"edgecolor":"0.7","facecolor":"None"},
-                 transform=axg.transAxes, fontsize="x-large")
-        axi.text(0.85,0.85, r"$i$", bbox={"edgecolor":"0.7","facecolor":"None"},
-                 transform=axi.transAxes, fontsize="x-large")
         
-        axi.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize="xx-large")
+        ax.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize="xx-large")
         axcolor.set_xlabel(r"$g-i\ \mathrm{color\ [mag]}$", fontsize="xx-large")
-        axcolor.set_xlim(0.,1.3)
+        axmass.set_xlabel(r"$\log(\mathrm{M_*/M_{\odot}})$", fontsize="xx-large")
+
+
+        axcolor.set_xlim(-0.5,2)
         
         axcolor_prior.legend(loc="upper right", fontsize="x-large", frameon=False)
-        axcolor_prior.set_ylim(0,1.1)
-        # -- out
-        fig.figout(savefile=savefile, show=show)
+        axcolor_prior.set_ylim(0,1.0*1.2)
+        axcolor.set_ylim(0,axcolor.get_ylim()[1]*1.2)
+
+        _ = [ax_.set_yticks([]) for ax_ in fig.axes]
+        fig.suptitle(r"$\mathrm{Derivation\ of\ the\ Stellar\ Mass:\ %s}$"%self.target.name,
+                    fontsize="xx-large")
+
+        fig.figout(savefile=savefile, show=show)#"/Users/mrigault/snfgit/papers/snfhost_lssfr/PLOTS/local_mass_builder_%s"%self.target.name)
 
     # --------- #
     #  I/O      #
@@ -418,15 +432,22 @@ class MassEstimate( Samplers, PhotoPointCollection ):
         if "g" not in data or "i" not in data:
             raise TypeError("The data does not contain 'g' and/or 'i' band data")
         # -- loading g and i bands
-        g = get_photopoint(**data["g"])
-        i = get_photopoint(**data["i"])
+
+        if data["g"] is not None:
+            g = get_photopoint(**data["g"])
+        else:
+            g = None
+        if data["i"] is not None:
+            i = get_photopoint(**data["i"])
+        else:
+            i = None
         self.__init__(g,i, **kwargs)
         
-        if set_samplers and "samplers" in data:
+        if set_samplers and "samplers" in data and data["samplers"] is not None:
             #self._set_color_samplers_()
             self.set_samplers(data["samplers"])
 
-        if "meta" in data.keys():
+        if data is not None and "meta" in data.keys():
             for k,v in self.data['meta']:
                 self.set_meta(k,v)
             
@@ -475,6 +496,15 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     @property
     def data(self):
         """ PhotoPoint Collections and samplers data """
+
+        if "i" not in self.photopoints.keys() or "g" not in self.photopoints.keys():
+            return {"estimate": [np.NaN,np.NaN,np.NaN],
+                    "samplers":None,
+                    "g": None if "g" not in self.photopoints.keys() else
+                    self.photopoints["g"].data,
+                    "i":None if "i" not in self.photopoints.keys() else
+                    self.photopoints["i"].data} # to be improved
+        
         return {
             "estimate" : self.get_estimate(),
             "samplers" : self.samplers,

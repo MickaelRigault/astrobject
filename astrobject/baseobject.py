@@ -292,6 +292,22 @@ class Samplers( BaseObject ):
         """ To Be Implemented in the child class"""
         raise NotImplementedError(" The draw_samplers() method has not been implemented ")
 
+    def get_samplers_cdf(self, value):
+        """returns the fraction of samplers below or equal to the given value """
+        return len(self.samplers[self.samplers<=value]) / np.float(len(self.samplers))
+
+    def get_random_samplers(self, n):
+        """ return n ramdomly selected samplers """
+        if not self.has_samplers():
+            self.draw_samplers()
+        
+        def get_shuffledcopy(x):
+            x_ = x.copy()
+            np.random.shuffle(x_)
+            return x_
+        
+        return get_shuffledcopy(self.samplers)[:n]
+        
     def get_estimate(self):
         """ Estimation of the True parameters based on the current samplers.
         Return
@@ -308,8 +324,10 @@ class Samplers( BaseObject ):
     #  PLOT     #
     # --------- #
     def show(self, savefile=None, show=True, ax=None,
-             propmodel={}, xlabel="", fancy_xticklabel=False,
-             show_legend=True, logscale=False, **kwargs):
+             show_model=True, propmodel={}, xlabel="", fancy_xticklabel=False,
+             show_legend=True, logscale=False,
+             show_estimate= True,
+             **kwargs):
         """ Show the samplers and the derived rv_distribution (scipy.stats)
 
         Parameters
@@ -360,16 +378,16 @@ class Samplers( BaseObject ):
         
         x = np.linspace(xrange[0],xrange[1],1e4)
 
-        if not logscale:
-            pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_)
-            ax.axvline(med, color="0.5", zorder=2)
-            ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
-            ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
-        else:
-            pl = None
-            ax.axvline(np.log10(med), color="0.5", zorder=2)
-            ax.axvline(np.log10(med-lowmed), color="0.6", ls="--", zorder=2)
-            ax.axvline(np.log10(med+highmed), color="0.6", ls="--", zorder=2)
+        pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_) if show_model and not logscale else None
+        if show_estimate:
+            if not logscale:
+                ax.axvline(med, color="0.5", zorder=2)
+                ax.axvline(med-lowmed, color="0.6", ls="--", zorder=2)
+                ax.axvline(med+highmed, color="0.6", ls="--", zorder=2)
+            else:
+                ax.axvline(np.log10(med), color="0.5", zorder=2)
+                ax.axvline(np.log10(med-lowmed), color="0.6", ls="--", zorder=2)
+                ax.axvline(np.log10(med+highmed), color="0.6", ls="--", zorder=2)
         
         # - Legend
         if show_legend:
@@ -458,6 +476,7 @@ class Samplers( BaseObject ):
             return np.random.choice(x, p= kde.pdf(x) / kde.pdf(x).sum(), size=size)
             
         return kde
+    
     @property
     def rvdist_info(self):
         """ information about the rvdistribution """

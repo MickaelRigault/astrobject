@@ -619,8 +619,7 @@ class Image( TargetHandler, WCSHandler ):
 
     def get_host_aperture(self, scaleup=2.5,
                           radius=30, runits="kpc",
-                          max_galdist=2.,
-                          **kwargs):
+                          max_galdist=2., catid=None, **kwargs):
         """ if a target is loaded, this get the aperture of the
         nearest galaxy. This is build upon the sepobject's get_host_idx() method.
         It first searches galaxies in a given radius and then returns
@@ -637,6 +636,12 @@ class Image( TargetHandler, WCSHandler ):
             2.5 is what is displayed in the show(show_sepobjects=True)
             method.
 
+        // host setting
+
+        catid: [float/string/None] -optional-
+            You can force the id for the host by providing it here.
+            If None catid will be ignore and this will run the host-search
+            
         // host search
 
         radius: [float/None] -optional-
@@ -662,9 +667,8 @@ class Image( TargetHandler, WCSHandler ):
         if not self.has_sepobjects():
             raise AttributeError("No 'sepobjects' loaded (check the sep_extract() method)")
 
-        
-        idx = self.sepobjects.get_host_idx(self.target, radius=radius,
-                                            runits=runits, max_galdist=max_galdist)
+        idx = self.sepobjects.get_host_idx(self.target, radius=radius, catid=catid,
+                                           runits=runits, max_galdist=max_galdist)
         
         return np.concatenate(self.get_idx_aperture(idx, scaleup=scaleup, **kwargs))
     

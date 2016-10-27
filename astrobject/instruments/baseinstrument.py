@@ -765,6 +765,7 @@ class Catalogue( WCSHandler ):
         if "__iter__" not in dir(ra):
             ra = [ra]
             dec = [dec]
+            
         skytarget = coordinates.SkyCoord(ra*units.degree,dec*units.degree)
         catsky = self.sky_radec if infov else self._sky_radec
         return catsky.search_around_sky(skytarget,

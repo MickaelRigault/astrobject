@@ -3,6 +3,7 @@
 
 """This modules has some basics numpy based statisitical tools """
 import numpy         as np
+from scipy       import stats
 __all__ = ["kfold_it",
            "pearson_coef","spearman_rank_coef","ks_test","aicc"]
 
@@ -28,12 +29,11 @@ def pearson_coef(a,b,verbose=False):
     """
     This return rho,p_val,signifiance
     """
-    from scipy.stats import pearsonr
     a,b = np.asarray(a),np.asarray(b)
     if len(a) != len(a):
         raise ValueError("A and B must have the same size")
 
-    rho,P_val = pearsonr(a,b)
+    rho,P_val = stats.pearsonr(a,b)
     significance =  rho * np.sqrt( (len(a)-2) /(1-rho**2) )
     if verbose:
         print "rho,pvalues,significance: ",rho,P_val,significance
@@ -49,12 +49,11 @@ def spearman_rank_coef(a,b,axis=None,verbose=True):
     ----
     
     """
-    from scipy.stats import spearmanr
     a,b = np.asarray(a),np.asarray(b)
     if len(a) != len(a):
         raise ValueError("a and b must have the same size")
     
-    rho,P_val = spearmanr(a,b,axis=axis)
+    rho,P_val = stats.spearmanr(a,b,axis=axis)
     significance =  rho*np.sqrt( (len(a)-2) /(1-rho**2) )
     return rho,P_val,significance
 
@@ -82,12 +81,11 @@ def ks_test(a,b):
     ----
     return Booleen
     """
-    from scipy.stats import ks_2samp
     a,b = np.asarray(a),np.asarray(b)
     if len(a) != len(a):
         raise ValueError("a and b must have the same size")
     
-    return ks_2samp(a,b)
+    return stats.ks_2samp(a,b)
     
 
 def aicc(k,L,n,logL_given=False):
@@ -113,13 +111,74 @@ def aicc(k,L,n,logL_given=False):
         
     return AIC + (2*k*(k+1))/(n-k-1)
 
+
+# ========================== #
+#
+#   Sampler Tools            #
+#
+# ========================== #
+def gaussian_kde(*arg,**kwargs):
+    """ scipy.stats' gaussian kde with 2 additional methods:
+    rvs and cdf
+    """
+    from .decorators import make_method
+    kde = stats.gaussian_kde(*arg,**kwargs)
+    
+    @make_method(stats.kde.gaussian_kde)
+    def cdf(kde, value):
+        return kde.integrate_box(-np.inf, value)
+        
+    @make_method(stats.kde.gaussian_kde)
+    def rvs(kde, size, xrange=None, nsample=1e3):
+        """ random distribution following the estimated pdf.
+        random values drawn from a finite sampling of `nsample` points
+        """
+        # faster than resample
+        if xrange is None:
+            scale = np.nanmax(kde.dataset) - np.nanmin(kde.dataset)
+            xrange = np.nanmin(kde.dataset) - scale*0.1, np.nanmax(kde.dataset) + scale*0.1
+            
+        x = np.linspace(xrange[0], xrange[1], nsample)
+        return np.random.choice(x, p= kde.pdf(x) / kde.pdf(x).sum(), size=size)
+            
+    return kde
+
+    
 # ========================== #
 #
 #   Outlier Rejection        #
 #
 # ========================== #
-def chauvenet_criterium(npoints, p=0.5):
-    """ Equivalent, in sigma, of the Chauvenet's criterium.
+def grubbs_criterion(npoints, alpha=0.05, twosided=True):
+    """ The value (in sigma) above which a point is an outlier
+    Caution the grubbs criterion is design to reject 1 outlier maxinum
+    http://www.itl.nist.gov/div898/handbook/eda/section3/eda35h1.htm
+    and see http://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm
+
+    This is really close to Chauvenet's criterion with p=0.1
+    
+    Parameters:
+    -----------
+    npoints: [int]
+        The size of your dataset
+        
+    alpha: [float] -optional-
+        Rejection criterion.
+
+    twosided: [bool] -optional-
+        Set this to False if you do a one-sided test.
+        
+    Return:
+    -------
+    float (numbers of sigma)
+    """
+    from scipy import stats
+    significance_level = alpha / (2.*npoints) if twosided else alpha / np.float(npoints)
+    t = stats.t.isf(significance_level, npoints-2)
+    return ((npoints-1) / np.sqrt(npoints)) * (np.sqrt(t**2 / (npoints-2 + t**2)))
+
+def chauvenet_criterion(npoints, p=0.5):
+    """ Equivalent, in sigma, of the Chauvenet's criterion.
     
     (https://en.wikipedia.org/wiki/Chauvenet%27s_criterion)
     
@@ -141,7 +200,7 @@ def chauvenet_criterium(npoints, p=0.5):
     ------
     float (number of sigma)
     """
-    from scipy import stats
+    
     
     return np.abs(stats.norm.ppf(p/(2.*npoints), loc=0., scale=1.))
 
@@ -175,4 +234,4 @@ def chauvenet_rejection(mu_disp, sigma_disp, data, errors, npoints, p=0.5):
     bool (array of bool)
     NB: False means 'not to be rejected'
     """
-    return np.abs((data - mu_disp)/np.sqrt(sigma_disp**2+errors**2)) > chauvenet_criterium(npoints,p=p)    
+    return np.abs((data - mu_disp)/np.sqrt(sigma_disp**2+errors**2)) > chauvenet_criterion(npoints,p=p)    

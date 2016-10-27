@@ -388,9 +388,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
     # - GETTER    - #
     # ------------- #
     # -- Access Index
-    def get_host_idx(self, target=None, coords=None, 
-                     radius=30, runits="kpc",
-                     max_galdist=2.5):
+    def get_host_idx(self, target=None, coords=None,  catid=None,
+                     radius=30, runits="kpc",max_galdist=2.5):
 
         """
         It first searches galaxies in a given radius and then returns
@@ -404,7 +403,13 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
         
         target or coords: [astrobject.Target or [ra,dec]] -one required-
              provide the target location
-             
+
+        // host setting
+
+        catid: [float/string/None] -optional-
+            You can force the id for the host by providing it here.
+            If None catid will be ignore and this will run the host-search
+            
         // search options
         
         radius: [float/None] -optional-
@@ -423,6 +428,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
         -------
         [int] / None # None if no host detected
         """
+        if catid is not None:
+            return self.catindex_to_index(self.catalogue.id_to_idx(catid))
+        
         # --- input test --- #
         if target is None:
             if coords is None:

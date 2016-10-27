@@ -11,7 +11,7 @@ import matplotlib.pyplot as mpl
 from .baseobject import BaseObject, TargetHandler
 from .photometry import get_photopoint
 from .instruments import instrument as inst
-from .utils.tools import kwargs_update
+from .utils.tools import kwargs_update, load_pkl
 from .utils.shape import draw_polygon, HAS_SHAPELY
 
 __all__ = ["ImageCollection"]
@@ -520,7 +520,7 @@ class ImageCollection( Collection ):
             del target_imcoll
         return images
 
-    def get_host_photopoints(self, scaleup=2.5, reference_id=None,
+    def get_host_photopoints(self, scaleup=2.5, reference_id=None, catid=None,
                              target=None, prop_hostsearch={},
                              verbose=False,**kwargs):
         """
@@ -537,6 +537,11 @@ class ImageCollection( Collection ):
                                       -> Error
                                       This method raise a ValueError is no target accessible.
                                       (see self.get_target_ids)
+
+        catid: [float/string/None] -optional-
+            You can force the id for the host by providing it here.
+            If None catid will be ignore and this will run the host-search
+
 
         idx_hostprop: [idx / None] -optional-
         
@@ -559,10 +564,14 @@ class ImageCollection( Collection ):
         """
         if target is not None:
             self.set_target(target)
+
+        if catid is not None:
+            self.host.set_catid(catid)
             
         if reference_id is not None:
-            self.host.set_reference_image(reference_id, fetch_hostid=True, **prop_hostsearch)
-            
+            self.host.set_reference_image(reference_id, fetch_hostid= self.host.host_catid is None, **prop_hostsearch)
+
+
         return self.host.get_photopoints(scaleup=scaleup, verbose=verbose, **kwargs)
     
     # ========================== #
@@ -886,6 +895,14 @@ class HostImageCollection( ImageCollection ):
 
         self._derived_properties["host_catindex"] = catidx
         self._derived_properties["hostcatid"]     = self.refimage.catalogue.idx_to_id(catidx)
+
+    def set_catid(self, value):
+        """ provide the catalogue ID of the host """
+        if value not in self.catalogue.data[self.catalogue._build_properties["key_id"]]:
+            raise ValueError("%s is not a known catalog ID entry"%value)
+        
+        self._derived_properties["host_catindex"] = self.catalogue.id_to_idx(value)
+        self._derived_properties["hostcatid"]     = value if hasattr(value, "__iter__") else [value]
         
     # ---------- #
     # - GETTER - #
@@ -923,7 +940,8 @@ class HostImageCollection( ImageCollection ):
         return self.images[id_]["image"].sepobjects.get(["x","y","a","b","theta"], mask=idx)[0], True
     
     def get_photopoints(self, scaleup=2.5,refid=None,
-                        verbose=False,**kwargs):
+                        verbose=False, use_cat_mags=False,
+                        **kwargs):
         """
         This modules enables to get a new ImageCollection containing only
         the images corresponding to the given target (target in the image FoV).
@@ -931,11 +949,10 @@ class HostImageCollection( ImageCollection ):
         Parameters:
         -----------
 
-
-        onflight: [bool]              Use this to avoid to load the images in the current instance
-                                      If True, this will instead load a copy of the current instance
-                                      using 'get_target_collection' which will then be delaited.
-                                      -> Use this to save cach-memory once the method is finished.
+        use_cat_mags: [bool] -optional-
+            Force the use of the calague magnitudes instead of the extracted ones.
+            [In dev]
+        
                       
         -- other options --
         
@@ -968,16 +985,32 @@ class HostImageCollection( ImageCollection ):
         else:
             pps= []
             for id_ in self.list_id:
-                [x,y,a,b,theta], notforced = self.get_host_ellipse(id_)
-                if verbose:
-                    print "x,y position", x,y
-                    print "a,b,theta, ",a,b,theta
-                    print "band, ", self.images[id_]["image"].bandname
-                    print "ellipse param from reference image", not notforced
+                #  Our data
+                img = self.get_image(id_)
+                if not use_cat_mags:
+                    [x,y,a,b,theta], notforced = self.get_host_ellipse(id_)
+                    if verbose:
+                        print "x,y position", x,y
+                        print "a,b,theta, ",a,b,theta
+                        print "band, ", img.bandname
+                        print "ellipse param from reference image", not notforced
     
-                pps.append(self.images[id_]["image"].get_photopoint(x, y, radius=scaleup, runits="pixels",
-                                                     ellipse_args=dict(a=a, b=b, theta=theta),
-                                                     aptype="ellipse", getlist=True,**kwargs))
+                    pps.append(img.get_photopoint(x, y, radius=scaleup, runits="pixels",
+                                                  ellipse_args=dict(a=a, b=b, theta=theta),
+                                                  aptype="ellipse", getlist=True,**kwargs))
+                #  Catalogue Data
+                else:
+                    if "sdss" not in img.bandname and self.catalogue.source_name.lower() =="sdss":
+                        raise NotImplementedError("Only the catalogue magnitude measurement made for SDSS entries")
+                    from astrobject.utils import tools
+                    mag_cat = img.bandname[-1]+"mag"
+                    mag, mag_err = self.catalogue.data[ self.catalogue.id_to_idx( self.host_catid)][mag_cat,"e_"+mag_cat][0].data
+                    flux, err = tools.mag_to_flux(mag, mag_err,img.lbda)
+                    pps.append(get_photopoint(img.lbda, flux, err**2,
+                                        source="catalogue",mjd=img.mjd,
+                                        zp=img.mab0, bandname=img.bandpass.name,
+                                        instrument_name=self.catalogue.source_name))
+                    
                 
             photopoints = PhotoPointCollection(photopoints=pps)
         
@@ -1031,16 +1064,21 @@ class HostImageCollection( ImageCollection ):
             if self.images[id_]["image"] is None: self._load_image_(id_)
                 
             self.images[id_]["image"].show(ax =ax, show=False, **show_prop)
-            ellip_data, notforced = self.get_host_ellipse(id_)
-            add_ellipse(ax, ellip_data, ls= "-" if notforced else "--",
-                        **kwargs_update({"lw":2},**ellipse_prop))
+            if self.host_catid is not None:
+                try:
+                    ellip_data, notforced = self.get_host_ellipse(id_)
+                    add_ellipse(ax, ellip_data, ls= "-" if notforced else "--",
+                                **kwargs_update({"lw":2},**ellipse_prop))
+                except:
+                    warnings.warn("No Ellipse draw possible for %s"%id_)
 
             ax.text(0.05,0.95, "band: %s"% self.images[id_]["image"].bandname, 
                     fontsize="large",va="top",ha="left",
                     transform=ax.transAxes, bbox=dict(facecolor='w', alpha=0.9))
             
         # = Titles
-        fig.suptitle("%s ID of %s-host: %s"%(self.catalogue.source_name, self.target.name, self.host_catid[0]), 
+        
+        fig.suptitle("%s ID of %s-host: %s"%(self.catalogue.source_name, self.target.name, self.host_catid[0] if self.host_catid is not None else "no"), 
                     y=0.90, va="top",fontsize="x-large")
         
         fig.figout(savefile=savefile, show=show)
@@ -1174,13 +1212,38 @@ class PhotoPointCollection( Collection ):
         Save the PhotoPointCollection following the astropy's Table 'write()' method.
         Such data will be accessible using the 'load()' method of the class.
         """
-        complet = table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
-          else self.data
-        complet.write(filename,format=format,**kwargs)
+        self.data_complet.write(filename,format=format,**kwargs)
         
     def load(self,filename,format="ascii",**kwargs):
         """
         """
+        if filename.endswith("pkl"):
+            self._load_pkl_(filename)
+        else:
+            self._load_table_(filename,format="ascii",**kwargs)
+
+    def _load_pkl_(self, filename, datakey=None):
+        """ """
+        data = load_pkl(filename)
+        if "target" in data.keys():
+            from .baseobject import get_target
+            target = get_target(**data.pop("target",{}))
+
+        if datakey is None:
+            datakeys = [k for k,d in data.values() if "id" in d.keys()]
+            
+        if len(datakeys)>1:
+            raise ValueError("Ambiguous pkl file. Several entries with 'id'. Set datakey")
+        # --------------- #
+        # Data Loading  - #
+        # --------------- #
+        datakey = datakeys[0]
+        
+        
+        
+
+        
+    def _load_table_(self, filename, format="ascii",**kwargs):
         data = table.Table.read(filename,format=format)
         ids,pps = [],[]
         # - This way to be able to call create that might be more
@@ -1204,6 +1267,42 @@ class PhotoPointCollection( Collection ):
     # ------------------- #
     # - Getter          - #
     # ------------------- #
+    def get_data(self, which="complet", format="dict"):
+        """ return a copy of the requested data in the requested format.
+        For individual parameter information see get()
+
+        Parameter
+        ---------
+        which: [string] complet/meta/data
+            Which can of data to you want to get.
+            Default 'complet' is the combination of data and meta
+
+        format: [string] dict/table
+            The default format is the python dict(). You can also access
+            the astropy table format.
+
+        Returns
+        -------
+        dict/table (see format) or None if no data available
+        """
+        data = self.data_complet.copy() if which is "complet" else \
+          self.data.copy() if which is "data" else \
+          self.meta.copy() if self.meta  is not None else None
+        if data is None:
+            return None
+
+        if format == "table":
+            return data
+        if format == "dict":
+            dt = {}
+            dt_ = dict(data)
+            for k in dt_.keys():
+                dt[k] = dt_[k].data
+            return dt
+        raise ValueError("unknown format.")
+    
+          
+        
     def get(self,param, mask=None, safeexit=True):
         """Loop over the photopoints (following the list_id sorting) to get the
          parameters using the photopoint.get() method.
@@ -1429,3 +1528,8 @@ class PhotoPointCollection( Collection ):
         return table.Table(data=[self.list_id]+metadata,
                             names=["id"]+metanames)
     
+    @property
+    def data_complet(self):
+        """ Combination of the data and the metadata """
+        return table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
+          else self.data
