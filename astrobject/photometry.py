@@ -236,7 +236,7 @@ class Image( TargetHandler, WCSHandler ):
     # - I/O Methods     - #
     # ------------------- #
     def load(self,filename,index=None,
-             force_it=False,
+             force_it=False, background=None,
              dataslice0=[0,None],dataslice1=[0,None]):
         """
         This enables to load a fitsfile image and will create
@@ -298,7 +298,7 @@ class Image( TargetHandler, WCSHandler ):
         #  Everythin looks good !    #
         # -------------------------- #
         self.create(data,None,wcs_,
-                    background= None,
+                    background=background,
                     header=fits[index].header,
                     filename=filename,fits=fits,
                     force_it=True)
@@ -322,7 +322,6 @@ class Image( TargetHandler, WCSHandler ):
         ------
         Void
         """
-            
         # -- Check if you will not overwrite anything
         if self.rawdata is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
@@ -362,7 +361,7 @@ class Image( TargetHandler, WCSHandler ):
         self._set_data_(rawdata,mask=mask,
                         variance=variance,
                         background=background)
-
+        
         if self.has_wcs():
             self.wcs.set_offset(*self._dataslicing)
             if self.has_catalogue():
@@ -373,7 +372,7 @@ class Image( TargetHandler, WCSHandler ):
     # ------------------- #
     # - Set Methods     - #
     # ------------------- #
-    def set_target(self,newtarget,test_inclusion=True):
+    def set_target(self,newtarget, test_inclusion=True):
         """
         Change (or create) an object associated to the given image.
 
@@ -495,17 +494,22 @@ class Image( TargetHandler, WCSHandler ):
         if self.background is not None and force_it is False:
             raise AttributeError("'background' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
-
-        if background is None:            
+        
+        if background is None:
             background  = self._get_default_background_()
             self._uses_default_background = True
         else:
             self._uses_default_background = False
             
         # Shape test
+        if not hasattr(background,"__iter__"):
+            background = np.ones(np.shape(self.rawdata))*np.float(background)
+            
         if self.rawdata is not None and np.shape(background) != self.shape:
             raise ValueError("The given background must have rawdata's shape")
+        
         # -- Looks good
+        
         self._properties['background'] = np.asarray(background)
         if update:
             self._update_data_(update_background=False)
@@ -1529,6 +1533,7 @@ class Image( TargetHandler, WCSHandler ):
         self._properties["var"]          = variance
         if self.has_datamask() and self.has_var():
             self._properties["var"][self.datamask] = np.NaN
+            
         # BACKGROUND
         self.set_background(background, force_it=True, update=False)
         # --> update

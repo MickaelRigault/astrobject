@@ -213,7 +213,7 @@ class ImageCollection( Collection ):
                     try:
                         self.images[id_]["image"].set_target(self.target)
                     except ValueError:
-                        warnings.wanr("the new target is not in %s's FoV "%id_)
+                        warnings.warn("the new target is not in %s's FoV "%id_)
         
                     
         
@@ -269,7 +269,8 @@ class ImageCollection( Collection ):
     # = Get                    = #
     # ========================== #
     def get_image(self,id,load_catalogue=True,
-                  dataslice0=[0,-1],dataslice1=[0,-1],
+                  dataslice0=None,dataslice1=None,
+                  reload=True,
                   **kwargs):
         """
 
@@ -278,22 +279,34 @@ class ImageCollection( Collection ):
         
         """
         self._test_id_(id)
+        
+        slice = np.asarray([ dataslice0 if dataslice0 is not None else [0,-1],
+                                dataslice1 if dataslice1 is not None else [0,-1]]).copy()
+        if slice[0][-1] == -1 or slice[1][-1] == -1:
+            from astropy.io.fits import getheader
+            h = getheader(self.images[id]["file"]) if self.images[id]["image"] is None else\
+              self.images[id]["image"].header               
+            slice[0][-1] = h["NAXIS2"] if slice[0][-1] == -1 else slice[0][-1]
+            slice[1][-1] = h["NAXIS1"] if slice[1][-1] == -1 else slice[1][-1]
+            
         # --------------------
         # - image already exist
         if self.images[id]["image"] is None:
-            self._load_image_(id,dataslice0=dataslice0,
-                                 dataslice1=dataslice1,
+            self._load_image_(id,dataslice0=slice[0],
+                                 dataslice1=slice[1],
                               **kwargs)
-            return self.get_image(id,dataslice0=dataslice0,
-                                    dataslice1=dataslice1)
+            return self.get_image(id,dataslice0=slice[0],
+                                    dataslice1=slice[1],reload=False)
 
         im = self.images[id]["image"]
         # ------------------
         # - Check if slicing ok
-        if dataslice0 != im._build_properties["dataslice0"] or \
-          dataslice1 != im._build_properties["dataslice1"]:
-            # -- Remark: This update the self.images[id]["image"]
-            im.reload_data(dataslice0, dataslice1,**kwargs)
+        # - No need to realod because of -1 stuffs
+        if (np.any(slice[0] != np.asarray(im._build_properties["dataslice0"])) or\
+            np.any(slice[1] != np.asarray(im._build_properties["dataslice1"]))) and \
+            reload:
+            # -- Remark: This updates the self.images[id]["image"]
+            im.reload_data( slice[0], slice[1],**kwargs)
             
         # ---------------
         # Target
@@ -474,7 +487,7 @@ class ImageCollection( Collection ):
         -------
         PhotoPointCollection
         """
-        images = self.get_target_images(target=target, onflight=onflight)
+        images = self.get_target_images(target=target, onflight=onflight, reload=False)
         
         photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius=radius,runits=runits,
                                             **kwargs) for image_ in images])
@@ -487,7 +500,7 @@ class ImageCollection( Collection ):
             
         return photopoints
 
-    def get_target_images(self, target=None, onflight=False):
+    def get_target_images(self, target=None, onflight=False, **kwargs):
         """
 
         Parameters
@@ -511,7 +524,7 @@ class ImageCollection( Collection ):
         """
         if not onflight:
             ids = self.get_target_ids(target=target) if HAS_SHAPELY else self.list_id
-            images = [self.get_image(_id,load_catalogue=False)
+            images = [self.get_image(_id,load_catalogue=False, **kwargs)
                       for _id in ids]
         else:
             target_imcoll = self.get_target_collection(target=target)

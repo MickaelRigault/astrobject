@@ -501,8 +501,10 @@ class Samplers( BaseObject ):
     @nsamplers.setter
     def nsamplers(self, value):
         """ Set the number of random drawing used to build the mass pdf """
+        if value is None:
+            raise ValueError("value given for nsamplers cannot be 'None' ")
         if value<10:
-            raise ValueError("set a value greater than 10!")
+            raise ValueError("set a value greater than 10! %s"%value)
         self._properties["nsamplers"] = value
 
 ###########################
