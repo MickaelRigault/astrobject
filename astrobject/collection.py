@@ -582,7 +582,8 @@ class ImageCollection( Collection ):
             self.host.set_catid(catid)
             
         if reference_id is not None:
-            self.host.set_reference_image(reference_id, fetch_hostid= self.host.host_catid is None, **prop_hostsearch)
+            self.host.set_reference_image(reference_id, fetch_hostid= self.host.host_catid is None and self.has_catalogue(),
+                                          **prop_hostsearch)
 
 
         return self.host.get_photopoints(scaleup=scaleup, verbose=verbose, **kwargs)
@@ -737,10 +738,10 @@ class ImageCollection( Collection ):
         """
         """
         self.images[id]["image"] = inst.get_instrument(self.images[id]["file"],**kwargs)
-        if self.has_target():
-            self.images[id]["image"].set_target(self.target)
         if self.has_catalogue():
             self.images[id]["image"].set_catalogue(self.catalogue.copy())
+        if self.has_target():
+            self.images[id]["image"].set_target(self.target)
             
     # ========================== #
     # = Properties             = #
@@ -774,12 +775,11 @@ class ImageCollection( Collection ):
         if self._side_properties["hostcollection"] is None:
             if not self.has_target():
                 raise AttributeError(" You need to set a target to have access to the host collection")
-            if not self.has_catalogue():
-                self.download_catalogue()
                 
             host = HostImageCollection(empty=True)
             host.link_to(self)
             self._side_properties["hostcollection"] = host
+            
         return self._side_properties["hostcollection"]
     # ------------------ #
     # - On flight prop - #
@@ -882,7 +882,9 @@ class HostImageCollection( ImageCollection ):
         """
         if refid is not None:
             self.set_reference_image(refid)
-        
+        if not self.has_catalogue():
+            raise AttributeError("No Catalogue set. Cannot Fetch a catalogue id")
+            
         # refimage will load automatically
         # raise AttributeError if id not set
         if not self.refimage.has_sepobjects():
@@ -920,37 +922,57 @@ class HostImageCollection( ImageCollection ):
     # ---------- #
     # - GETTER - #
     # ---------- #
-    def get_host_ellipse(self, id_):
+    def get_host_sepid(self, image_id, catid=None):
+        """ get the sepobject entry for of the host for the given
+        image_id. You can select a given catid, otherwise,
+        this will use the current catid if it exists
+        Returns
+        -------
+        int (sepobject id)
         """
+        self._test_id_(image_id)
+
+        # - Basic image loading
+        if self.images[image_id]["image"] is None:
+            self._load_image_(image_id)
+            
+        if not self.images[image_id]["image"].has_sepobjects():
+            self.images[image_id]["image"].sep_extract()
+            
+        # - Cat ID provided
+        if catid is not None or self.host_catid is not None:
+            catidx = self.images[image_id]["image"].catalogue.id_to_idx(self.host_catid if self.host_catid is not None else catid)
+            return self.images[image_id]["image"].sepobjects.catindex_to_index(catidx) if \
+               catidx in self.images[image_id]["image"].sepobjects.catmatch["idx_catalogue"] else\
+               None
+        else:
+            return self.images[image_id]["image"].sepobjects.get_host_idx(self.target)
+        
+    def get_host_ellipse(self, id_):
+        """ get the host ellipse contours for the given image id.
+        
         Returns
         -------
         [x,y,a,b,theta], bool (False means used default a,b,theta)
         """
         self._test_id_(id_)
-
-        if not self.has_refid():
-            raise AttributeError("No reference image has been set. Do so.")
-        if self.host_catid is None:
-            raise AttributeError("No host has been found in the reference image.")
-        
-        
-        if self.images[id_]["image"] is None:
-            self._load_image_(id_)
         if not self.images[id_]["image"].has_sepobjects():
             self.images[id_]["image"].sep_extract()
             
+        idx = self.get_host_sepid(id_, catid = self.host_catid)
         
-        catidx = self.images[id_]["image"].catalogue.id_to_idx(self.host_catid)
         # = has the data
-        if catidx not in self.images[id_]["image"].sepobjects.catmatch["idx_catalogue"]:
+        if idx is None:
+            if not self.has_refid():
+                raise AttributeError("No reference image has been set. No sep id detected for the given host.")
+            catidx = self.images[id_]["image"].catalogue.id_to_idx(self.host_catid)
             x,y = self.images[id_]["image"].coords_to_pixel(*np.asarray(self.images[id_]["image"].catalogue.get(["ra","dec"],
-                                                                            mask= catidx)).T[0]
-                                            )
+                                                                            mask= catidx)).T[0])
             return np.concatenate([[x],[y],self.ref_host_ellipse[2:]]), False
         
         # = has the data
-        idx = self.images[id_]["image"].sepobjects.catindex_to_index(catidx)
-        return self.images[id_]["image"].sepobjects.get(["x","y","a","b","theta"], mask=idx)[0], True
+        return self.images[id_]["image"].sepobjects.get_idx_ellipse(idx), True
+
     
     def get_photopoints(self, scaleup=2.5,refid=None,
                         verbose=False, use_cat_mags=False,
@@ -979,21 +1001,21 @@ class HostImageCollection( ImageCollection ):
         """
         # ---------------------
         # - Is instance ready?
-        # Catalogue
-        if not self.has_catalogue():
-            self.download_catalogue()
+
         # Reference ID
         if refid is not None:
             self.set_reference_image(refid)
-        if not self.has_refid():
-            raise AttributeError("You need to set (or provide) a reference image")
-
-        
+            
+        if use_cat_mags and not self.has_catalogue():
+            warnings.warn("No catalogue loaded, cannot the catalogue magnitude. use_cat_mags set to False")
+            use_cat_mags = False
+            
         # ---------------------
         # - Get the PhotoPoints
         # No Host identified
-        if self.host_catid is None:
+        if self.host_catid is None and self.has_catalogue():
             photopoints = PhotoPointCollection(empty=True)
+            
         # Host identified
         else:
             pps= []
@@ -1126,6 +1148,10 @@ class HostImageCollection( ImageCollection ):
             
         return self.images[self.refid]["image"]
 
+    # ----------
+    # - IDs
+    # ----------
+    # Catalogue
     @property
     def host_catid(self):
         """ """

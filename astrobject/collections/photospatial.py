@@ -389,7 +389,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
     # ------------- #
     # -- Access Index
     def get_host_idx(self, target=None, coords=None,  catid=None,
-                     radius=30, runits="kpc",max_galdist=2.5):
+                     radius=30, runits="kpc", scaleup=2.5,max_galdist=2.5):
 
         """
         It first searches galaxies in a given radius and then returns
@@ -455,12 +455,13 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
         pix_x, pix_y = self.coords_to_pixel(ra,dec)
 
         dist = np.asarray([[idx_,distance.pdist([[0,0],
-                                                             np.dot(np.asarray([[np.cos(theta[i]), -np.sin(theta[i])],[np.sin(theta[i]), np.cos(theta[i])]]).T,
-                                                                    [pix_x-x[i],pix_y-y[i]])], # coords_aligned = rotation matrix . coord_xy
-                                                            "wminkowski", w=[1/(a[i]*2.5),1/(b[i]*2.5)])]
+                                                 np.dot(np.asarray([[np.cos(theta[i]), -np.sin(theta[i])],[np.sin(theta[i]), np.cos(theta[i])]]).T,
+                                                        [pix_x-x[i],pix_y-y[i]])], # coords_aligned = rotation matrix . coord_xy
+                                                        "wminkowski", w=[1/(a[i]*scaleup),1/(b[i]*scaleup)])]
                                     for i,idx_ in enumerate(idxaround)
-                                        if idx_ in self.catmatch["idx"] and \
-                                        not (self.catalogue.has_starmask() and np.all(self.catalogue.starmask[self.index_to_catindex([idx_])]))
+                                        if not self.has_catalogue() or \
+                                        (idx_ in self.catmatch["idx"] and not \
+                                         (self.catalogue.has_starmask() and np.all(self.catalogue.starmask[self.index_to_catindex([idx_])])))
                                     ]).T
         if len(dist) == 0:
             print("No detected host within the given search limits: ", radius, runits)
@@ -468,7 +469,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
         
         # this is the composition of dist
         idx, dist_in_radius = dist
-
+        
         i_nearest = np.argmin(dist_in_radius)
         if max_galdist is not None and dist_in_radius[i_nearest]>max_galdist:
             print "No nearby host identified"+(" for %s"%(target.name) if target is not None else "")
@@ -537,7 +538,16 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
         return self.catalogue.get_idx_around(ra, dec, radius.value,
                                              runits=radius.unit.name,
                                              wcs_coords=True)
- 
+
+    # -- Ellipse Shape
+    def get_idx_ellipse(self, idx):
+        """ get the ellipse parameters ("x","y","a","b","theta") for the given idx.
+        
+        idx could be a single idx, a list of index or a bolean mask.
+        """
+        return self.get(["x","y","a","b","theta"],
+                        mask=idx if hasattr(idx, "__iter__") or idx is None else [idx])[0]
+        
     # -- Masking Tool
     def get_indexes(self,isolated_only=False,
                     stars_only=False,nonstars_only=False,
@@ -698,24 +708,33 @@ class SepObject( PhotoMap ):
     def display(self,ax, scaleup=2.5,draw=True,
                 apply_catmask=True,
                 stars_only=False, isolated_only=False,
-                catmag_range=[None,None]):
+                catmag_range=[None,None], **kwargs):
         """ Show the ellipses of the sep extracted sources """
         
         mask = None if not apply_catmask or not self.has_catalogue() else\
           self.get_indexes(isolated_only=isolated_only,stars_only=stars_only,
                             catmag_range=catmag_range, cat_indexes=False)
                 
-        ells = self.get_detected_ellipses(scaleup=scaleup, mask=mask,
+        self.display_ellipses(ax, mask,scaleup=scaleup,
+                              draw=draw, **kwargs )
+
+    # - Ellipse
+    def display_ellipses(self, ax, idx=None, scaleup=2.5,
+                         draw=True,
+                         fc="None", ec="k"):
+        """ draw the requested ellipse on the axis """
+        ells = self.get_detected_ellipses(scaleup=scaleup,
+                                          mask=idx if hasattr(idx, "__iter__") or idx is None\
+                                           else [idx],
                                           contours=False)
         for ell in ells:
             ell.set_clip_box(ax.bbox)
-            ell.set_facecolor("None")
-            ell.set_edgecolor("k")
+            ell.set_facecolor(fc)
+            ell.set_edgecolor(ec)
             ax.add_patch(ell)
         if draw:
             ax.figure.canvas.draw()
-
-    # - Ellipse
+        
     def show_ellipses(self,ax=None,
                       savefile=None,show=True,
                       apply_catmask=True,stars_only=False,nonstars_only=True,
@@ -883,7 +902,7 @@ class SepObject( PhotoMap ):
         return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
         [psf_t,np.std(t_clipped)/m]
         
-    def get_detected_ellipses(self,scaleup=2.5,mask=None, contours=False):
+    def get_detected_ellipses(self,scaleup=2.5, mask=None, contours=False):
         """
         Get the matplotlib Patches (Ellipse) defining the detected object. You can
         select the returned ellipses using the apply_catmask, stars_only,
@@ -899,11 +918,6 @@ class SepObject( PhotoMap ):
         """
         from matplotlib.patches import Ellipse
         
-        # -- maskout non matched one if requested
-        if not self.has_catalogue():
-            print "no catalogue mask applied"
-            apply_catmask = False
-            
         # -------------
         # - Properties
         ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
@@ -914,7 +928,7 @@ class SepObject( PhotoMap ):
         from ...utils.shape import patch_to_polygon
         return patch_to_polygon(ells)
     
-    def get_ellipse_mask(self,width,height, r=3, apply_catmask=False):
+    def get_ellipse_mask(self,width, height, r=3, apply_catmask=False):
         """
         This method returns a boolean mask of the detected ellipses
         on the given width x height pixels image

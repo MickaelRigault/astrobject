@@ -666,8 +666,7 @@ class Image( TargetHandler, WCSHandler ):
         """
         if not self.has_target():
             raise AttributeError("No 'target' loaded")
-        if not self.has_catalogue():
-            raise AttributeError("No 'catalogue' loaded (check the download_catalogue() method)")
+        
         if not self.has_sepobjects():
             raise AttributeError("No 'sepobjects' loaded (check the sep_extract() method)")
 
@@ -925,8 +924,8 @@ class Image( TargetHandler, WCSHandler ):
         
         if thresh is None:
             thresh = self._get_sep_extract_threshold_() if self.var is None\
-              else np.sqrt(self.var).mean()*1.5
-              
+              else np.nanmean(np.sqrt(self.var[~np.isinf(self.var)]))*1.5
+            
         o = extract(self.data,thresh,**kwargs)
         
         # -- If this is an instrument and not an image
