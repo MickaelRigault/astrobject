@@ -880,7 +880,9 @@ class Image( TargetHandler, WCSHandler ):
     
     def sep_extract(self,thresh=None,returnobjects=False,
                     set_catalogue=True,match_catalogue=True,
-                    matching_distance=None,**kwargs):
+                    matching_distance=None,
+                    min_objects=2,
+                    **kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor SEP.
 
@@ -889,25 +891,33 @@ class Image( TargetHandler, WCSHandler ):
 
         - options -
 
-        thresh: [float]            Threshold pixel value for detection.
-                                   If None is set, the globalrms background from sep
-                                   will be used.
-                                   Additional information from sep.extract:
-                                   "If an err array is not given, this is interpreted
-                                    as an absolute threshold. If err is given,
-                                    this is interpreted as a relative threshold:
-                                    the absolute threshold at pixel (j, i) will be
-                                    thresh * err[j, i]."
+        thresh: [float]
+            Threshold pixel value for detection.
+            If None is set, the globalrms background from sep will be used.
+            Additional information from sep.extract:
+             "If an err array is not given, this is interpreted
+             as an absolute threshold. If err is given,
+             this is interpreted as a relative threshold:
+             the absolute threshold at pixel (j, i) will be
+             thresh * err[j, i]."
 
-        set_catalogue: [bool]      If the current instance has a catalogue, it will be
-                                   transfered to the SexOutput object created.
-                                   Set False to avoid that.
+        set_catalogue: [bool]
+            If the current instance has a catalogue, it will be
+            transfered to the SexOutput object created.
+            Set False to avoid that.
                                    
                                    
-        returnobjects: [bool]      Change the output of this function. if True the
-                                   extracted objects are recorded and returned
-                                   (self.sepobjects) if not they are just recorded.
+        returnobjects: [bool]
+            Change the output of this function. if True the extracted
+            objects are recorded and returned (self.sepobjects)
+            if not they are just recorded.
 
+        min_objects: [int/None] -optional-
+            Define the minimal number of objects you expect in the image.
+            If sep detected less than this number and if the threshold was not
+            set (automatic threshold) than a lower threshold will be assigned
+            and relaunch. This is only made once.
+             
         
         - others options -
 
@@ -925,6 +935,8 @@ class Image( TargetHandler, WCSHandler ):
         if thresh is None:
             thresh = self._get_sep_extract_threshold_() if self.var is None\
               else np.nanmean(np.sqrt(self.var[~np.isinf(self.var)]))*1.5
+        else:
+            min_objects = None
             
         o = extract(self.data,thresh,**kwargs)
         
@@ -932,8 +944,21 @@ class Image( TargetHandler, WCSHandler ):
         instrument_prop = {'lbda':self.lbda,"mjd":self.mjd,
                            "bandname":self.bandname} if "lbda" in dir(self) else\
                            {}
-        self._derived_properties["sepobjects"] = \
-          get_sepobject(o,ppointkwargs=instrument_prop) 
+        sepobjects = get_sepobject(o,ppointkwargs=instrument_prop)
+        # ----------- #
+        #  What next? #
+        # ----------- #
+        # - Did sep_extract worked ?
+        if min_objects is not None and sepobjects.nsources < min_objects:
+            # - No? Try again
+            warnings.warn("Automatic Threshold lowered for too few sources has been detected ")
+            return self.sep_extract(thresh=thresh/5.,returnobjects=returnobjects,
+                               set_catalogue=set_catalogue,match_catalogue=match_catalogue,
+                               matching_distance=matching_distance, min_objects=None,
+                               **kwargs)
+        # - Yes? Good
+        self._derived_properties["sepobjects"] = sepobjects
+          
 
         if self.has_wcs():
             self.sepobjects.set_wcs(self.wcs)
@@ -1788,9 +1813,7 @@ class PhotoPoint( TargetHandler ):
         # * Creation       * #
         # ****************** #
         self._properties["lbda"] = np.float(lbda) if lbda is not None else None
-        self._properties["flux"] = np.float(flux)
-        self._properties["var"]  = np.float(var) if var is not None else np.NaN
-        self._reset_derived_prop_()
+        self.set_flux(flux, var, force_it=True)
         
         self._side_properties["source"] = source
         self._side_properties["instrument_name"] = instrument_name
@@ -1802,12 +1825,90 @@ class PhotoPoint( TargetHandler ):
         self.bandname = bandname
         self._update_()
 
+
+    def set_flux(self, flux, var, force_it=False):
+        """ Define the flux of the photopoint. This defines the rest of the object
+        """
+        if self._properties["flux"] is not None and not force_it:
+            raise AttributeError("'flux' already defined."+\
+                    " Set force_it to True if you really known what you are doing")
+                    
+        self._properties["flux"] = np.float(flux)
+        self._properties["var"]  = np.float(var) if var is not None else np.NaN
+        self._reset_derived_prop_()
+        
+        
     def remove_flux(self, flux, var=None):
         """ this flux quantity will be removed from the current flux"""
-        self._properties["flux"] = self._properties["flux"] - flux
-        if var is not None:
-            self._properties["var"] = self._properties["var"] - var
+        self.set_flux(self._properties["flux"] - flux,
+                      self._properties["var"] - var if var is not None else\
+                      self.var)
+                      
+
+    def apply_extinction(self, ebmv, r_v=3.1, law="fitzpatrick99"):
+        """ correct the flux and variance for the given extinction.
+        if embv is negative, this will remove flux (i.e. simulate dust absorption).
+        use a positive ebmv to correct for dust extinction.
+        The resulting flux will be higher.
+        """
+        # - Do you have extinction installed
+        try:
+            import extinction
+        except ImportError:
+            raise ImportError("install the python library 'extinction', pip install extinction. See http://extinction.readthedocs.io")
         
+        # - Select the extinction law
+        law= law.lower()
+        if law not in extinction.__all__:
+            raise ValueError("Unknown extinction law. This are available"+", ".join([l for l in extinction.__all__ if l not in ["apply,Fitzpatrick99"]]))
+
+        dustlaw = eval("extinction.%s"%law)
+        if law == "fitzpatrick99":
+            base_rv = extinction.Fitzpatrick99().r_v
+            if r_v != base_rv:
+                warnings.warn("Fitzpatrick99 have fixed r_v of %.1f"%base_rv)
+                print "WARNING Fitzpatrick99 have fixed r_v of %.1f"%base_rv
+            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv)
+        else:
+            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv, base_rv)
+
+        # - Correction factor
+        flux_corr = extinction.apply(ext_mag, [1])
+        
+        # - Correct the current flux
+        self.set_flux(self.flux/flux_corr[0], self.var/flux_corr[0]**2, force_it=True)
+                
+    # --------- #
+    #  PLOTTER  #
+    # --------- #
+    def get(self, key, safeexit=False):
+        """ Generic method to access information of the instance.
+        Taken either from the instance itself self.`key` or from the meta parameters.
+
+        *Remark* 'key' could be an list of keys.
+
+        Returns:
+        --------
+        Value (or list)
+        """
+        ## Tested, try except faster than if key in dir(self) and enable things like key="meta.keys()"
+
+        if "__iter__" in dir(key):
+            return [self.get(key_,safeexit=safeexit) for key_ in key]
+        
+        try: # if key in dir(self):
+            return eval("self.%s"%key)
+        except:
+            if key in self.meta.keys():
+                return self.meta[key]
+            elif not safeexit:
+                raise ValueError("No instance or meta key %s "%key)
+            warnings.warn("No instance or meta key %s. NaN returned"%key)
+            return np.NaN
+
+    # ----------- #
+    #  PLOTTING   #
+    # ----------- #
     def display(self,ax,toshow="flux",function_of_time=False,**kwargs):
         """This method enable to display the current point
         in the given matplotlib axes"""
@@ -1837,35 +1938,7 @@ class PhotoPoint( TargetHandler ):
         self._plot["plot"] = pl
         self._plot["prop"] = prop
         return self._plot
-
-    def get(self, key, safeexit=False):
-        """ Generic method to access information of the instance.
-        Taken either from the instance itself self.`key` or from the meta parameters.
-
-        *Remark* 'key' could be an list of keys.
-
-        Returns:
-        --------
-        Value (or list)
-        """
-        ## Tested, try except faster than if key in dir(self) and enable things like key="meta.keys()"
-
-        if "__iter__" in dir(key):
-            return [self.get(key_,safeexit=safeexit) for key_ in key]
-        
-        try: # if key in dir(self):
-            return eval("self.%s"%key)
-        except:
-            if key in self.meta.keys():
-                return self.meta[key]
-            elif not safeexit:
-                raise ValueError("No instance or meta key %s "%key)
-            warnings.warn("No instance or meta key %s. NaN returned"%key)
-            return np.NaN
-
-    # ----------- #
-    #  PLOTTING   #
-    # ----------- #
+    
     def show(self, savefile=None,axes=None, propmodel={}, **kwargs):
         """ display the flux and magnitude distribution
         as well as its associated modeling

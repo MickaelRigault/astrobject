@@ -389,7 +389,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
     # ------------- #
     # -- Access Index
     def get_host_idx(self, target=None, coords=None,  catid=None,
-                     radius=30, runits="kpc", scaleup=2.5,max_galdist=2.5):
+                     radius=30, runits="kpc", scaleup=3, max_galdist=3):
 
         """
         It first searches galaxies in a given radius and then returns

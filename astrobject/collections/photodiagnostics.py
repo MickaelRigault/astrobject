@@ -8,7 +8,7 @@ import numpy   as np
 from scipy import stats
 from ..photometry  import get_photopoint
 from ..baseobject  import Samplers, TargetHandler
-from ..collection  import PhotoPointCollection
+from ..collection  import TargetPhotoPointCollection
 from ..utils.tools import kwargs_update, load_pkl
 
 
@@ -256,7 +256,7 @@ class GmISamplers( Samplers ):
         noprior_xrange = super(GmISamplers,self)._default_sampling_xrange
         return [np.nanmax([noprior_xrange[0], -0.5]), np.nanmin([noprior_xrange[1], 2.])]
     
-class MassEstimate( Samplers, PhotoPointCollection ):
+class MassEstimate( Samplers, TargetPhotoPointCollection ):
     """
     """
     PROPERTIES = []
@@ -334,7 +334,7 @@ class MassEstimate( Samplers, PhotoPointCollection ):
     #   PLOTTER   #
     # ----------- #
 
-    def show_delails(self, savefile=None, show=True, 
+    def show_details(self, savefile=None, show=True, 
                          **kwargs):
         """ Display and advanced figure showing the details on
         how the mass estimate is drawn
