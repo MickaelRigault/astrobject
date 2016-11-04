@@ -8,6 +8,7 @@ from matplotlib.transforms  import Bbox
 import warnings
 from .tools import kwargs_update
 from .decorators import make_method
+
 # remark: do no import .plot.*** at this level
 #         otherwise import loop with astrobject
 __all__ = ["specplot","skyplot","figout"]
@@ -16,7 +17,83 @@ __all__ = ["specplot","skyplot","figout"]
 # =  Axes Add-on           = #
 # ========================== #
 # --------------------- #
-# - Spectrum          - #
+# - Matrix           - #
+# --------------------- #
+@make_method(mpl.Axes)
+def corrmatrix(ax, matrix, npoints=None,
+               cmap=None, significance_range=[0,6], ncolors=6,
+               matrixlabels=None,
+               **kwargs):
+    """
+    In Dev
+    """
+    # --------------
+    # Init Settings
+    
+    shape = np.shape(matrix)
+    def get_significance(rho, npoints):
+        """ """
+        rho = np.abs(rho)
+        return rho * np.sqrt( (npoints-2.) /(1.-rho**2) )
+
+    prop = dict(interpolation="nearest", origin="upper",
+                alpha=0.9)
+    
+    if npoints is None:
+        color_matrix = matrix
+        cmap = mpl.cm.Spectral if cmap is None else \
+          mpl.cm.get_cmap(cmap) if type(cmap) == str else cmap
+
+    else:
+        color_matrix = get_significance(matrix, npoints)
+        cmap = mpl.cm.get_cmap("YlGnBu_r",ncolors) if cmap is None else cmap
+        prop["vmin"],prop["vmax"] = significance_range
+        cticks = np.linspace(prop["vmin"],prop["vmax"],ncolors+1)
+
+
+    # - imshow
+    propimshow = kwargs_update(prop,**kwargs)
+    
+    pl = mpl.imshow(color_matrix, cmap=cmap,**propimshow)
+
+    # - ColorBar
+    cb = mpl.colorbar(pl, ticks=cticks if npoints is not None else None)
+    if npoints is not None:
+        cb.ax.set_yticklabels([r'$%d$'%v if i<(len(cticks)-1) else r'$>%d$'%v for i,v in enumerate(cticks)],
+                                fontsize="large")
+        cb.set_label(r"$\mathrm{Corr.\ Significance\ [in\,\sigma]}$", fontsize="x-large")
+
+    # --------
+    # - Ticks
+    ax.xaxis.set_ticks(np.linspace(0,shape[1]-1,shape[1]))
+    ax.yaxis.set_ticks(np.linspace(0,shape[0]-1,shape[0]))
+
+
+    
+    # - Text
+    
+    _ = [[ax.text(i,j,"%.2f"%matrix[i][j],
+            va="center", ha="center",
+            fontproperties="black",color="k")
+            for i in range(shape[0])] for j in range(shape[1])]
+        
+    if matrixlabels is not None:
+        _ = ax.set_xticklabels(matrixlabels,
+                    fontsize="xx-large")
+        _ = ax.set_yticklabels(matrixlabels,
+                                fontsize="xx-large")
+
+    # - No ticks 
+    [ax_.tick_params(length=0) for ax_ in [ax,cb.ax]]
+    return pl
+
+    
+    
+
+
+
+# --------------------- #
+# - Scatter           - #
 # --------------------- #
 @make_method(mpl.Axes)
 def errorscatter(ax,x,y,dx=None,dy=None,**kwargs):
@@ -566,6 +643,7 @@ def vline(ax,value,ymin=None,ymax=None,
      ax.plot([value,value],[ymin,ymax],
              scalex=False,scaley=False,
              **kwargs)
+     
 @make_method(mpl.Axes)      
 def hline(ax,value,xmin=None,xmax=None,
                 **kwargs):
