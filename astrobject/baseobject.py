@@ -13,8 +13,6 @@ from astropy import units
 from .utils.tools import load_pkl, dump_pkl, kwargs_update
 
 
-
-__version__ = 0.1
 __all__     = ["BaseObject","get_target"]
 
 def get_target(name=None,zcmb=None, ra=None, dec=None, mjd=None,

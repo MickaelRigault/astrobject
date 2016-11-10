@@ -854,9 +854,9 @@ class Image( TargetHandler, WCSHandler ):
         return super(Image, self).units_to_pixels(units_, target=self.target)
 
     # ------------------- #
-    # - SEP Tools       - #
+    #   SEP Tools         #
     # ------------------- #
-    def get_sep_background(self,update_background=True,cleaning_sep=True,**kwargs):
+    def get_sep_background(self,update_background=True, clean_sep=True,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor: sep.
         
@@ -865,16 +865,18 @@ class Image( TargetHandler, WCSHandler ):
         if self.has_sepobjects():
             # -----------------
             # - First loop get the first exposure
-            if "_rmsep" in dir(self) and self._rmsep:
+            if hasattr(self,"_rmsep") and self._rmsep:
                 self._derived_properties["sepobjects"] = None
-            # -- No need to conserve that
-            del self._rmsep
-            
+                # -- No need to conserve that
+                del self._rmsep
+                
             return self._sepbackground.back()
+        
         if update_background:
             self.set_background(self._sepbackground.back(),force_it=True)
-        self.sep_extract(match_catalogue= not cleaning_sep)
-        self._rmsep=cleaning_sep
+            
+        self.sep_extract(match_catalogue= not clean_sep)
+        self._rmsep = clean_sep
         return self.get_sep_background(update_background=True)
 
     
@@ -1658,7 +1660,7 @@ class MagSamplers( Samplers ):
         if lbda is not None: self._properties["lbda"] = lbda
             
             
-    def draw_samplers(self, nsamplers=None):
+    def draw_samplers(self, nsamplers=None, negativeflux_mag=None):
         """ draw new samplers """
         if self.lbda is None:
             raise AttributeError("Unknown 'lbda' cannot go from flux to magnitude")
@@ -1671,8 +1673,11 @@ class MagSamplers( Samplers ):
         mags = flux_to_mag(np.random.normal(loc=self.flux, scale=self.fluxerr,
                                        size=self.nsamplers),
                             None,self.lbda)[0]
-        
-        mags = mags[mags==mags]
+        if negativeflux_mag is None:
+            mags = mags[mags==mags]
+        else:
+            mags[mags!=mags] = negativeflux_mag
+            
         self.nsamplers = len(mags)
         self._derived_properties['samplers'] = mags
 

@@ -1,14 +1,18 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
 """This module manage the Astrometry issue"""
 
 import numpy as np
 import warnings
-# - local
-from .utils import shape
 
+# - astropy
+from astropy     import units
+from astropy.wcs import WCS as pyWCS
+from astropy.io  import fits
+from astropy.coordinates.angle_utilities import angular_separation
+
+# - AstLib, might not be needed
 try:
     from astLib      import astWCS
     _HAS_ASTLIB_ = True
@@ -16,15 +20,13 @@ except ImportError:
     warnings.warn("ImportError - astLib can not be imported ; PTF-like images won't load.")
     _HAS_ASTLIB_ = False
     
-# - astropy
-from astropy.wcs import WCS as pyWCS
-from astropy.io  import fits
-from astropy.coordinates.angle_utilities import angular_separation
-from astropy import units
+# - local
+from .utils import shape
+
 
 def wcs(filename=None,header=None,extension=0):
-    """
-    """
+    """ loads the WCS solution for the given data. """
+    
     if filename is not None:
         header = fits.getheader(filename,ext=extension)
     if header is None:
@@ -41,7 +43,7 @@ def wcs(filename=None,header=None,extension=0):
             return _WCSbackup(header,mode = "pyfits")
         except:
             from pyfits import getheader
-            print "I had to use pyfits for %s"%filename
+            print "I had to use pyfits for %s. Most likely this is a PTF image"%filename
             return _WCSbackup(getheader(filename,ext=extension),mode = "pyfits")
         
     return WCS(header)

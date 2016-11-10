@@ -746,8 +746,8 @@ class SepObject( PhotoMap ):
             return
         
         from matplotlib.patches import Ellipse,Polygon
-        from ...utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
+        import matplotlib.pyplot    as mpl
+        from ..utils.mpladdon   import figout
         self._plot = {}
         # ------------------- #
         # - axes            - #

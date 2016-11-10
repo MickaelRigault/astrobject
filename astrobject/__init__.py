@@ -4,11 +4,6 @@
 #
 
 
-#import collections
-#import spectr
-#from photometry import *
-#from instruments.instrument import *
-
 __version__ = "0.3.6"
 
 from baseobject   import *
