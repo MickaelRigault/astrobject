@@ -968,3 +968,96 @@ class TargetHandler( BaseObject ):
     def has_target(self):
         """ Test if a target has been set. True means yes """
         return self.target is not None
+
+
+class CatalogueHandler( BaseObject ):
+    """ """
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = ["catalogue"]
+    DERIVED_PROPERTIES = []
+
+
+    # ================= #
+    #   Main            #
+    # ================= #
+    def download_catalogue(self,source="sdss",
+                           set_it=True,force_it=False,
+                           radec=None, radius_degree=None,
+                           **kwargs):
+        """
+        Downloads a catalogue of the given 'source'. This methods requires an
+        internet connection. This downloaded catalogue is then loaded in this
+        instance using the 'set_catalogue' method. If 'set_it' is set to False,
+        the catalogue is returned instead of being loaded.
+        
+        kwargs goes to instrument.catalogue
+        example: column_filters={"gmag":"13..22"}
+
+        Return:
+        ------
+        Void (or the Catalogue if set_it is False)
+        """
+        from .instruments.instrument import fetch_catalogue
+        if radec is None:
+            if hasattr(self,"wcs") and self.has_wcs():
+                radec = "%s %s"%(self.wcs._central_coords_nooffset[0],
+                                 self.wcs._central_coords_nooffset[1])
+            else:
+                raise ValueError("Without wcs solution you need to provide 'radec'")
+
+        if radius_degree is None:
+            if not hasattr(self,"wcs") or not self.has_wcs():
+                radius_degree = self.wcs.diag_size/1.8 # not 2 to have some room around
+            else:
+                raise ValueError("Without wcs solution you need to provide 'radius_degree'")
+            
+        
+        cat = fetch_catalogue(source=source,radec=radec,radius="%sd"%radius_degree,
+                              **kwargs)
+        if not set_it:
+            return cat
+        
+        self.set_catalogue(cat,force_it=force_it)
+        
+    def set_catalogue(self, catalogue, force_it=False):
+        """ attach a catalogue to the current instance.
+        you can then access it through 'self.catalogue'.
+
+        The current instance's wcs solution is passed to the calague.
+
+        Returns
+        -------
+        Void
+        """
+        from .instruments.baseinstrument import Catalogue
+        if self.has_catalogue() and force_it is False:
+            raise AttributeError("'catalogue' already defined"+\
+                    " Set force_it to True if you really known what you are doing")
+
+        if Catalogue not in catalogue.__class__.__mro__:
+            raise TypeError("the input 'catalogue' must be an astrobject Catalogue")
+        
+        
+        if hasattr(self,"wcs") and self.has_wcs():
+            catalogue.set_wcs(self.wcs,force_it=True)
+            if catalogue.nobjects_in_fov < 1:
+                warnings.warn("WARNING No object in the field of view,"+"\n"+\
+                              "  -> catalogue not loaded")
+                return
+                
+        # --------
+        # - set it
+        self._side_properties["catalogue"] = catalogue
+
+    
+    # ================= #
+    #   Property        #
+    # ================= #
+    @property
+    def catalogue(self):
+        """ Catalogue object """
+        return self._side_properties["catalogue"]
+    
+    def has_catalogue(self):
+        """ Test if a catalogue has been assigned. True means yes """
+        return self.catalogue is not None

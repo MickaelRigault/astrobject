@@ -6,7 +6,7 @@ import numpy as np
 
 from astropy        import coordinates, units
 
-from ..baseobject   import WCSHandler
+from ..baseobject   import WCSHandler, CatalogueHandler
 from ..photometry   import get_photopoint
 from ..collection   import PhotoPointCollection
 from ..utils.tools import kwargs_update
@@ -69,26 +69,32 @@ def get_sepobject(sepoutput, ppointkwargs={},
     SepObject (Child of PhotoMap)
     """
     xkey,ykey = ["x","y"] if not use_peakposition else ["xpeak","ypeak"]
-    if is_sepoutput(sepoutput):
-        inputphotomap = parse_sepoutput(sepoutput,**ppointkwargs)
-        pmap = SepObject(photopoints=inputphotomap["ppoints"],
+    
+    # - Test aninput parsing made at this level
+    inputphotomap = parse_sepoutput(sepoutput,**ppointkwargs) if is_sepoutput(sepoutput) else \
+      parse_sepsex_fitsdata(sepoutput)
+
+    # - good to go.
+    pmap = SepObject(photopoints=inputphotomap["ppoints"],
                          coords=inputphotomap["coords"],
                          wcs_coords=False, **kwargs)
-        ids_sorting = [pmap.coords_to_id(x,y)
+    ids_sorting = [pmap.coords_to_id(x,y)
                        for x,y in zip(inputphotomap["meta"][xkey].data,
                                       inputphotomap["meta"][ykey].data)]
         
-        [pmap.set_meta(k,inputphotomap["meta"][k].data, ids=ids_sorting)
+    [pmap.set_meta(k,inputphotomap["meta"][k].data, ids=ids_sorting)
          for k in inputphotomap["meta"].keys()]
         
-        return pmap
-    else:
-        raise TypeError("The Input Array is not an sep.extract() output")
+    return pmap
+    
 # ======================= #
 #                         #
 # Internal Functions      #
 #                         #
 # ======================= #
+# ------------ #
+#  From SEP    #
+# ------------ #
 def is_sepoutput(array):
     """
     """
@@ -96,30 +102,71 @@ def is_sepoutput(array):
     if type(array) != np.ndarray:
         return False
     tsep = table.Table(array)
-    if "cxx" not in tsep.keys():
-        return False
-    return True
+    return "cxx" in tsep.keys()
 
 def parse_sepoutput(sepoutput,lbda=None,**kwargs):
     """
     """
     from astropy import table
-    if type(sepoutput) != np.ndarray:
+    if type(sepoutput) != np.ndarray and type(sepoutput) != dict:
         raise TypeError("the given 'sexoutput' is not an ndarray ; This is not a sepoutput")
 
+    # - so that any entry now has the same shape
     tsep = table.Table(sepoutput)
-    if "cxx" not in tsep.keys():
-        raise TypeError("the given 'sexoutput' ndarray has no 'cxx' key."+\
-                            "\n"+" It most likely is not a sextrator/sep output ")
     ppoints = [get_photopoint(lbda,t_["flux"],None,
                           source="sepextract",**kwargs)
                           for t_ in tsep]
+        
     coords = np.asarray([tsep["x"],tsep["y"]]).T
     return {"ppoints":ppoints,"coords":coords,"meta":tsep[[t_ for t_ in tsep.keys() if t_ not in ["flux"]]]}
     
+# ------------------- #
+#  From Sextractor    #
+# ------------------- #
+def parse_sepsex_fitsdata( filename, lbda=None, fluxkey="flux_auto", **kwargs):
+    """ This checks is the fits file is from sextractor
+    Parameters
+    ----------
     
+    dataindex: [int/None] -optional-
+        
+    """
+    from astropy.io import fits
+    # ----------
+    # - Input
+    if type(filename) == str:
+        try:
+            header = fits.getheader(filename)
+            data   = fits.getdata(filename)
+        except:
+            raise TypeError("cannot get the data and header from the given file %s. Not a fits file?"%filename)
+    else:
+        data = filename
     
+    # ----------
+    #  formating
+    if type(data) in [fits.fitsrec.FITS_rec]:
+        data = {col.name.lower():data[col.name] for col in data.columns}
+    elif hasattr(data,"columns"):
+        data = {col.lower():data[col] for col in data.columns}
 
+    # ----------
+    #  formating    
+    if "x_world" in data.keys():
+        #  SEXTRACTOR
+        data["ra"]        = data["x_world"]
+        data["dec"]       = data["y_world"]
+        data["x"]         = data["x_image"]
+        data["y"]         = data["y_image"]
+        data["theta"]     = data["theta_image"]
+        data["theta.err"] = data["errtheta_image"]
+        
+        if fluxkey.lower() not in data.keys():
+            raise ValueError("Unknwon key entry (%s)"%fluxkey +" known flux entries: "+", ".join([k for k in data.keys() if "flux" in k]))
+        data["flux"] = data[fluxkey.lower()]
+        data["flux.err"] = data[fluxkey.lower().replace("_","err_")] if fluxkey.lower().replace("_","err_") in data.keys() else None
+
+    return parse_sepoutput(data,lbda, **kwargs)
 
 ######################################
 #                                    #
@@ -127,12 +174,12 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
 #                                    #
 ######################################
 
-class PhotoMap( PhotoPointCollection, WCSHandler ):
+class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     """
     """
 
     PROPERTIES         = []
-    SIDE_PROPERTIES    = ["refmap","catalogue"]
+    SIDE_PROPERTIES    = ["refmap"]
     DERIVED_PROPERTIES = ["catmatch"]
 
     
@@ -274,12 +321,10 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
         if not self.has_catalogue():
             raise AttributeError("No 'catalogue' defined or given.")
         
-        if self.has_wcs():
-            # -- matching are made in degree space
-            skyradec = self.get_skycoords(**kwargs)
-            idxcatalogue, idxsepobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, deltadist)
-        else:
-            raise NotImplementedError("You currently need a wcs solution in the SepObject to match a catalogue")
+        # -- matching are made in degree space
+        skyradec = self.get_skycoords(**kwargs)
+        idxcatalogue, idxsepobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, deltadist)
+        
         # --------------------
         # - Save the results
         self._derived_properties["catmatch"] = {
@@ -339,50 +384,42 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
 
         self._side_properties["refmap"] = photomap
 
+    #  Super Catalogue
+    # -----------------
+    @_autogen_docstring_inheritance(CatalogueHandler.set_catalogue,"CatalogueHandler.get_indexes")
     def set_catalogue(self,catalogue,force_it=True,
                       reset=True,
                       match_catalogue=True):
-        """
-        Attach to this instance a catalogue.
+        #
+        # + reset and matching
+        #
+        if reset:
+            catalogue.reset()
+            
+        super(PhotoMap, self).set_catalogue(catalogue,force_it=True)
         
-        Parameters
-        ---------
-        Return
-        ------
-        Voids
-        """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-
-        # ----------------------
-        # - Clean the catalogue 
-        if reset: catalogue.reset()
-        
-        # -------------------------
-        # - Add the world_2_pixel            
-        if self.has_wcs():
-            if catalogue.has_wcs():
-                warnings.warn("WARNING the given 'catalogue' already has a wcs solution."+\
-                              " This did not overwrite it.")
-            else:
-                catalogue.set_wcs(self.wcs)
-                
-        # ---------------------
-        # - Test consistancy
-        if catalogue.nobjects_in_fov < 1:
-            warnings.warn("WARNING No object in the FoV, catalogue not loaded")
-            return
-        
-        # ---------------------
-        # - Good To Go
-        self._side_properties["catalogue"] = catalogue
-        if match_catalogue:
+        if self.has_catalogue() and match_catalogue:
             self.match_catalogue()
 
+            
+    @_autogen_docstring_inheritance(CatalogueHandler.download_catalogue,"CatalogueHandler.download_catalogue")
+    def download_catalogue(self, source="sdss",
+                           set_it=True,force_it=False,
+                           radec=None, radius_degree=None,
+                           **kwargs):
+        #
+        # default definition of radec and radius_degree
+        #
+        if radec is None:
+            radec = np.mean(self.radec, axis=0)
+            radec = "%s %s"%(radec[0],radec[1])
+        if radius_degree is None:
+            radius_degree = np.max(np.std(self.radec,axis=0)*5)
+            
+        return super(PhotoMap, self).download_catalogue(source="sdss",
+                                                        set_it=set_it, force_it=force_it,
+                                                        radec=radec, radius_degree=radius_degree,
+                                                        **kwargs)
     # ------------- #
     # - GETTER    - #
     # ------------- #
@@ -619,8 +656,13 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
         """ """
         if self._wcsid:
             return self._coords
+        
         if not self.has_wcs():
-            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
+            if "ra" in self.metakeys and "dec" in self.metakeys:
+                return self.get(["ra","dec"])
+            else:
+                raise AttributeError("You need a wcs solution to convert pixels to radec or to have 'ra' and 'dec' in the metakeys. None set.")
+            
         return self.wcs.pix2world(*self._coords.T)
     
     @property
@@ -669,13 +711,6 @@ class PhotoMap( PhotoPointCollection, WCSHandler ):
     
     # -------------
     # - Catalogue
-    @property
-    def catalogue(self):
-        return self._side_properties["catalogue"]
-    
-    def has_catalogue(self):
-        return self.catalogue is not None
-
     @property
     def catmatch(self):
         """This is the match dictionnary"""
@@ -817,19 +852,45 @@ class SepObject( PhotoMap ):
     # ----------- #
     #   GETTER    #
     # ----------- #
-    def get_skycoords(self, position="average"):
-        """ """
-        x,y,xpeak,ypeak = self.get(["x","y","xpeak","ypeak"]).T
-        if position.lower() == "center":
-            ra,dec = self.pixel_to_coords(x,y).T
-        elif position.lower() == "peak":
-            ra,dec =self.pixel_to_coords(xpeak,ypeak).T 
-        elif position.lower() in ["mean", "average"]:
-            ra,dec = self.pixel_to_coords(np.mean([x, xpeak], axis=0),np.mean([y, ypeak], axis=0)).T
-        else:
-            raise ValueError("Unknown matching position %s"%position)
-        
+    def get_skycoords(self, position="average", meta_radec=True):
+        """ astropy SkyCoord object corresponding to ra and dec positions
+
+        Parameters
+        ----------
+        meta_radec: [bool] -optional-
+            If there are 'ra' and 'dec' entries on the meta, should this use them?
+            Remark: if no wcs solution loaded, this is forced to True
             
+        position: [bool] -optional-
+            If there is a wcs solution and if this has to build the ra and dec values
+            how this should be made?
+            could be:
+                - center:  This uses the center of the ellipse 
+                - peak:    This uses the center of mass of the ellipses
+                - average: The average of 'center' and 'peak'
+        Returns
+        -------
+        astropy's SkyCoord
+        """
+        if not meta_radec and not self.has_wcs():
+            warnings.warn("Without wcs solution, you need to have ra and dec in the meta entries")
+            meta_radec = True
+            
+        if "ra" in self.metakeys and "dec" in self.metakeys and meta_radec:
+            ra,dec = self.get("ra"), self.get("dec")
+        elif not self.has_wcs():
+            raise AttributeError("no wcs solution loaded and no 'ra', 'dec' entries in the meta")
+        else:
+            x,y,xpeak,ypeak = self.get(["x", "y", "xpeak", "ypeak"]).T
+            if position.lower() == "center":
+                ra,dec = self.pixel_to_coords(x,y).T
+            elif position.lower() == "peak":
+                ra,dec =self.pixel_to_coords(xpeak,ypeak).T 
+            elif position.lower() in ["mean", "average"]:
+                ra,dec = self.pixel_to_coords(np.mean([x, xpeak], axis=0),np.mean([y, ypeak], axis=0)).T
+            else:
+                raise ValueError("Unknown matching position %s"%position)
+        
         return coordinates.SkyCoord(ra=ra*units.degree,dec=dec*units.degree)
 
     # -------------------------- #

@@ -14,7 +14,7 @@ from astropy     import units,coordinates
 from astropy.table import Table
 
 from . import astrometry
-from .baseobject import  TargetHandler, WCSHandler, Samplers #, BaseObject
+from .baseobject import  TargetHandler, WCSHandler, Samplers, CatalogueHandler #, BaseObject
 from .utils.shape import HAS_SHAPELY
 from .utils.tools import kwargs_update,flux_to_mag
 
@@ -166,13 +166,13 @@ def dictsource_2_photopoints(dictsource,**kwargs):
 # Base Object Classes: Image          #
 #                                     #
 #######################################
-class Image( TargetHandler, WCSHandler ):
+class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     """
     """
     __nature__ = "Image"
 
     PROPERTIES         = ["filename","rawdata","header","var","background"]
-    SIDE_PROPERTIES    = ["datamask","catalogue","exptime"] # maybe Exptime should just be on flight
+    SIDE_PROPERTIES    = ["datamask","exptime"] # maybe Exptime should just be on flight
     DERIVED_PROPERTIES = ["fits","data","sepobjects","backgroundmask","apertures_photos","fwhm"]
 
     # -------------------- #
@@ -413,52 +413,26 @@ class Image( TargetHandler, WCSHandler ):
         super(Image, self).set_wcs(wcs, force_it=force_it)
         self.wcs.set_offset(*self._dataslicing)
         
-    def set_catalogue(self,catalogue,force_it=False):
-        """
-        A Catalogue object will be loaded to this instance, you could then access it
-        as 'self.catalogue' ('self.has_catalogue()' will be True).
+    def set_catalogue(self,catalogue, force_it=False):
+        """ attach a catalogue to the current instance.
+        you can then access it through 'self.catalogue'.
 
-        The wcs solution of this
-        instance will be passed to the 'calague' one, as well as the sepobject
-        if you have one. This way, the detected object will directly be match to the
-        'catalogue'
+        The current instance's wcs solution is passed to the calague.
 
-        Catalogue: must be an astrobject Catalogue
-        
-        Return
-        ------
+        If the current instance has an sepobjects, sepobjects gains the catalogue and
+        a matching is run.
+
+        Returns
+        -------
         Void
         """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
+        super(Image, self).set_catalogue(catalogue, force_it=force_it)
 
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-        # -------------------------
-        # - Add the world_2_pixel
-        
-        if not self.has_wcs():
-            print "WARNING: no wcs solution."+"\n"+\
-              " catalogue recorded, but most likely is useless"
-            
-        else:
-            # -- Lets only consider the objects in the FoV
-            catalogue.set_wcs(self.wcs,force_it=True)
-            if catalogue.nobjects_in_fov < 1:
-                warnings.warn("WARNING No object in the field of view,"+"\n"+\
-                              "  -> catalogue not loaded")
-                return
-            
-            # -- Lets save the pixel values
-            if self.has_sepobjects():
-                self.sepobjects.set_catalogue(catalogue,force_it=True,reset=False)
-                self.sepobjects.match_catalogue()
-            
-                
-        # --------
-        # - set it
-        self._side_properties["catalogue"] = catalogue
+        # -- Lets save the pixel values
+        if self.has_catalogue() and self.has_sepobjects():
+            self.sepobjects.set_catalogue(catalogue,force_it=True,reset=False)
+            self.sepobjects.match_catalogue()
+
         
     def set_background(self,background,
                        force_it=False,check=True, update=True):
@@ -529,37 +503,7 @@ class Image( TargetHandler, WCSHandler ):
             value = value*units.arcsec
             
         self._derived_properties['fwhm'] = value
-        
-    # --------------------- #
-    # - download Methods  - #
-    # --------------------- #
-    def download_catalogue(self,source="sdss",
-                           set_it=True,force_it=False,
-                           **kwargs):
-        """
-        Downloads a catalogue of the given 'source'. This methods requires an
-        internet connection. This downloaded catalogue is then loaded in this
-        instance using the 'set_catalogue' method. If 'set_it' is set to False,
-        the catalogue is returned instead of being loaded.
-        
-        kwargs goes to instrument.catalogue
-        example: column_filters={"gmag":"13..22"}
-
-        Return:
-        ------
-        Void (or the Catalogue if set_it is False)
-        """
-        from .instruments.instrument import fetch_catalogue
-        radec = "%s %s"%(self.wcs._central_coords_nooffset[0],
-                         self.wcs._central_coords_nooffset[1])
-        radius = self.wcs.diag_size/1.8 # not 2 to have some room around
-        cat = fetch_catalogue(source=source,radec=radec,radius="%sd"%radius,
-                              **kwargs)
-        if not set_it:
-            return cat
-        self.set_catalogue(cat,force_it=force_it)
     
-        
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
@@ -1511,17 +1455,7 @@ class Image( TargetHandler, WCSHandler ):
         if not self.has_sepobjects():
             raise AttributeError("No sepobjects loaded. Run sep_extract")
         return self.sepobjects.get_ellipse_mask(self.width,self.height,r=r)
-            
-    # ----------------      
-    # -- CATALOGUE
-    @property
-    def catalogue(self):
-        return self._side_properties["catalogue"]
-    
-    def has_catalogue(self):
-        return False if self.catalogue is None\
-          else True
-    
+                
     # FWHM
     @property
     def fwhm(self):
