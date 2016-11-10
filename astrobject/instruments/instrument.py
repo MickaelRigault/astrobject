@@ -15,20 +15,18 @@ __all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
 
 KNOWN_INSTRUMENTS = ["sdss","snifs","hst","stella","ptf"]
 
-def catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
-    print "DECREPATED: catalogue->fetch_catalogue"
-    return get_catalogue(source,radec,radius,extracolums=extracolums,
-                         column_filters=column_filters,**kwargs)
 
-def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
+def fetch_catalogue(source,radec,radius,extracolumns=[],column_filters={"rmag":"5..25"},**kwargs):
     """ Download a catalogue from internet (Vizier)
     (Module based on astroquery.)
 
+    NB: The gaia catalogue DR1 only have G-band magnitude (in vega magnitude) and has no error.
+        There is FG and e_FG entries that are the fluxes (and errors) in e-/s in the gaia G-band
+    
     Parameters
     ----------
-
     source: [string]
-        Source of the catalogue. Could be: sdss/2mass/wise
+        Source of the catalogue. Could be: sdss/2mass/wise/gaia
 
     radec: [string / 2D array]
         Coordinates [deg] of the central point of the catalogue.
@@ -50,28 +48,22 @@ def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5
 
     **kwargs goes to vizier.Vizier
 
-    Return
-    ------
+    Returns
+    -------
     Catalogue
     """
+    
     if type(radec) is not str:
         if len(radec) != 2: raise TypeError("radec must be a string ('ra dec') or a 2D array ([ra,dec])")
         radec = "%f %f"(radec[0],radec[1])
+
+    # Test if catalog exist
+    if not hasattr(catalogues, "fetch_%s_catalogue"%source.lower()):
+        raise ValueError("Unknown catalog %s"%source.lower())
     
-    if source.lower() == "sdss":
-        return catalogues.fetch_sdss_catalogue(radec,radius,
-                                    extracolums=extracolums,
-                                    column_filters=column_filters,**kwargs)
-    if source.lower() in ["2mass","mass"]:
-        return catalogues.fetch_2mass_catalogue(radec,radius,
-                                    extracolums=extracolums,
-                                    column_filters=column_filters,**kwargs)
-    if source.lower() == "wise":
-        return catalogues.fetch_wise_catalogue(radec,radius,
-                                    extracolums=extracolums,
-                                    column_filters=column_filters,**kwargs)
-    
-    raise NotImplementedError("Only the SDSS, 2MASS and WISE source catalogues implemented")
+    return eval("catalogues.fetch_%s_catalogue(radec,radius,"%source.lower()+\
+                                    "extracolumns=extracolumns,"+\
+                                    "column_filters=column_filters,**kwargs)")
 
 def get_catalogue(filename, source,**kwargs):
     """ Reads the given catalogue file and open its corresponding Catalogue
@@ -90,16 +82,12 @@ def get_catalogue(filename, source,**kwargs):
     ------
     Catalogue (corresponding Child's class)
     """
-    if source == "sdss":
-        return catalogues.SDSSCatalogue(filename,**kwargs)
+    # Test if catalog exist
+    if not hasattr(catalogues, "%sCatalogue"%source.upper()):
+        raise ValueError("Unknown catalog %s"%source.upper())
     
-    if source == "2mass":
-        return catalogues.MASSCatalogue(filename,**kwargs)
+    return eval("catalogues.%sCatalogue(filename,**kwargs)"%source.upper())
     
-    if source.lower() == "wise":
-        return catalogues.WISECatalogue(filename,**kwargs)
-    
-    raise NotImplementedError("Only the SDSS, 2MASS source catalogues implemented")
 
 def get_instrument(filename,astrotarget=None,**kwargs):
     """ Reads the given file and open its corresponding Instrument object.
@@ -218,8 +206,6 @@ def which_obs_mjd(filename):
                      "these are:"+", ".join(KNOWN_INSTRUMENTS))
                      
 
-
-                     
 def is_known_instrument_file(filename):
     """
     This function test if the given filename is a known object that
