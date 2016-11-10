@@ -15,12 +15,12 @@ __all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
 
 KNOWN_INSTRUMENTS = ["sdss","snifs","hst","stella","ptf"]
 
-def catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
+def catalogue(source,radec,radius,extracolumns=[],column_filters={"rmag":"5..25"},**kwargs):
     print "DECREPATED: catalogue->fetch_catalogue"
-    return get_catalogue(source,radec,radius,extracolums=extracolums,
+    return get_catalogue(source,radec,radius,extracolumns=extracolumns,
                          column_filters=column_filters,**kwargs)
 
-def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
+def fetch_catalogue(source,radec,radius,extracolumns=[],column_filters={"rmag":"5..25"},**kwargs):
     """ Download a catalogue from internet (Vizier)
     (Module based on astroquery.)
 
@@ -60,15 +60,15 @@ def fetch_catalogue(source,radec,radius,extracolums=[],column_filters={"rmag":"5
     
     if source.lower() == "sdss":
         return catalogues.fetch_sdss_catalogue(radec,radius,
-                                    extracolums=extracolums,
+                                    extracolumns=extracolumns,
                                     column_filters=column_filters,**kwargs)
     if source.lower() in ["2mass","mass"]:
         return catalogues.fetch_2mass_catalogue(radec,radius,
-                                    extracolums=extracolums,
+                                    extracolumns=extracolumns,
                                     column_filters=column_filters,**kwargs)
     if source.lower() == "wise":
         return catalogues.fetch_wise_catalogue(radec,radius,
-                                    extracolums=extracolums,
+                                    extracolumns=extracolumns,
                                     column_filters=column_filters,**kwargs)
     
     raise NotImplementedError("Only the SDSS, 2MASS and WISE source catalogues implemented")

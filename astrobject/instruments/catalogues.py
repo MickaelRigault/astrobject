@@ -42,13 +42,24 @@ def stellar_density( catalogue, mask=None,
     
 
 
+#################################
+#                               #
+# All Sky GAIA: Catalogue       #
+#                               #
+#################################
+def fetch_gaia_catalogue(center, radius, extracolumns=[], column_filters={}, **kwargs):
+    """ "query the gaia catalogue thought Vizier
+    In Dev
+    """
+    pass
+
 
 #################################
 #                               #
 # BASIC SDSS: Catalogue         #
 #                               #
 #################################
-def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5..25"},**kwargs):
+def fetch_sdss_catalogue(center, radius, extracolumns=[],column_filters={"rmag":"5..25"},**kwargs):
     """ query online sdss-catalogue in Vizier (V/139, DR9) using astroquery.
     This function requieres an internet connection.
     
@@ -61,7 +72,7 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5.
         radius of the region to query. For instance '1d' means a
         1 degree raduis
 
-    extracolums: [list-of-string] -optional-
+    extracolumns: [list-of-string] -optional-
         Add extra column from the V/139 catalogue that will be added to
         the basic query (default: position, ID, object-type, magnitudes)
 
@@ -90,7 +101,7 @@ def fetch_sdss_catalogue(center,radius,extracolums=[],column_filters={"rmag":"5.
         columns.append("%smag"%band)
         columns.append("e_%smag"%band)
     
-    columns = columns+extracolums
+    columns = columns+extracolumns
     column_quality = {"mode":"1","Q":"2.3"}
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
     c = vizier.Vizier(catalog="V/139", columns=columns,
@@ -145,7 +156,7 @@ class SDSSCatalogue( Catalogue ):
 # BASIC 2MASS: Catalogue        #
 #                               #
 #################################
-def fetch_2mass_catalogue(center,radius,extracolums=[],
+def fetch_2mass_catalogue(center,radius,extracolumns=[],
                           column_filters={"Jmag":"5..30"},**kwargs):
     """ query online 2mass-catalogue in Vizier (II/246) using astroquery.
     This function requieres an internet connection.
@@ -159,7 +170,7 @@ def fetch_2mass_catalogue(center,radius,extracolums=[],
         radius of the region to query. For instance '1d' means a
         1 degree raduis
 
-    extracolums: [list-of-string] -optional-
+    extracolumns: [list-of-string] -optional-
         Add extra column from the II/246 catalogue that will be added to
         the basic query (default: position, ID, magnitudes)
 
@@ -187,7 +198,7 @@ def fetch_2mass_catalogue(center,radius,extracolums=[],
         columns.append("%smag"%band)
         columns.append("e_%smag"%band)
     
-    columns = columns+extracolums
+    columns = columns+extracolumns
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
     c = vizier.Vizier(catalog="II/246", columns=columns, column_filters=column_filters,
                       **kwargs)
@@ -271,7 +282,7 @@ class MASSCatalogue( Catalogue ):
 # BASIC WISE: Catalogue         #
 #                               #
 #################################
-def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5..30"}):
+def fetch_wise_catalogue(center,radius,extracolumns=[],column_filters={"Jmag":"5..30"}):
     """ query online wise-catalogue in Vizier (II/328) using astroquery.
     This function requieres an internet connection.
     
@@ -284,7 +295,7 @@ def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5.
         radius of the region to query. For instance '1d' means a
         1 degree raduis
 
-    extracolums: [list-of-string] -optional-
+    extracolumns: [list-of-string] -optional-
         Add extra column from the II/328 catalogue that will be added to
         the basic query (default: position, ID, magnitudes)
 
@@ -312,7 +323,7 @@ def fetch_wise_catalogue(center,radius,extracolums=[],column_filters={"Jmag":"5.
         columns.append("%smag"%band)
         columns.append("e_%smag"%band)
     
-    columns = columns+extracolums
+    columns = columns+extracolumns
     # - WARNING if discovered that some of the bandmag were missing if too many colums requested
     c = vizier.Vizier(catalog="II/328", columns=columns, column_filters=column_filters,
                       **kwargs)
