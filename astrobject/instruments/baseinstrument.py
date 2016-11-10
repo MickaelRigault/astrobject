@@ -1169,7 +1169,8 @@ class Catalogue( WCSHandler ):
         Remark, you need to have defined key_class and value_star
         in the __build_properties to be able to have access to this mask
         """
-        if "value_star" not in self._build_properties.keys():
+        if "value_star" not in self._build_properties.keys() or \
+          self._build_properties["value_star"] is None:
             return None
         return (self.objecttype == self._build_properties["value_star"])
 

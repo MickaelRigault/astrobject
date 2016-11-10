@@ -10,6 +10,7 @@ from ..utils.tools import kwargs_update
 from ..utils.decorators import _autogen_docstring_inheritance, make_method
 
 
+
 # ============================= #
 #                               #
 # Quick Catalogue Study         #
@@ -48,11 +49,83 @@ def stellar_density( catalogue, mask=None,
 #                               #
 #################################
 def fetch_gaia_catalogue(center, radius, extracolumns=[], column_filters={}, **kwargs):
-    """ "query the gaia catalogue thought Vizier
-    In Dev
-    """
-    pass
+    """ "query the gaia catalogue thought Vizier (I/337, DR1) using astroquery.
+    This function requieres an internet connection.
 
+    Parameters
+    ----------
+    center: [string] 'ra dec'
+        position of the center of the catalogue to query.
+
+    radius: [string] 'value unit'
+        radius of the region to query. For instance '1d' means a
+        1 degree raduis
+
+    extracolumns: [list-of-string] -optional-
+        Add extra column from the V/139 catalogue that will be added to
+        the basic query (default: position, ID, object-type, magnitudes)
+
+    column_filters: [dict] -optional-
+        Selection criterium for the queried catalogue.
+
+    **kwargs goes to astroquery.vizier.Vizier
+    
+    Returns
+    -------
+    SDSSCatalogue (child of Catalogue)
+    
+    """
+    try:
+        from astroquery import vizier
+    except:
+        raise ImportError("install astroquery. (pip install astroquery)")
+
+    #   Basic Info
+    # --------------
+    columns = ["RA_ICRS","DE_ICRS","e_RA_ICRS","e_DE_ICRS","Source","Dup",
+               "o_<Gmag>","<FG>","e_<FG>","<Gmag>","Var"]
+        
+    columns = columns+extracolumns
+    column_quality = {} # Nothing there yet
+    
+    c = vizier.Vizier(catalog="I/337/gaia", columns=columns,
+                      column_filters=kwargs_update(column_quality,**column_filters),
+                      **kwargs)
+    c.ROW_LIMIT = "unlimited"
+    
+    t = c.query_region(center,radius=radius).values()[0]
+    
+    cat = GAIACatalogue(empty=True)
+    cat.create(t.columns ,None,
+               key_ra="RA_ICRS",key_dec="DE_ICRS")
+    return cat
+
+
+class GAIACatalogue( Catalogue ):
+
+    source_name = "Gaia"
+    
+    def __init__(self, catalogue_file=None, empty=False,
+                 key_mag="__Gmag_", key_magerr="__e_Gmag_",
+                 key_ra=None, key_dec=None, **kwargs):
+        """
+        """
+        self.__build__(data_index=0,key_mag=key_mag,
+                       key_magerr=key_magerr,key_id="Source",
+                       key_ra=key_ra,key_dec=key_dec)
+        if empty:
+            return
+        
+        self.load(catalogue_file,**kwargs)
+    
+    @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
+    def set_mag_keys(self,key_mag,key_magerr):
+        #
+        # add lbda def
+        #
+        super(GAIACatalogue,self).set_mag_keys(key_mag,key_magerr)
+        if "G" in key_mag:
+            self.lbda = 6730
 
 #################################
 #                               #

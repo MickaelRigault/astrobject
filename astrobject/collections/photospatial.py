@@ -130,7 +130,6 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
 class PhotoMap( PhotoPointCollection, WCSHandler ):
     """
     """
-    #__nature__ = "PhotoMap"
 
     PROPERTIES         = []
     SIDE_PROPERTIES    = ["refmap","catalogue"]
