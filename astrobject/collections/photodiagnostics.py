@@ -37,7 +37,7 @@ def get_massestimator(photopoints=None,samplers=None,dist_param=None,
     
     Parameters
     ----------
-    = Setter: one must be used. If several are given, the first is used. =
+    = One of these must be set. If several are given, the first is used. =
     
     photopoints: [2 PhotoPoints: photopoint_g,photopoint_i]
         Astrobject's PhotoPoint of the g and i band measurements of the galaxy
@@ -348,15 +348,12 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         ax      = fig.add_axes([0.07,0.65,0.2,0.18],zorder=9)
         axcolor_prior = axcolor.twinx()
         axmass  = fig.add_axes([0.65,0.12,0.3,0.78])
-        
-
-
+        # -----------
+        # - Property
         prop = kwargs_update(dict(histtype="step", bins=20, normed=True, 
                             lw="2",fill=True, fc=mpl.cm.binary(0.2,0.4),
                             ec=mpl.cm.binary(0.8,1.), zorder=6), **kwargs)
         
-
-
         # - Plots    - #
         _ = self.photopoints["i"].magsamplers.show(ax=ax, fancy_xticklabel=False,
                                             show_legend=False, show_model=False, show=False,
@@ -451,7 +448,6 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
             for k,v in self.data['meta']:
                 self.set_meta(k,v)
             
-        
     # =================== #
     #  Internal           #
     # =================== #

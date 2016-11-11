@@ -1006,14 +1006,16 @@ class CatalogueHandler( BaseObject ):
                 raise ValueError("Without wcs solution you need to provide 'radec'")
 
         if radius_degree is None:
-            if not hasattr(self,"wcs") or not self.has_wcs():
+            if hasattr(self,"wcs") and self.has_wcs():
                 radius_degree = self.wcs.diag_size/1.8 # not 2 to have some room around
             else:
                 raise ValueError("Without wcs solution you need to provide 'radius_degree'")
             
-        
+        # - Catalogue object found.
         cat = fetch_catalogue(source=source,radec=radec,radius="%sd"%radius_degree,
                               **kwargs)
+        
+        # - set it of return it
         if not set_it:
             return cat
         

@@ -20,10 +20,6 @@ from .utils.tools import kwargs_update,flux_to_mag
 
 __all__ = ["get_image","get_photopoint"]
 
-def image(filename=None,astrotarget=None,**kwargs):
-    print "DECREPATED: image->get_image"
-    return get_image(filename=filename,astrotarget=astrotarget,**kwargs)
-
 
 def get_image(filename=None,astrotarget=None,**kwargs):
     """
@@ -435,6 +431,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
         
     def set_background(self,background,
+                       doublepass=True,
                        force_it=False,check=True, update=True):
         """
         This is a method that might strongly depend on the instrument.
@@ -445,22 +442,38 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
         Parameters
         ----------
-        background: [2d-array]     This is the float-array containing the background
-                                   level of the data.
-                                   *Important* if None is set, this method will call
-                                   Sextractor's sep-Background module to estimate it.
-
-        - option -
-        force_it: [bool]           If the data already exist, this method
-                                   will raise an execption except if you set
-                                   *force_it* to True. Be Careful with this.
+        background: [2d-array/float/None/string]
+            This is the float-array containing the background level of the data.
+            
+            Additional entries:
+               - None:    A default background will be defined using sep.
+               - 'basic': Same has None but with no double pass estimation
+                          of the background. The double pass enables to
+                          mask out the sources to measure a more consistant
+                          background.
+                          
+        
+        doublepass: [bool] -optional-
+            When estimated the background. If no sepobject extracted, then this
+            will estimate a first background, then run sep_extract to find the
+            objects then, in a second pass, re-estimate the background while masking
+            the detected source. You can avoid the sep_estimation and the second pass
+            by setting this to false.
+            *Remark* that if sep_extract has already been ran, this mask already exist
+            and the aforementioned second pass actually is the first and unique pass.
+            Hence this option only apply to cases where sep has not been ran.
+            
+        force_it: [bool] -optional-
+            If the data already exist, this method will raise an execption
+            except if you set this to True. Be careful with this.
                                    
-        check: [bool]              If True, this will check tha the given background 
-                                   is consistant with the existing data (rawdata)
-                                   if any. Set that to False to avoid this check.
+        check: [bool]
+            If True, this will check tha the given background is consistant
+            with the existing data (rawdata) if any.
+            Set that to False to avoid this check.
 
-        Return
-        ------
+        Returns
+        -------
         Void
         """
             
@@ -469,8 +482,12 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             raise AttributeError("'background' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
         
-        if background is None:
-            background  = self._get_default_background_()
+        if background is None or type(background) == str:
+            if type(background) == str and background in ["basic","simple","uniquerun"]:
+                background_prop = dict(doublepass=False)
+            else:
+                background_prop = {}
+            background  = self._get_default_background_(**background_prop)
             self._uses_default_background = True
         else:
             self._uses_default_background = False
@@ -800,7 +817,9 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ------------------- #
     #   SEP Tools         #
     # ------------------- #
-    def get_sep_background(self,update_background=True, clean_sep=True,**kwargs):
+    def get_sep_background(self, doublepass=True,
+                           update_background=True,
+                           clean_sep=True,**kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor: sep.
         
@@ -818,6 +837,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         if update_background:
             self.set_background(self._sepbackground.back(),force_it=True)
+        if not doublepass:
+            return self._sepbackground.back()
             
         self.sep_extract(match_catalogue= not clean_sep)
         self._rmsep = clean_sep
@@ -1199,7 +1220,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ----------- #
         # - What      #
         backgroudsource = self.rawdata.copy()
-        backgroudsource[self.backgroundmask] = np.NaN
+        if self.backgroundmask is not None:
+            backgroudsource[self.backgroundmask] = np.NaN
         # ----------- #
         # - How
         # -- labels
@@ -1511,7 +1533,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         return None
         
     def _get_default_background_(self,*args,**kwargs):
-        
+        """ """
         return self.get_sep_background(*args,**kwargs)
 
     

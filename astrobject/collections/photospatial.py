@@ -4,13 +4,14 @@
 import warnings
 import numpy as np
 
-from astropy        import coordinates, units
+from astropy            import coordinates, units
 
-from ..baseobject   import WCSHandler, CatalogueHandler
-from ..photometry   import get_photopoint
-from ..collection   import PhotoPointCollection
-from ..utils.tools import kwargs_update
+from ..baseobject       import WCSHandler, CatalogueHandler
+from ..photometry       import get_photopoint
+from ..collection       import PhotoPointCollection
+from ..utils.tools      import kwargs_update
 from ..utils.decorators import _autogen_docstring_inheritance
+
 __all__ = ["get_photomap","get_sepobject"]
 
 
@@ -34,8 +35,8 @@ def get_photomap(photopoints=None,coords=None,wcs_coords=True,**kwargs):
 
     **kwargs goes to PhotoMap init
 
-    Return
-    ------
+    Returns
+    -------
     PhotoMap (Collection of PhotoPoints)
     """
     return PhotoMap(photopoints=photopoints,
@@ -64,8 +65,8 @@ def get_sepobject(sepoutput, ppointkwargs={},
 
     **kwargs goes to SepObject init (Child of PhotoMap)
 
-    Return
-    ------
+    Returns
+    -------
     SepObject (Child of PhotoMap)
     """
     xkey,ykey = ["x","y"] if not use_peakposition else ["xpeak","ypeak"]
@@ -105,7 +106,21 @@ def is_sepoutput(array):
     return "cxx" in tsep.keys()
 
 def parse_sepoutput(sepoutput,lbda=None,**kwargs):
-    """
+    """ convert entries from sep or formatted sextractor output.
+
+    Parameters
+    ----------
+    sepoutput: [ndarray or dict]
+        output of sep.extract or sextractor output formatted by `parse_sepsex_fitsdata()`
+
+    lbda: [float/None] -optional-
+        provide the wavelength [in angstrom] of the photometric measurements.
+        
+    Returns
+    -------
+    dictionary (formatted to by the input of SepObject)
+
+    
     """
     from astropy import table
     if type(sepoutput) != np.ndarray and type(sepoutput) != dict:
@@ -124,13 +139,7 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
 #  From Sextractor    #
 # ------------------- #
 def parse_sepsex_fitsdata( filename, lbda=None, fluxkey="flux_auto", **kwargs):
-    """ This checks is the fits file is from sextractor
-    Parameters
-    ----------
-    
-    dataindex: [int/None] -optional-
-        
-    """
+    """ This checks is the fits file is from sextractor """
     from astropy.io import fits
     # ----------
     # - Input
@@ -187,6 +196,34 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
                  filein=None,empty=False,wcs=None,catalogue=None,
                  **kwargs):
         """
+
+        Parameters
+        ----------
+        photopoints: [list/array of photopoints] -optional-
+            List of astrobject's PhotoPoints that will set this Collection.
+
+        coords: [list of coordinates] -optional-
+            List of Nx2 array [[x,y],[x,y]...] location of the PhotoPoints
+            
+        filein: [string] -optional-
+            File containing PhotoMap data.
+
+        wcs: [astrobject's WCS] -optional-
+            Attach a wcs solution to the instance.
+            (ignored if photopoints are not given)
+            
+        catalogue: [astrobject's Catalogue] -optional-
+            Attach a catalogue to the instance.
+            (ignored if photopoints are not given)
+            
+        empty: [bool] -optional-
+            return an empty instance of this object
+
+        **kwargs goes to load / create
+        
+        Returns
+        -------
+        Void (defines the object)
         """
         self.__build__()
         if empty:
