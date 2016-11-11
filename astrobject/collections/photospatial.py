@@ -402,8 +402,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         The cleanindex option enable to automatically remove the unknown index values.
         If you do not. this will raise a ValueError indicating the unknown index
         """
-        if "__iter__" not in dir(catindex):
+        if not hasattr(catindex,"__iter__"):
             catindex = [catindex]
+            
         catindex = np.asarray(catindex)
         
         bool_ = np.in1d( catindex, self.catmatch["idx_catalogue"] )
