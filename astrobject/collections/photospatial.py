@@ -167,7 +167,12 @@ def parse_sepsex_fitsdata( filename, lbda=None, fluxkey="flux_auto", **kwargs):
         data["dec"]       = data["y_world"]
         data["x"]         = data["x_image"]
         data["y"]         = data["y_image"]
+        data["a"]         = data["a_image"]
+        data["b"]         = data["b_image"]
+        data["a.err"]     = data["erra_image"]
+        data["b.err"]     = data["errb_image"]
         data["theta"]     = data["theta_image"]
+        
         data["theta.err"] = data["errtheta_image"]
         
         if fluxkey.lower() not in data.keys():
@@ -337,7 +342,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
 
     # -- Catalogue <-> PhotoMap
     def match_catalogue(self,catalogue=None,
-                        force_it=False, deltadist=5*units.arcsec,
+                        force_it=False, deltadist=None,
                         **kwargs):
         """
         This methods enable to attached a given sepobject entry
@@ -358,6 +363,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         if not self.has_catalogue():
             raise AttributeError("No 'catalogue' defined or given.")
         
+        if deltadist is None:
+            deltadist = 3*units.arcsec
+            
         # -- matching are made in degree space
         skyradec = self.get_skycoords(**kwargs)
         idxcatalogue, idxsepobjects, d2d, d3d = skyradec.search_around_sky(self.catalogue.sky_radec, deltadist)
@@ -425,7 +433,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     # -----------------
     @_autogen_docstring_inheritance(CatalogueHandler.set_catalogue,"CatalogueHandler.get_indexes")
     def set_catalogue(self,catalogue,force_it=True,
-                      reset=True,
+                      reset=True,match_angsep=3*units.arcsec,
                       match_catalogue=True):
         #
         # + reset and matching
@@ -436,7 +444,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         super(PhotoMap, self).set_catalogue(catalogue,force_it=True)
         
         if self.has_catalogue() and match_catalogue:
-            self.match_catalogue()
+            self.match_catalogue(deltadist=match_angsep)
 
             
     @_autogen_docstring_inheritance(CatalogueHandler.download_catalogue,"CatalogueHandler.download_catalogue")
@@ -453,7 +461,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         if radius_degree is None:
             radius_degree = np.max(np.std(self.radec,axis=0)*5)
             
-        return super(PhotoMap, self).download_catalogue(source="sdss",
+        return super(PhotoMap, self).download_catalogue(source=source,
                                                         set_it=set_it, force_it=force_it,
                                                         radec=radec, radius_degree=radius_degree,
                                                         **kwargs)
@@ -808,7 +816,7 @@ class SepObject( PhotoMap ):
         
     def show_ellipses(self,ax=None,
                       savefile=None,show=True,
-                      apply_catmask=True,stars_only=False,nonstars_only=True,
+                      apply_catmask=True,stars_only=False,nonstars_only=False,
                       isolated_only=False,catmag_range=[None,None],
                       **kwargs):
         """ Display ellipses of the extracted sources (see masking options) """

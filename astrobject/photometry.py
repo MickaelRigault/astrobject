@@ -409,7 +409,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         super(Image, self).set_wcs(wcs, force_it=force_it)
         self.wcs.set_offset(*self._dataslicing)
         
-    def set_catalogue(self,catalogue, force_it=False):
+    def set_catalogue(self,catalogue, force_it=False,
+                      match_angsep=3*units.arcsec):
         """ attach a catalogue to the current instance.
         you can then access it through 'self.catalogue'.
 
@@ -427,7 +428,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # -- Lets save the pixel values
         if self.has_catalogue() and self.has_sepobjects():
             self.sepobjects.set_catalogue(catalogue,force_it=True,reset=False)
-            self.sepobjects.match_catalogue()
+            self.sepobjects.match_catalogue(deltadist=match_angsep)
 
         
     def set_background(self,background,

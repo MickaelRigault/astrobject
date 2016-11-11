@@ -68,6 +68,23 @@ class BaseCollection(BaseObject):
     # ----------------- #
     # - Getter        - #
     # ----------------- #
+    def get(self, param, mask=None, softout=False, **kwargs):
+        """ get data from the object this contains (get of collected object called) """
+
+        ids = self.list_id if mask is None else np.asarray(self.list_id)[mask]
+
+        def has_no_get(id_, softout=softout):
+            if softout:
+                warnings.warn("The object labeled %s has no get() method"%id_)
+                return []
+            
+            raise AttributeError("The object labeled %s has no get() method"%id_)
+            
+        return [self._handler[id_].get(param, **kwargs)
+                if hasattr(self._handler[id_],"get") else has_no_get(id_)
+                for id_ in ids]
+            
+    
     def get_id(self, containing):
         """ returns all the id containing the 'containing'
         part within their text """
@@ -116,8 +133,17 @@ class BaseCollection(BaseObject):
             raise AttributeError("no data loaded")
         
         return np.sort(self._handler.keys()).tolist()
-    
 
+    @property
+    def list_id(self):
+        """This is the list of the known data id (equivalent to list_sources). Empty list return if not data"""
+        return [] if not self.has_sources() else \
+          self.list_sources
+
+    def _test_id_(self,id_):
+        """ Is the given id known? """
+        return self._test_source_(id_)
+    
 # =============================== #
 #                                 #
 #  Astro-oriented BaseCollection  #
@@ -137,10 +163,7 @@ class Collection( TargetHandler, BaseCollection ):
         super(Collection,self).__build__(*args,**kwargs)
         self._build_properties = {}
 
-    def _test_id_(self,id_):
-        """
-        """
-        return self._test_source_(id_)
+
     # ========================== #
     # = Properties             = #
     # ========================== #
@@ -151,11 +174,7 @@ class Collection( TargetHandler, BaseCollection ):
     def has_data(self):
         return self.has_sources()
     
-    @property
-    def list_id(self):
-        """This is the list of the known data id (equivalent to list_sources). Empty list return if not data"""
-        return [] if not self.has_sources() else \
-          self.list_sources 
+
 
 #######################################
 #                                     #
@@ -1167,7 +1186,7 @@ class PhotoPointCollection( Collection ):
     """
     PROPERTIES         = []
     SIDE_PROPERTIES    = []
-    DERIVED_PROPERTIES = []
+    DERIVED_PROPERTIES = ["getkeys"]
     
     def __init__(self, photopoints=None,filein=None,empty=False,**kwargs):
         """
@@ -1232,8 +1251,10 @@ class PhotoPointCollection( Collection ):
                 ID = ID+"-%d"%i
         # -------------------
         # - Record the point        
-        self.photopoints[ID] = photopoint
-
+        self.photopoints[ID]                = photopoint
+        self._derived_properties["getkeys"] = None
+        
+        
     def writeto(self,filename,format="ascii",**kwargs):
         """
         Save the PhotoPointCollection following the astropy's Table 'write()' method.
@@ -1323,9 +1344,7 @@ class PhotoPointCollection( Collection ):
                 dt[k] = dt_[k].data
             return dt
         raise ValueError("unknown format.")
-    
-          
-        
+      
     def get(self,param, mask=None, safeexit=True):
         """Loop over the photopoints (following the list_id sorting) to get the
          parameters using the photopoint.get() method.
@@ -1337,10 +1356,9 @@ class PhotoPointCollection( Collection ):
         -------
         list
         """
-        ids = self.list_id if mask is None else np.asarray(self.list_id)[mask]
-        return np.asarray([self.photopoints[id_].get(param,safeexit=safeexit)
-                            for id_ in ids])
+        reteurn super(PhotoPointCollection, self).get(param, mask=mask, safeexit=safeexit)
 
+    
     # ------------------- #
     # - Setter          - #
     # ------------------- #
@@ -1552,6 +1570,15 @@ class PhotoPointCollection( Collection ):
         metadata = [self.get(metak) for metak in metanames]
         return table.Table(data=[self.list_id]+metadata,
                             names=["id"]+metanames)
+    
+    @property
+    def getkeys(self):
+        """ List of keys known in data and meta you can call by get().
+        Remark that these are not the only thing you can call with get.
+        """
+        if self._derived_properties["getkeys"] is None:
+            self._derived_properties["getkeys"] = np.sort(np.unique(self.data.keys() + self.metakeys))
+        return self._derived_properties["getkeys"]
     
     @property
     def data_complet(self):
