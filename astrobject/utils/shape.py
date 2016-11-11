@@ -3,7 +3,7 @@
 
 """This module, based on Shapely, enable to have access to contours
    and Patch for astrobjects"""
-
+import warnings
 import numpy as np
 import matplotlib.pyplot as mpl
 from matplotlib.patches import Polygon
@@ -15,10 +15,10 @@ from .decorators import make_method
 try:
     from shapely.geometry import MultiPoint,Point, polygon, multipolygon
     HAS_SHAPELY = True
+    
 except ImportError:
     _ERRORMESSAGE = "you do not have shapely installed."
-    print _ERRORMESSAGE + " Some function will not be accessible."
-    print "--> pip install Shapely"
+    warnings.warns(_ERRORMESSAGE + " Some function will not be accessible."+"\n"+"--> pip install Shapely")
     HAS_SHAPELY = False
 
 

@@ -8,7 +8,7 @@ import warnings
 from astropy import coordinates, table, units
 import matplotlib.pyplot as mpl
 
-from .baseobject import BaseObject, TargetHandler
+from .baseobject import BaseObject, TargetHandler, CatalogueHandler
 from .photometry import get_photopoint
 from .instruments import instrument as inst
 from .utils.tools import kwargs_update, load_pkl
@@ -162,11 +162,11 @@ class Collection( TargetHandler, BaseCollection ):
 # Image Collection                    #
 #                                     #
 #######################################
-class ImageCollection( Collection ):
+class ImageCollection( Collection, CatalogueHandler ):
     """
     """
     PROPERTIES         = []
-    SIDE_PROPERTIES    = ["catalogue", "hostcollection"]
+    SIDE_PROPERTIES    = ["hostcollection"]
     DERIVED_PROPERTIES = []
     
     def __init__(self,images=None,empty=False,catalogue=None, **kwargs):
@@ -598,22 +598,6 @@ class ImageCollection( Collection ):
     # --------------------- #
     # - Catalogue Methods - #
     # --------------------- #
-    def set_catalogue(self,catalogue,force_it=False):
-        """
-        """
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
-
-        if "__nature__" not in dir(catalogue) or catalogue.__nature__ != "Catalogue":
-            raise TypeError("the input 'catalogue' must be an astrobject catalogue")
-        # Important:
-        # No WCS solution loaded here, this will be made image by image
-        # --------
-        # - set it
-        self._side_properties["catalogue"] = catalogue
-        
-
     def download_catalogue(self,id_=None,
                            source="sdss",
                            **kwargs):
@@ -761,14 +745,6 @@ class ImageCollection( Collection ):
         print "_imageids to be changed to self.list_id"
         return self.list_id
     
-    # -- Catalogue
-    @property
-    def catalogue(self):
-        return self._side_properties['catalogue']
-
-    def has_catalogue(self):
-        return not self.catalogue is None 
-
     # ------------------ #
     # - Host Tricks    - #
     # ------------------ #
