@@ -137,16 +137,35 @@ def get_voronoy_multipolygon(x, y ,  edges=None):
         Edges of the voronoy map
     """
     from scipy.spatial import Voronoi
+    from itertools import product
+    
+    # - Define the Grid
+    # --------------------
     flagok = np.isnan(x) * np.isnan(y)
-    xy = np.asarray([x[~flagok],y[~flagok]]).T
+    x,y    = x[~flagok], y[~flagok]
+    # define extremum to avoid non finished edges
+    ext_x,ext_y = np.asarray(list (product([x.min()-x.max()*10,x.mean(), x.max()+x.max()*10],
+                                    [y.min()-y.max()*10,y.mean(), y.max()+y.max()*10]))).T
+
+    xy = np.asarray([np.concatenate([x,ext_x]),
+                     np.concatenate([y,ext_y])]).T
+    
     npoint = np.shape(xy)[0]
     vor = Voronoi(xy)
     xy_poly = [[vor.vertices[x] for x in vor.regions[vor.point_region[i]]
                         if x>=0  # this others could be saved
                         ] for i in range(npoint)]
+
     
     #edges = polygon.Polygon([[0,0],[0,4100],[2100,4100],[2100,0]])
-    
-    return MultiPolygon([edges.intersection(polygon.Polygon(xy_)) for xy_ in xy_poly]) if edges is not None\
-      else MultiPolygon([polygon.Polygon(xy_) for xy_ in xy_poly])
+    polygons = []
+    for xy_ in xy_poly:
+        try:
+            p_ = edges.intersection(polygon.Polygon(xy_))
+        except:
+            continue
+        if p_.area>0:
+            polygons.append(p_)
+        
+    return MultiPolygon(polygons)
     

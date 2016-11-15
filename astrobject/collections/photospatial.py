@@ -327,6 +327,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         # - value within the maskin are filled
         if np.any(flag_hasidx):
             values_out[flag_hasidx] = self.get(param, mask=self.catindex_to_index(np.asarray(catindex)[flag_hasidx]))
+            
         return values_out
 
     def is_catindex_detected(self, catindex):
@@ -470,9 +471,16 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         bool_ = np.in1d( index, self.catmatch["idx"] )
         if not np.all(bool_) and  not cleanindex:
             raise ValueError("Unknown photomap index(es):"+", ".join(index[bool_]))
-            
-        return np.concatenate(self.catmatch["idx_catalogue"][\
-                        np.argwhere(np.in1d(self.catmatch["idx"], index[bool_]))])
+
+        catindexmask = np.argwhere(np.in1d(self.catmatch["idx"], index[bool_]))
+        # all the index[bool_] entries have a catidx associated. But some may have several
+        # If so len(catindexmask) would be greater. Hence we run a slower, but accurate technique
+        if len(catindexmask)>len(index[bool_]):
+            warnings.warn("At least one index has several catindex matched. First used")
+            return np.asarray([self.catmatch["idx_catalogue"][np.argwhere(self.catmatch["idx"]==i)[0]][0]
+                for i in index[bool_]])
+                    
+        return np.concatenate(self.catmatch["idx_catalogue"][catindexmask])
                         
         
     def catindex_to_index(self,catindex, cleanindex=False):
@@ -488,8 +496,17 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         bool_ = np.in1d( catindex, self.catmatch["idx_catalogue"] )
         if not np.all(bool_) and not cleanindex:
             raise ValueError("Unknown catalogue index(es):"+", ".join(catindex[bool_]))
-            
-        return np.concatenate(self.catmatch["idx"][np.argwhere(np.in1d(self.catmatch["idx_catalogue"], catindex[bool_]))])
+
+        
+        indexmask =  np.argwhere(np.in1d(self.catmatch["idx_catalogue"], catindex[bool_]))
+        # all the catindex[bool_] entries have a idx associated. But some may have several
+        # If so len(indexmask) would be greater. Hence we run a slower, but accurate technique
+        if len(indexmask)>len(catindex[bool_]):
+            warnings.warn("At least one catalogue entry has several index matched. First used  ")
+            return np.asarray([self.catmatch["idx"][np.argwhere(self.catmatch["idx_catalogue"]==i)[0]][0]
+                for i in catindex[bool_]])
+                    
+        return np.concatenate(self.catmatch["idx"][indexmask])
 
     # ------------- #
     # - SETTER    - #
