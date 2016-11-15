@@ -1356,7 +1356,7 @@ class PhotoPointCollection( Collection ):
         -------
         list
         """
-        reteurn super(PhotoPointCollection, self).get(param, mask=mask, safeexit=safeexit)
+        return super(PhotoPointCollection, self).get(param, mask=mask, safeexit=safeexit)
 
     
     # ------------------- #

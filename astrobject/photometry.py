@@ -16,7 +16,7 @@ from astropy.table import Table
 from . import astrometry
 from .baseobject import  TargetHandler, WCSHandler, Samplers, CatalogueHandler #, BaseObject
 from .utils.shape import HAS_SHAPELY
-from .utils.tools import kwargs_update,flux_to_mag
+from .utils.tools import kwargs_update, flux_to_mag
 
 __all__ = ["get_image","get_photopoint"]
 

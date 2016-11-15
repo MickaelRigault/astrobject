@@ -361,7 +361,7 @@ def wcsplot(ax, wcs, exp_order=10,
 # --------------------- #
 @make_method(mpl.Axes)
 def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
-                   cmap=mpl.cm.jet,
+                   cmap=mpl.cm.viridis,
                    cbar=True,cblabel="",cbarprop={},
                    **kwargs):
     """
@@ -445,7 +445,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
     # ----------------- #
     if not (color is "None" or not cbar):
         # - this means it is not an ax
-        axcar = ax.insert_ax("right", shrunk=0.8,space=.0,axspace=0.03) \
+        axcar = ax.insert_ax("right", shrunk=0.9,space=.0,axspace=0.03) \
           if "imshow" not in dir(cbar) else cbar
         calpha = cbarprop.pop('alpha',kwargs.pop("alpha",None))
         return collec, axcar.colorbar(cmap,vmin=vmin,vmax=vmax,label=cblabel,

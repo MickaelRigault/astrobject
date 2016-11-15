@@ -8,15 +8,15 @@ from astropy            import coordinates, units
 
 from ..baseobject       import WCSHandler, CatalogueHandler
 from ..photometry       import get_photopoint
-from ..collection       import PhotoPointCollection
+from ..collection       import BaseCollection, PhotoPointCollection
 from ..utils.tools      import kwargs_update
 from ..utils.decorators import _autogen_docstring_inheritance
 
-__all__ = ["get_photomap","get_sepobject"]
+
+__all__ = ["get_photomap","get_sepobject", "get_photomapcollection"]
 
 
-
-def get_photomap(photopoints=None,coords=None,wcs_coords=True,**kwargs):
+def get_photomap(photopoints=None,coords=None,wcs_coords=True, **kwargs):
     """ Create a collection of photopoints
 
     Parameters
@@ -46,7 +46,7 @@ def get_photomap(photopoints=None,coords=None,wcs_coords=True,**kwargs):
 
 
 def get_sepobject(sepoutput, ppointkwargs={},
-                  use_peakposition=False,
+                  use_peakposition=False, wcs_extension=None,
                    **kwargs):
     """ Create a Spectial collection of photopoints dedicated
     to the SEP's output.
@@ -63,6 +63,10 @@ def get_sepobject(sepoutput, ppointkwargs={},
         value.
         See set_meta() of PhotoPoint
 
+    wcs_extension: [int/None] -optional-
+        If the data (a fits file) has a wcs recorded. Provide here the extension.
+        If None, no wcs solution will be loaded.
+        
     **kwargs goes to SepObject init (Child of PhotoMap)
 
     Returns
@@ -85,9 +89,55 @@ def get_sepobject(sepoutput, ppointkwargs={},
         
     [pmap.set_meta(k,inputphotomap["meta"][k].data, ids=ids_sorting)
          for k in inputphotomap["meta"].keys()]
+    
+    # WCS Solution
+    # --------------
+    if wcs_extension is not None:
+        from ..astrometry import wcs
+        try:
+            wcssolution = wcs(sepoutput, extension=wcs_extension)
+        except:
+            warnings.warn("Failing loading the wcs solution")
+            wcssolution = None
+            
+        if wcssolution is not None:
+            pmap.set_wcs(wcssolution)
         
     return pmap
+
+
+
+def get_photomapcollection( photomaps, wcs_extension=None, **kwargs ):
+    """ Get a PhotoMap collection
+
+    Parameters
+    ----------
+    photomaps: [list of photomaps or filenames of]
+        The photomaps of roughly a same area that you want to combine into a collection
+        if a list of filename is given, get_sepobject() will be used to read them.
+        This could be e.g. sep or sextractor outputs
+
+    wcs_extension: [int/None] -optional-
+        If the given data are fitfiles, you can specify the extension of the header
+        containing the wcs solution if any. Leave this to None if no wcs solution have
+        to be loaded.
+
+    **kwargs goes to the PhotoMapCollection __init__ (catalogue etc.)
     
+    Returns
+    -------
+    PhotoMapCollection
+    """
+    if not hasattr(photomaps, "__iter__"):
+        raise TypeError("photomaps must be a list/array")
+
+    # -- loading data
+    if type(photomaps[0]) == str:
+        photomaps = [get_sepobject(filename, wcs_extension=wcs_extension, **kwargs) for filename in photomaps]
+        if wcs_extension is not None:
+            [p._derive_radec_() for p in photomaps if p.has_wcs()]
+
+    return PhotoMapCollection(photomaps, **kwargs)
 # ======================= #
 #                         #
 # Internal Functions      #
@@ -255,6 +305,34 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     # ---------- #
     #  GETTER    #
     # ---------- #
+    def getcat(self, param, catindex):
+        """ get method based on catindex entry(ies).
+        This converts the catindex into index and return the
+        values for the requested parameter(s) (param). If the catindex
+        has no associated index entry, the corresponding returned value
+        will be nan.
+        
+        Returns
+        -------
+        array
+        """
+        if self.catmatch is None or len(self.catmatch) == 0:
+            raise AttributeError("No catalogue matched")
+        
+        # - output array  
+        values_out = np.ones([len(catindex), len(param)])*np.NaN if hasattr(param, "__iter__") else\
+          np.ones(len(catindex))*np.NaN
+        # - flag has data
+        flag_hasidx = self.is_catindex_detected(catindex)
+        # - value within the maskin are filled
+        if np.any(flag_hasidx):
+            values_out[flag_hasidx] = self.get(param, mask=self.catindex_to_index(np.asarray(catindex)[flag_hasidx]))
+        return values_out
+
+    def is_catindex_detected(self, catindex):
+        """ check if the given catalog index has been matched """
+        return np.in1d(catindex, self.catmatch["idx_catalogue"])
+    
     def get_skycoords(self):
         """ """
         ra,dec = self.radec.T
@@ -323,7 +401,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             raise ValueError("Not enough points in the given location")
         
         # -- known sources in the photomap
-        catindex = cat_indexes[np.in1d( cat_indexes, self.catmatch["idx_catalogue"] )]
+        catindex = cat_indexes[self.is_catindex_detected(catindex)]
         index = self.catindex_to_index(catindex)
 
         # ------------------- #
@@ -411,10 +489,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         if not np.all(bool_) and not cleanindex:
             raise ValueError("Unknown catalogue index(es):"+", ".join(catindex[bool_]))
             
-        return np.concatenate(self.catmatch["idx"][\
-                        np.argwhere(np.in1d(self.catmatch["idx_catalogue"], catindex[bool_]))])
+        return np.concatenate(self.catmatch["idx"][np.argwhere(np.in1d(self.catmatch["idx_catalogue"], catindex[bool_]))])
 
-    
     # ------------- #
     # - SETTER    - #
     # ------------- #
@@ -433,16 +509,16 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     #  Super Catalogue
     # -----------------
     @_autogen_docstring_inheritance(CatalogueHandler.set_catalogue,"CatalogueHandler.get_indexes")
-    def set_catalogue(self,catalogue,force_it=True,
-                      reset=True,match_angsep=3*units.arcsec,
-                      match_catalogue=True):
+    def set_catalogue(self,catalogue, reset=True,
+                      match_catalogue=True,match_angsep=3*units.arcsec, **kwargs):
         #
         # + reset and matching
         #
         if reset:
             catalogue.reset()
-            
-        super(PhotoMap, self).set_catalogue(catalogue,force_it=True)
+
+        _ = kwargs.pop("fast_setup", None)
+        super(PhotoMap, self).set_catalogue(catalogue, fast_setup=True, **kwargs)
         
         if self.has_catalogue() and match_catalogue:
             self.match_catalogue(deltadist=match_angsep)
@@ -669,6 +745,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         Show a Voronoy cell map colored as a function of the given 'toshow'.
         You can see the nods used to define the cells setting show_nods to True.    
         """
+        import matplotlib.pyplot as mpl
         if ax is None:
             fig = mpl.figure(figsize=[8,8])
             ax  = fig.add_axes([0.1,0.1,0.8,0.8])
@@ -680,7 +757,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         else:
             fig = ax.figure
 
-        from ...utils.mpladdon import voronoi_patchs
+        from ..utils.mpladdon import voronoi_patchs
         # -----------------
         # - The plot itself
         xy = self.radec if wcs_coords else self.xy
@@ -693,32 +770,46 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
                     alpha=kwargs.pop("alpha",0.8),zorder=kwargs.pop("zorder",3)+1)
         ax.figure.canvas.draw()
         return out
-        
+
     # =============================== #
-    # = properties                  = #
+    #   Internal Tools                #
+    # =============================== #
+    def _derive_radec_(self):
+        """ derives the ra dec values from the wcs solution """
+        if not self.has_wcs():
+            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
+        
+        ra,dec = self.wcs.pix2world(*self._coords.T).T
+        self.set_meta("ra",ra)
+        self.set_meta("dec",dec)
+
+    def _derive_xy_():
+        """ derives the x y values from the wcs solution """
+        if not self.has_wcs():
+            raise AttributeError("You need a wcs solution to convert radec to pixels. None set.")
+        x,y = self.wcs.world2pix(*self._coords.T).T
+        self.set_meta("x",x)
+        self.set_meta("y",y)
+    # =============================== #
+    #   properties                    #
     # =============================== #
     @property
     def radec(self):
-        """ """
+        """ world coordinates in degree """
         if self._wcsid:
             return self._coords
-        
-        if not self.has_wcs():
-            if "ra" in self.metakeys and "dec" in self.metakeys:
-                return self.get(["ra","dec"])
-            else:
-                raise AttributeError("You need a wcs solution to convert pixels to radec or to have 'ra' and 'dec' in the metakeys. None set.")
-            
-        return self.wcs.pix2world(*self._coords.T)
+        if "ra" not in self.metakeys or "dec" not in self.metakeys:
+            self._derive_radec_()
+        return self.get(["ra","dec"])
     
     @property
     def xy(self):
-        """ """
+        """ image coordinates in pixels """
         if not self._wcsid:
             return self._coords
-        if not self.has_wcs():
-            raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
-        return self.wcs.world2pix(*self._coords.T)
+        if "x" not in self.metakeys or "y" not in self.metakeys:
+            self._derive_xy_()            
+        return self.get(["x","y"])
     
     @property
     def _coords(self):
@@ -1114,3 +1205,211 @@ class SepObject( PhotoMap ):
                                                                    dtype="bool")
               
         return self._derived_properties["ingalaxy_mask"]
+
+
+
+
+######################################
+#                                    #
+#   Collection of PhotoMaps          #
+#                                    #
+######################################
+
+class PhotoMapCollection( BaseCollection, CatalogueHandler ):
+    """ Collection of PhotoMaps """
+
+    PROPERTIES         = []
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = []
+
+    def __init__(self, photomaps=None, empty=False, catalogue=None, **kwargs):
+        """ """
+        self.__build__()
+        if empty:
+            return
+
+        # - Load the Catalogue if given
+        if catalogue is not None:
+            self.set_catalogue(catalogue, **kwargs)
+            
+        # - Load any given photomap
+        if photomaps is not None:
+            if hasattr(photomaps, "__iter__"):
+                [self.add_photomap(photomap, **kwargs) for photomap in photomaps]
+            else:
+                self.add_photomap(photomaps, **kwargs)
+
+    # =================== #
+    #   Main Methods      #
+    # =================== #
+    def add_photomap(self, photomap, id_=None,
+                     match_catalogue=True, **kwargs):
+        """ 
+        This method enables to load the given photomap in the
+        self.photomaps container (dict).
+        
+        Parameters
+        ----------
+        new_image: [string or astrobject's Image (or children)]
+
+        - option -
+        id_: [any]
+            key used to access the photomap from the _handler.
+            id_ is set the photopoint's bandname if None
+
+        **kwargs goes to catalogue matching.
+        Return
+        ------
+        Void
+        """
+        # --------------
+        # - Define ID
+        if photomap is None:
+            return
+
+        if PhotoMap not in photomap.__class__.__mro__:
+            raise TypeError("The givem photomap must be (or inherate of) an astrobject's PhotoMap")
+        
+        if self.has_sources():
+            if id_ is None or id_ in self.list_id:
+                id_= ""
+                i = 1
+                while id_+"%d"%i in self.list_id:
+                    i+=1
+                id_ = id_+"%d"%i
+        else:
+            id_ = "1"
+            
+        # -------------------
+        # - Match the catalogue
+        if self.has_catalogue() and match_catalogue:
+            photomap.match_catalogue(force_it=True, **kwargs)
+        # -------------------
+        # - Record the map            
+        self.photomaps[id_]  = photomap
+
+    # -------------- #
+    #    GETTER      #
+    # -------------- #
+    def getcat(self, param, catindex):
+        """ get method based on catindex entry(ies). """
+        return [self.photomaps[id_].getcat(param, catindex)
+                for id_ in self.list_id]
+    
+    # -------------- #
+    #  Catalogue     #
+    # -------------- #
+    def match_catalogue(self, deltadist=3*units.arcsec, **kwargs):
+        """ Match the catalogue to all the PhotoMaps """
+        if not self.has_catalogue():
+            raise AttributeError("No catalogue to match")
+        
+        [self.photomaps[id_].match_catalogue(deltadist=3*units.arcsec,
+                                              **kwargs)
+         for id_ in self.list_id]
+
+    def get_catindexes(self, inclusion=0,
+                       isolated_only=False, stars_only=False,
+                       nonstars_only=False, catmag_range=[None, None],
+                       contours=None, **kwargs):
+        """ Get the index of the catalogue that has been mathced.
+
+        Parameters
+        ----------
+        inclusion: [0,1 or >1] -optional-
+            - inclusion [0,1]:
+                Minimal fraction of photomaps that should share a catalogue entry.
+                If 0 this means that any catalogue entry detected at least once
+                will be returned. If 1, only catalogue entry shared by all Photomaps
+                will be returned.
+            - inclusion >1:
+                Minimal number of time a given catalogue entry is matched within a photomaps
+                For instance if include is 3, only catalogue entries detected at least 3 times
+                will be used.
+
+        Returns
+        -------
+        list (indexes of the catalogue)
+        """
+        catindexes = [self.photomaps[id_].get_indexes(isolated_only=isolated_only, stars_only=stars_only,
+                                                      nonstars_only=nonstars_only, catmag_range=catmag_range,
+                                                      contours=contours,
+                                                      cat_indexes=True, **kwargs)
+                      for id_ in self.list_id]
+            
+        # For speed, let's do the obvious cases first
+        if inclusion==1:
+            return list(frozenset(catindexes[0]).intersection(*catindexes[1:]))
+        if len(catindexes) == 1:
+            return catindexes[0]
+
+        detected_once = np.unique(np.concatenate(catindexes))
+        if inclusion==0:
+            return detected_once
+        
+        # Ok then let's measure it.
+        fractionin = np.sum([self.photomaps[i].is_catindex_detected(detected_once) for i in self.list_id], axis=0)/float(self.nsources) if inclusion<1\
+          else np.sum([self.photomaps[i].is_catindex_detected(detected_once) for i in self.list_id], axis=0)
+
+        return detected_once[fractionin>=inclusion]
+        
+
+    def catindex_to_index(self, catindex, cleanindex=False):
+        """ Get the index of the individual photomaps associated to the given catindex
+        
+        Parameters
+        ----------
+        catindex: [int of list of]
+            catalogue entry that should be matched with the photomap indexes
+
+            
+        Returns
+        -------
+        list [[idx],[idx],...]
+        """
+        return [self.photomaps[id_].catindex_to_index(catindex,cleanindex=cleanindex)
+                for id_ in self.list_id]
+
+    
+    # - Super Mother CatalogueHandler
+    @_autogen_docstring_inheritance(CatalogueHandler.download_catalogue,"CatalogueHandler.download_catalogue")
+    def download_catalogue(self, source="sdss",
+                           set_it=True,force_it=False,
+                           radec=None, radius_degree=None,
+                           match_catalogue=True,match_angsep=2*units.arcsec,
+                           **kwargs):
+        #
+        # default definition of radec and radius_degree
+        #
+        if radec is None or radius_degree is None:
+            ra,dec = np.concatenate(self.get(["ra","dec"]), axis=0).T
+            
+        if radec is None:
+            radec = np.mean([ra,dec],axis=1)
+            radec = "%s %s"%(radec[0],radec[1])
+        if radius_degree is None:
+            radius_degree = np.max(np.std([ra,dec],axis=1)*5)
+            
+        out = super(PhotoMapCollection, self).download_catalogue(source=source,
+                                                        set_it=set_it, force_it=force_it,
+                                                        radec=radec, radius_degree=radius_degree,
+                                                        **kwargs)
+        if self.has_catalogue() and match_catalogue:
+            self.match_catalogue(deltadist=match_angsep)
+
+        return out
+    
+    @_autogen_docstring_inheritance(CatalogueHandler.set_catalogue,"CatalogueHandler.set_catalogue")
+    def set_catalogue(self, catalogue, force_it=False, **kwargs):
+        # 
+        super(PhotoMapCollection, self).set_catalogue( catalogue, force_it=force_it, **kwargs)
+        [self.photomaps[id_].set_catalogue(self.catalogue, fast_setup=True, **kwargs)
+         for id_ in self.list_id]
+        
+    # =================== #
+    #   Properties        #
+    # =================== #
+    @property
+    def photomaps(self):
+        """ """
+        return self._handler

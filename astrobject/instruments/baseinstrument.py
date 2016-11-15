@@ -432,10 +432,10 @@ class Catalogue( WCSHandler ):
         super(Catalogue, self).set_wcs(wcs, force_it=force_it)
         
         if update_fovmask:
-            if self.has_wcs() and shape.HAS_SHAPELY:
+            if self.has_wcs() and shape.HAS_SHAPELY and self.wcs.has_contours():
                 self.set_fovmask(wcs=self.wcs,update=False)
             else:
-                print "None wcs"
+                warnings.warn("loading default fovmask since no wcs solution or no Shapely or wcssolution without image")
                 self._load_default_fovmask_()
 
     def set_fovmask(self, wcs=None, fovcontours=None,
@@ -459,6 +459,7 @@ class Catalogue( WCSHandler ):
         """
         if wcs is not None:
             fovcontours = wcs.contours
+            
         elif fovcontours is None:
             raise ValueError("Either wcs or fovcontours must be provided")
         
@@ -773,6 +774,9 @@ class Catalogue( WCSHandler ):
         
     def get_contour_mask(self, contours, infov=True):
         """  returns a boolean array for the given contours """
+        if contours is None:
+            return np.asarray([True for ra in self._ra])
+        
         if type(contours) != shape.polygon.Polygon and\
            type(contours) != shape.multipolygon.MultiPolygon:
             raise TypeError("contours must be a shapely Polygon or MultiPolygon")

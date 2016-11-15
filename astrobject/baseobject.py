@@ -1021,34 +1021,41 @@ class CatalogueHandler( BaseObject ):
         
         self.set_catalogue(cat,force_it=force_it)
         
-    def set_catalogue(self, catalogue, force_it=False):
+    def set_catalogue(self, catalogue, force_it=False,
+                      fast_setup=False):
         """ attach a catalogue to the current instance.
         you can then access it through 'self.catalogue'.
 
         The current instance's wcs solution is passed to the calague.
 
+        Parameters
+        ----------
+        fast_setup: [bool] -optional-
+            No Test to automatic wcs association, pure setting
         Returns
         -------
         Void
         """
         from .instruments.baseinstrument import Catalogue
-        if self.has_catalogue() and force_it is False:
-            raise AttributeError("'catalogue' already defined"+\
-                    " Set force_it to True if you really known what you are doing")
 
-        if Catalogue not in catalogue.__class__.__mro__:
-            raise TypeError("the input 'catalogue' must be an astrobject Catalogue")
-        
-        
-        if hasattr(self,"wcs") and self.has_wcs():
-            catalogue.set_wcs(self.wcs,force_it=True)
-            if catalogue.nobjects_in_fov < 1:
-                warnings.warn("WARNING No object in the field of view,"+"\n"+\
-                              "  -> catalogue not loaded")
-                return
+        if not fast_setup:
+            if self.has_catalogue() and force_it is False:
+                raise AttributeError("'catalogue' already defined"+\
+                        " Set force_it to True if you really known what you are doing")
+    
+            if Catalogue not in catalogue.__class__.__mro__:
+                raise TypeError("the input 'catalogue' must be an astrobject Catalogue")
+            
+            if hasattr(self,"wcs") and self.has_wcs():
+                catalogue.set_wcs(self.wcs,force_it=True)
+                if catalogue.nobjects_in_fov < 1:
+                    warnings.warn("WARNING No object in the field of view,"+"\n"+\
+                                "  -> catalogue not loaded")
+                    return
                 
         # --------
         # - set it
+        
         self._side_properties["catalogue"] = catalogue
 
     

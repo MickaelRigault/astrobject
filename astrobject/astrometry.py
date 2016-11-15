@@ -24,7 +24,7 @@ except ImportError:
 from .utils import shape
 
 
-def wcs(filename=None,header=None,extension=0):
+def wcs(filename=None, header=None, extension=0):
     """ loads the WCS solution for the given data. """
     
     if filename is not None:
@@ -156,28 +156,31 @@ class _MotherWCS_( object ):
     @property
     def contours(self,exp_order=5):
         # -- Load it the fist time you use it
-        if "_contour" not in dir(self) or\
-           ("_reload_contours" in dir(self) and self._reload_contours):
+        if not hasattr(self,"_contour") or\
+           ( hasattr(self,"_reload_contours") and self._reload_contours ):
             self._reload_contours = False
             from .utils import shape
             if not shape.HAS_SHAPELY:
                 self._contour = None
             else:
                 a2,a1 = self.image_height,self.image_width
-                # This could be improved
-                npoints = 2+exp_order
-                # -- This defines the contours
-                width = np.linspace(0,a1,npoints)
-                height = np.linspace(0,a2,npoints)
-                v1 = np.asarray([np.ones(npoints-1)*0, width[:-1]]).T
-                v2 = np.asarray([height[:-1], np.ones(npoints-1)*a1]).T
-                v3 = np.asarray([np.ones(npoints-1)*a2, width[::-1][:-1]]).T
-                v4 = np.asarray([height[::-1][:-1], np.ones(npoints-1)*0]).T
+                if a2==0 or a1 == 0:
+                    self._contour = None
+                else:
+                    # This could be improved
+                    npoints = 2+exp_order
+                    # -- This defines the contours
+                    width = np.linspace(0,a1,npoints)
+                    height = np.linspace(0,a2,npoints)
+                    v1 = np.asarray([np.ones(npoints-1)*0, width[:-1]]).T
+                    v2 = np.asarray([height[:-1], np.ones(npoints-1)*a1]).T
+                    v3 = np.asarray([np.ones(npoints-1)*a2, width[::-1][:-1]]).T
+                    v4 = np.asarray([height[::-1][:-1], np.ones(npoints-1)*0]).T
+                    
+                    ra,dec = np.asarray([self.pix2world(i,j)
+                                    for i,j in np.concatenate([v1,v2,v3,v4],axis=0)]).T
                 
-                ra,dec = np.asarray([self.pix2world(i,j)
-                                for i,j in np.concatenate([v1,v2,v3,v4],axis=0)]).T
-                
-                self._contour = shape.get_contour_polygon(ra,dec)
+                    self._contour = shape.get_contour_polygon(ra,dec)
             
         return self._contour
 

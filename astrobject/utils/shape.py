@@ -13,7 +13,7 @@ from .decorators import make_method
 
 # -- Shapely
 try:
-    from shapely.geometry import MultiPoint,Point, polygon, multipolygon
+    from shapely.geometry import MultiPoint,Point, polygon, multipolygon, MultiPolygon
     HAS_SHAPELY = True
     
 except ImportError:
@@ -94,7 +94,7 @@ def polygon_to_patch(polygon_,**kwargs):
 def patch_to_polygon(mpl_patch):
     """ converts a matplotlib patch into a shapely polygon. If mpl_patch is a list
      of patches, the returned polygon will be a 'union cascade' MultiPolygon  """
-    if "__iter__" not in dir(mpl_patch):
+    if not hasattr(mpl_patch,"__iter__"):
         return get_contour_polygon(*mpl_patch.get_verts().T)
     
     from shapely.ops import cascaded_union
@@ -126,3 +126,27 @@ def draw_polygon(ax,polygon_,**kwargs):
             draw_polygon(ax,p_,**prop)
     else:
         raise TypeError("Only Polygon implemented")
+
+
+
+def get_voronoy_multipolygon(x, y ,  edges=None):
+    """
+    Parameters
+    ----------
+    rect: [xmin, xmax, ymin, ymax] -optional-
+        Edges of the voronoy map
+    """
+    from scipy.spatial import Voronoi
+    flagok = np.isnan(x) * np.isnan(y)
+    xy = np.asarray([x[~flagok],y[~flagok]]).T
+    npoint = np.shape(xy)[0]
+    vor = Voronoi(xy)
+    xy_poly = [[vor.vertices[x] for x in vor.regions[vor.point_region[i]]
+                        if x>=0  # this others could be saved
+                        ] for i in range(npoint)]
+    
+    #edges = polygon.Polygon([[0,0],[0,4100],[2100,4100],[2100,0]])
+    
+    return MultiPolygon([edges.intersection(polygon.Polygon(xy_)) for xy_ in xy_poly]) if edges is not None\
+      else MultiPolygon([polygon.Polygon(xy_) for xy_ in xy_poly])
+    
