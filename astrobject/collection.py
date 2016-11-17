@@ -1362,7 +1362,7 @@ class PhotoPointCollection( Collection ):
     # ------------------- #
     # - Setter          - #
     # ------------------- #
-    def set_meta(self,key,values, ids=None):
+    def set_meta(self, key, values, ids=None):
         """
         Assign to all photopoints of the instance a 'value' registered
         as 'key' in their meta dict. The 'values' could either be a

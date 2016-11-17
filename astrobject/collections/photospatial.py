@@ -173,17 +173,18 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
     
     """
     from astropy import table
-    if type(sepoutput) != np.ndarray and type(sepoutput) != dict:
-        raise TypeError("the given 'sexoutput' is not an ndarray ; This is not a sepoutput")
+    if table.table.Table not in sepoutput.__class__.__mro__:
+        try:
+            sepoutput = table.Table(sepoutput)
+        except:
+            raise TypeError("the given 'sexoutput' cannot be converted into astropy's Table")
 
-    # - so that any entry now has the same shape
-    tsep = table.Table(sepoutput)
     ppoints = [get_photopoint(lbda,t_["flux"],None,
                           source="sepextract",**kwargs)
-                          for t_ in tsep]
+                          for t_ in sepoutput]
         
-    coords = np.asarray([tsep["x"],tsep["y"]]).T
-    return {"ppoints":ppoints,"coords":coords,"meta":tsep[[t_ for t_ in tsep.keys() if t_ not in ["flux"]]]}
+    coords = np.asarray([sepoutput["x"],sepoutput["y"]]).T
+    return {"ppoints":ppoints,"coords":coords,"meta":sepoutput[[t_ for t_ in sepoutput.keys() if t_ not in ["flux"]]]}
     
 # ------------------- #
 #  From Sextractor    #

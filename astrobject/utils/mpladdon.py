@@ -452,7 +452,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
                                       alpha=calpha,**cbarprop)
     # - no cbar
     return collec
-    
+
 # --------------------------- #
 # -    Color Bar            - #
 # --------------------------- #

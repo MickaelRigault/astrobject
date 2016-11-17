@@ -81,6 +81,7 @@ def get_photopoint(lbda=None,flux=None,var=None,
     instrument_name:[string]   Give a name of the intrument that enable to take the
                                photometric point.
 
+    **kwargs    extra entries will be save in the 'meta' property
     Return
     ------
     PhotoPoint
