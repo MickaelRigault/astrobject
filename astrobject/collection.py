@@ -1256,15 +1256,27 @@ class PhotoPointCollection( Collection ):
         self._derived_properties["getkeys"] = None
         
     def create_from_table(self, table, idkey=None):
-        """ """
+        """ provide a table (tested for astropy table; should work with pandas).
+        The columns are the keys value that you can 'get()' ; the rows are the
+        individual photopoint data.
+        """
         
         if not hasattr(table, "columns"):
             raise TypeError("table is not a Table (no columns attribute)")
         
         self._side_properties["table"]        = table
+        # the associated entries
         self._derived_properties["fromtable"] = True
         self._build_properties["idkey"]       = "number"
-            
+
+
+    def get_photopoint(self, id):
+        """ returns a copy of the photometric point"""
+        if not self.fromtable:
+            return self.photopoints[id].copy()
+        
+        return get_photopoint(**{k:self._table[self._build_properties["idkey"]==id][k] for k in self._table.keys()})
+    
     # ------ #
     #  IO    #
     # ------ #
@@ -1657,6 +1669,10 @@ class TargetPhotoPointCollection( PhotoPointCollection ):
     # --------------------- #
     # Correct Extinction    #
     # --------------------- #
+    def correct_extinction(self, embv, r_v=3.1, law="fitzpatrick99"):
+        """ """
+        [self.photopoints[b].apply_extinction(embv,r_v=r_v,law=law) for b in self.list_id]
+        
     def correct_mw_extinction(self, r_v=3.1, law="fitzpatrick99"):
         """ Correct for the MW extinction"""
         if self.mw_corrected:
@@ -1670,7 +1686,7 @@ class TargetPhotoPointCollection( PhotoPointCollection ):
         if mwebmv is None:
             raise ValueError("No MW extinction for the given target (self.target.mwebmv is None)")
         
-        [self.photopoints[b].apply_extinction(mwebmv,r_v=r_v,law=law) for b in self.list_id]
+        self.correct_extinction(mwebmv,r_v=r_v,law=law)
         self._derived_properties["mw_corrected"] = True
 
     # ================ #
