@@ -11,7 +11,7 @@ import matplotlib.pyplot as mpl
 from .baseobject import BaseObject, TargetHandler, CatalogueHandler
 from .photometry import get_photopoint
 from .instruments import instrument as inst
-from .utils.tools import kwargs_update, load_pkl
+from .utils.tools import kwargs_update, load_pkl, dump_pkl
 from .utils.shape import draw_polygon, HAS_SHAPELY
 
 __all__ = ["ImageCollection"]
@@ -1185,8 +1185,8 @@ class PhotoPointCollection( Collection ):
     """
     """
     PROPERTIES         = []
-    SIDE_PROPERTIES    = []
-    DERIVED_PROPERTIES = ["getkeys"]
+    SIDE_PROPERTIES    = ["table"]
+    DERIVED_PROPERTIES = ["getkeys","fromtable"]
     
     def __init__(self, photopoints=None,filein=None,empty=False,**kwargs):
         """
@@ -1200,6 +1200,7 @@ class PhotoPointCollection( Collection ):
             
         if photopoints is not None:
             self.create(photopoints,**kwargs)
+            
     # =============================== #
     # = Main Methods                = #
     # =============================== #
@@ -1254,55 +1255,80 @@ class PhotoPointCollection( Collection ):
         self.photopoints[ID]                = photopoint
         self._derived_properties["getkeys"] = None
         
+    def create_from_table(self, table, idkey=None):
+        """ provide a table (tested for astropy table; should work with pandas).
+        The columns are the keys value that you can 'get()' ; the rows are the
+        individual photopoint data.
+        """
         
-    def writeto(self,filename,format="ascii",**kwargs):
+        if not hasattr(table, "columns"):
+            raise TypeError("table is not a Table (no columns attribute)")
+        
+        self._side_properties["table"]        = table
+        # the associated entries
+        self._derived_properties["fromtable"] = True
+        self._build_properties["idkey"]       = "number"
+
+
+    def get_photopoint(self, id):
+        """ returns a copy of the photometric point"""
+        if not self.fromtable:
+            return self.photopoints[id].copy()
+        
+        return get_photopoint(**{k:self._table[self._build_properties["idkey"]==id][k] for k in self._table.keys()})
+    
+    # ------ #
+    #  IO    #
+    # ------ #
+    def writeto(self,filename,astable=False,**kwargs):
         """
         Save the PhotoPointCollection following the astropy's Table 'write()' method.
         Such data will be accessible using the 'load()' method of the class.
         """
-        self.data_complet.write(filename,format=format,**kwargs)
+        if astable:
+            warnings.warn("Only the data table can be saved in ascii format")
+            self.data.write(filename,format=format,**kwargs)
+            return
         
-    def load(self,filename,format="ascii",**kwargs):
-        """
-        """
+        dump_pkl(self._fulldata, filename)
+            
+    def load(self,filename,**kwargs):
+        """ e.g. kwargs you can specify the format (format='...') """
         if filename.endswith("pkl"):
             self._load_pkl_(filename)
         else:
-            self._load_table_(filename,format="ascii",**kwargs)
+            self._load_table_(filename,**kwargs)
 
-    def _load_pkl_(self, filename, datakey=None):
+    def _load_pkl_(self, filename, get_loaded_data=False):
         """ """
-        data = load_pkl(filename)
-        if "target" in data.keys():
-            from .baseobject import get_target
-            target = get_target(**data.pop("target",{}))
+        fulldata = load_pkl(filename)
+        if "data" not in fulldata.keys():
+            raise TypeError("Wrong pkl data format {data:data, ...}")
 
-        if datakey is None:
-            datakeys = [k for k,d in data.values() if "id" in d.keys()]
+        if "build" in fulldata.keys():
+            self._build_properties = kwargs_update(self._build_properties,**fulldata["build"])
             
-        if len(datakeys)>1:
-            raise ValueError("Ambiguous pkl file. Several entries with 'id'. Set datakey")
-        # --------------- #
-        # Data Loading  - #
-        # --------------- #
-        datakey = datakeys[0]
+        data = self.create_from_table(table.Table(fulldata["data"]),
+                                      idkey = None if "idkey" not in self._build_properties.keys() else\
+                                              self._build_properties["idkey"])
         
+        if "target" in fulldata.keys() and fulldata["target"] is not None:
+            from .baseobject import get_target
+            self.set_target(get_target(**fulldata["target"]))
+            
+        
+            
+        if get_loaded_data:
+            return fulldata
+
+        
+    # - load for ascii format
     def _load_table_(self, filename, format="ascii",**kwargs):
         data = table.Table.read(filename,format=format)
-        ids,pps = [],[]
-        # - This way to be able to call create that might be more
-        # generic than add_photopoints
-        for pp in data:
-            d = {}
-            for i,k in enumerate(data.keys()):
-                d[k] = pp[i]
-            ids.append(d.pop("id"))
-            pps.append(get_photopoint(**d))
-            
-        self.create(pps,ids,**kwargs)
+        self.create_from_table(data)
         if "comments" in data.meta.keys():
             self._read_table_comment_(data.meta["comments"])
-
+            
     def _read_table_comment_(self, comment):
         """ """
         warnings.warn("The following comments on the table are not saved:"+"\n".join(comment))
@@ -1329,9 +1355,13 @@ class PhotoPointCollection( Collection ):
         -------
         dict/table (see format) or None if no data available
         """
-        data = self.data_complet.copy() if which is "complet" else \
-          self.data.copy() if which is "data" else \
-          self.meta.copy() if self.meta  is not None else None
+        if not self.fromtable:
+            data = self.data_complet.copy() if which is "complet" else \
+            self.data.copy() if which is "data" else \
+            self.meta.copy() if self.meta  is not None else None
+        else:
+            data = self._table.copy()
+            
         if data is None:
             return None
 
@@ -1356,9 +1386,18 @@ class PhotoPointCollection( Collection ):
         -------
         list
         """
-        return super(PhotoPointCollection, self).get(param, mask=mask, safeexit=safeexit)
+        if not self.fromtable:
+            return super(PhotoPointCollection, self).get(param, mask=mask, safeexit=safeexit)
+        # not np.asarray(self._table[mask, param]) to have pure float
+        if mask is not None:
+            if hasattr(param,"__iter__"):
+                return np.asarray([self._table[mask][p] for p in param]).T
+            return np.asarray(self._table[mask][param])
+        else:
+            if hasattr(param,"__iter__"):
+                return np.asarray([self._table[p] for p in param]).T
+            return np.asarray(self._table[param])
 
-    
     # ------------------- #
     # - Setter          - #
     # ------------------- #
@@ -1387,10 +1426,13 @@ class PhotoPointCollection( Collection ):
             raise ValueError("the given 'values', must provide a value for each photopoints (%d)"\
                              +" or set ids to the correct id list"\
                              +" or a unique value  %d given"%(self.nsources,len(values)))
-        # -- latest check
-            
-        for id_,v in zip(id_to_loop,values):
-            self.photopoints[id_].meta[key] = v
+        if self.fromtable:
+            if key in self._table.colnames:
+                self._table.remove_column(key)
+            self._table.add_column(table.Column(values,key))
+        else:
+            for id_,v in zip(id_to_loop,values):
+                self.photopoints[id_].meta[key] = v 
             
             
     # ------------------- #
@@ -1492,7 +1534,19 @@ class PhotoPointCollection( Collection ):
         """
         """
         return self._handler
-        
+
+    @property
+    def fromtable(self):
+        """ were the data loaded from a table """
+        if self._derived_properties["fromtable"] is None:
+            self._derived_properties["fromtable"] = False
+        return self._derived_properties["fromtable"]
+
+    @property
+    def _table(self):
+        """ The table containing the data, if fromtable"""
+        return self._side_properties["table"]
+
     # ------------------ #
     # - On flight prop - #
     # ------------------ #
@@ -1552,15 +1606,18 @@ class PhotoPointCollection( Collection ):
     @property
     def data(self):
         """ builds an astropy table containing the fundatemental parameters of the collection """
-        # - Main
-        maindata = [self.list_id,self.fluxes,self.fluxvars,self.lbdas,self.mjds,self.bandnames,
-                    self.get("zp"),self.get("zpsys")]
-        mainnames= ["id","flux","var","lbda","mjd","bandname","zp","zpsys"]
-        # - Meta
-        #metaname = self.metakeys
-        #metadata = [self.get(metak) for metak in metaname]
-        return table.Table(data=maindata,
-                     names=mainnames)
+        if not self.fromtable:
+            # - Main
+            maindata = [self.list_id,self.fluxes,self.fluxvars,self.lbdas,self.mjds,self.bandnames,
+                        self.get("zp"),self.get("zpsys")]
+            mainnames= ["id","flux","var","lbda","mjd","bandname","zp","zpsys"]
+            # - Meta
+            #metaname = self.metakeys
+            #metadata = [self.get(metak) for metak in metaname]
+            return table.Table(data=maindata,
+                               names=mainnames)
+        return self._table
+    
     @property
     def meta(self):
         """  builds an astropy table containing the meta information about the sources of the collection """
@@ -1577,14 +1634,26 @@ class PhotoPointCollection( Collection ):
         Remark that these are not the only thing you can call with get.
         """
         if self._derived_properties["getkeys"] is None:
-            self._derived_properties["getkeys"] = np.sort(np.unique(self.data.keys() + self.metakeys))
+            if self.fromtable:
+                self._derived_properties["getkeys"] = self._table.keys()
+            else:
+                self._derived_properties["getkeys"] = np.sort(np.unique(self.data.keys() + self.metakeys))
+                
         return self._derived_properties["getkeys"]
     
     @property
-    def data_complet(self):
+    def _fulldata(self):
         """ Combination of the data and the metadata """
-        return table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
-          else self.data
+        
+        if self.fromtable:
+            data = self._table
+        else:
+            data = table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
+                else self.data
+        return {"data":data,
+                "target": self.target.data if self.has_target() else None,
+                "build": self._build_properties}
+        
 
 
 
@@ -1600,6 +1669,10 @@ class TargetPhotoPointCollection( PhotoPointCollection ):
     # --------------------- #
     # Correct Extinction    #
     # --------------------- #
+    def correct_extinction(self, embv, r_v=3.1, law="fitzpatrick99"):
+        """ """
+        [self.photopoints[b].apply_extinction(embv,r_v=r_v,law=law) for b in self.list_id]
+        
     def correct_mw_extinction(self, r_v=3.1, law="fitzpatrick99"):
         """ Correct for the MW extinction"""
         if self.mw_corrected:
@@ -1613,7 +1686,7 @@ class TargetPhotoPointCollection( PhotoPointCollection ):
         if mwebmv is None:
             raise ValueError("No MW extinction for the given target (self.target.mwebmv is None)")
         
-        [self.photopoints[b].apply_extinction(mwebmv,r_v=r_v,law=law) for b in self.list_id]
+        self.correct_extinction(mwebmv,r_v=r_v,law=law)
         self._derived_properties["mw_corrected"] = True
 
     # ================ #

@@ -974,7 +974,7 @@ class CatalogueHandler( BaseObject ):
     """ """
     PROPERTIES         = []
     SIDE_PROPERTIES    = ["catalogue"]
-    DERIVED_PROPERTIES = []
+    DERIVED_PROPERTIES = ["catquery"]
 
 
     # ================= #
@@ -982,7 +982,7 @@ class CatalogueHandler( BaseObject ):
     # ================= #
     def download_catalogue(self,source="sdss",
                            set_it=True,force_it=False,
-                           radec=None, radius_degree=None,
+                           radec=None, radius=None,
                            **kwargs):
         """
         Downloads a catalogue of the given 'source'. This methods requires an
@@ -998,6 +998,8 @@ class CatalogueHandler( BaseObject ):
         Void (or the Catalogue if set_it is False)
         """
         from .instruments.instrument import fetch_catalogue
+        
+        # - RaDec
         if radec is None:
             if hasattr(self,"wcs") and self.has_wcs():
                 radec = "%s %s"%(self.wcs._central_coords_nooffset[0],
@@ -1005,20 +1007,29 @@ class CatalogueHandler( BaseObject ):
             else:
                 raise ValueError("Without wcs solution you need to provide 'radec'")
 
-        if radius_degree is None:
+        # - Radius
+        if radius is None:
             if hasattr(self,"wcs") and self.has_wcs():
-                radius_degree = self.wcs.diag_size/1.8 # not 2 to have some room around
+                radius = self.wcs.diag_size/1.8 # not 2 to have some room around
             else:
-                raise ValueError("Without wcs solution you need to provide 'radius_degree'")
+                raise ValueError("Without wcs solution you need to provide 'radius'")
+            
+        if type(radius) == str:
+            if not radius.endswith("d"):
+                radius = "%sd"%radius
+        else:
+            radius = "%sd"%radius
             
         # - Catalogue object found.
-        cat = fetch_catalogue(source=source,radec=radec,radius="%sd"%radius_degree,
-                              **kwargs)
+        query = kwargs_update(dict(source=source,radec=radec,radius=radius),
+                               **kwargs)
+        cat = fetch_catalogue(**query)
         
         # - set it of return it
         if not set_it:
             return cat
-        
+
+        self._derived_properties["catquery"] = query
         self.set_catalogue(cat,force_it=force_it)
         
     def set_catalogue(self, catalogue, force_it=False,
@@ -1055,7 +1066,6 @@ class CatalogueHandler( BaseObject ):
                 
         # --------
         # - set it
-        
         self._side_properties["catalogue"] = catalogue
 
     
@@ -1070,3 +1080,11 @@ class CatalogueHandler( BaseObject ):
     def has_catalogue(self):
         """ Test if a catalogue has been assigned. True means yes """
         return self.catalogue is not None
+
+    @property
+    def _catquery(self):
+        """ """
+        if self._derived_properties["catquery"] is None:
+            self._derived_properties["catquery"] = {}
+        return self._derived_properties["catquery"]
+    

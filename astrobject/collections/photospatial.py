@@ -44,7 +44,6 @@ def get_photomap(photopoints=None,coords=None,wcs_coords=True, **kwargs):
                     wcs_coords=wcs_coords,
                     **kwargs)
 
-
 def get_sepobject(sepoutput, ppointkwargs={},
                   use_peakposition=False, wcs_extension=None,
                    **kwargs):
@@ -290,6 +289,16 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         if photopoints is not None:
             self.create(photopoints,coords,wcs=wcs,catalogue=catalogue,**kwargs)
 
+    # Super Loading including catmatch information
+    def _load_pkl_(self,filename):
+        # Super
+        datain = super(PhotoMap, self)._load_pkl_(filename,get_loaded_data=True)
+        # Do you also have a catalog?
+        if "catmatch" in datain.keys():
+            if "idx_catalogue" in datain["catmatch"].keys() and \
+               "idx" in datain["catmatch"].keys():
+                self._derived_properties["catmatch"] = datain["catmatch"]
+        
     def _read_table_comment_(self, comments):
         """
         """
@@ -299,7 +308,24 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
                 self._build_properties["wcsid"]=bool(value)
             else:
                 print "comment not saved: ", c
-                
+
+    def create_from_table(self, table, idkey=None):
+        """ """
+        super(PhotoMap, self).create_from_table(table, idkey="id")
+        if "x" in self._table.keys() and "y" in self._table.keys():
+            self._build_properties["wcsid"] = False
+            
+        # - Set the ID for list_id
+        if idkey is None or idkey not in table.colnames:
+            idkey = "id"
+            if idkey in table.colnames:
+                idkey +="1"
+            if not self._wcsid:
+                table.add_column(table.Column(self.coords_to_id(self.get("x"),self.get("y")),idkey))
+            else:
+                table.add_column(table.Column(self.coords_to_id(self.get("ra"),self.get("dec")),idkey))
+        self._build_properties["idkey"] = idkey
+            
     # =============================== #
     # = Building Methods            = #
     # =============================== #
@@ -377,10 +403,6 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             if refphotopoint is None:
                 refphotopoint = get_photopoint(empty=True)
             self.remap.add_photopoint(refphotopoint,coords)
-            
-    def writeto(self,filename,format="ascii.commented_header",**kwargs):
-        comments = "".join(["# %s %s \n "%(key, value) for key,value in [["wcsid",self._wcsid]]])
-        super(PhotoMap,self).writeto(filename,format,comment=comments,**kwargs)
         
     # =============================== #
     # = Main Methods                = #
@@ -414,7 +436,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     # -- Id <-> Coords
     def coords_to_id(self,x,y):
         """ this enables to have consistent coordinate/id mapping """
-        return "%.8f,%.8f"%(x,y)
+        if not hasattr(x,"__iter__"):
+            return "%.8f,%.8f"%(x,y)
+        return ["%.8f,%.8f"%(x_,y_) for x_,y_ in zip(x,y)]
     
     def id_to_coords(self,id):
         """ convert photopoint's id into coordinates. Only reading here, see radec, xy """
@@ -455,7 +479,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         self._derived_properties["catmatch"] = {
             "idx_catalogue":idxcatalogue,
             "idx":idxsepobjects,
-            "angsep":d2d
+            "angsep_arcsec":d2d.to("arcsec").value,
+            "catquery":self._catquery
             }
         
         self.catalogue.set_matchedmask(idxcatalogue)
@@ -524,6 +549,22 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
 
         self._side_properties["refmap"] = photomap
 
+        
+    #  WCS Solution
+    # -----------------
+    @_autogen_docstring_inheritance(WCSHandler.set_wcs,"WCSHandler.set_wcs")
+    def set_wcs(self, wcs, force_it=False,**kwargs):
+        #
+        #
+        #
+        super(PhotoMap, self).set_wcs(wcs, force_it=force_it,**kwargs)
+        if not self.has_wcs():
+            return
+        if not self._wcsid:
+            self._derive_radec_()
+        else:
+            self._derive_xy_()
+            
     #  Super Catalogue
     # -----------------
     @_autogen_docstring_inheritance(CatalogueHandler.set_catalogue,"CatalogueHandler.get_indexes")
@@ -545,20 +586,20 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     @_autogen_docstring_inheritance(CatalogueHandler.download_catalogue,"CatalogueHandler.download_catalogue")
     def download_catalogue(self, source="sdss",
                            set_it=True,force_it=False,
-                           radec=None, radius_degree=None,
+                           radec=None, radius=None,
                            **kwargs):
         #
-        # default definition of radec and radius_degree
+        # default definition of radec and radius
         #
         if radec is None:
             radec = np.mean(self.radec, axis=0)
             radec = "%s %s"%(radec[0],radec[1])
-        if radius_degree is None:
-            radius_degree = np.max(np.std(self.radec,axis=0)*5)
+        if radius is None:
+            radius = np.max(np.std(self.radec,axis=0)*5)
             
         return super(PhotoMap, self).download_catalogue(source=source,
                                                         set_it=set_it, force_it=force_it,
-                                                        radec=radec, radius_degree=radius_degree,
+                                                        radec=radec, radius=radius,
                                                         **kwargs)
     # ------------- #
     # - GETTER    - #
@@ -796,8 +837,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         """ derives the ra dec values from the wcs solution """
         if not self.has_wcs():
             raise AttributeError("You need a wcs solution to convert pixels to radec. None set.")
-        
-        ra,dec = self.wcs.pix2world(*self._coords.T).T
+
+        ra,dec = self.wcs.pix2world(*self.xy.T).T
         self.set_meta("ra",ra)
         self.set_meta("dec",dec)
 
@@ -805,7 +846,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         """ derives the x y values from the wcs solution """
         if not self.has_wcs():
             raise AttributeError("You need a wcs solution to convert radec to pixels. None set.")
-        x,y = self.wcs.world2pix(*self._coords.T).T
+        x,y = self.wcs.world2pix(*self.radec.T).T
         self.set_meta("x",x)
         self.set_meta("y",y)
     # =============================== #
@@ -814,19 +855,22 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     @property
     def radec(self):
         """ world coordinates in degree """
-        if self._wcsid:
+        if self._wcsid and not self.fromtable:
             return self._coords
-        if "ra" not in self.metakeys or "dec" not in self.metakeys:
+        if "ra" not in self.getkeys or "dec" not in self.getkeys:
             self._derive_radec_()
+            
         return self.get(["ra","dec"])
     
     @property
     def xy(self):
         """ image coordinates in pixels """
-        if not self._wcsid:
+        if not self._wcsid and not self.fromtable:
             return self._coords
-        if "x" not in self.metakeys or "y" not in self.metakeys:
-            self._derive_xy_()            
+        
+        if "x" not in self.getkeys or "y" not in self.getkeys:
+            self._derive_xy_()
+            
         return self.get(["x","y"])
     
     @property
@@ -835,8 +879,17 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         return np.asarray([self.id_to_coords(id_) for id_ in self.list_id])
     
     @property
+    def list_id(self):
+        """ """
+        if not self.fromtable:
+            return super(PhotoMap, self).list_id
+        
+        return self.get(self._build_properties["idkey"])
+    
+    @property
     def _wcsid(self):
-        if self._build_properties["wcsid"] is None:
+        if "wcsid" not in self._build_properties.keys() or \
+          self._build_properties["wcsid"] is None:
             warnings.warn("No information about the nature of the coordinate ids (wcs/pixel?). **WCS system assumed**")
             self._build_properties["wcsid"] = True
         return self._build_properties["wcsid"]
@@ -876,8 +929,15 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
 
     def has_catmatch(self):
         return (self.catmatch is not None and len(self.catmatch.keys())>0)
-
-          
+    
+    @property
+    def _fulldata(self):
+        """ data in the saved format """
+        fulldata = super(PhotoMap,self)._fulldata
+        if self.has_catmatch():
+            fulldata["catmatch"] = self.catmatch
+        return fulldata
+        
 ######################################
 #                                    #
 # Sextractor Output                  #
@@ -1007,12 +1067,12 @@ class SepObject( PhotoMap ):
     # ----------- #
     #   GETTER    #
     # ----------- #
-    def get_skycoords(self, position="average", meta_radec=True):
+    def get_skycoords(self, position="average", default_radec=True):
         """ astropy SkyCoord object corresponding to ra and dec positions
 
         Parameters
         ----------
-        meta_radec: [bool] -optional-
+        default_radec: [bool] -optional-
             If there are 'ra' and 'dec' entries on the meta, should this use them?
             Remark: if no wcs solution loaded, this is forced to True
             
@@ -1027,11 +1087,11 @@ class SepObject( PhotoMap ):
         -------
         astropy's SkyCoord
         """
-        if not meta_radec and not self.has_wcs():
+        if not default_radec and not self.has_wcs():
             warnings.warn("Without wcs solution, you need to have ra and dec in the meta entries")
-            meta_radec = True
+            default_radec = True
             
-        if "ra" in self.metakeys and "dec" in self.metakeys and meta_radec:
+        if "ra" in self.getkeys and "dec" in self.getkeys and default_radec:
             ra,dec = self.get("ra"), self.get("dec")
         elif not self.has_wcs():
             raise AttributeError("no wcs solution loaded and no 'ra', 'dec' entries in the meta")
@@ -1393,24 +1453,24 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
     @_autogen_docstring_inheritance(CatalogueHandler.download_catalogue,"CatalogueHandler.download_catalogue")
     def download_catalogue(self, source="sdss",
                            set_it=True,force_it=False,
-                           radec=None, radius_degree=None,
+                           radec=None, radius=None,
                            match_catalogue=True,match_angsep=2*units.arcsec,
                            **kwargs):
         #
-        # default definition of radec and radius_degree
+        # default definition of radec and radius
         #
-        if radec is None or radius_degree is None:
+        if radec is None or radius is None:
             ra,dec = np.concatenate(self.get(["ra","dec"]), axis=0).T
             
         if radec is None:
             radec = np.mean([ra,dec],axis=1)
             radec = "%s %s"%(radec[0],radec[1])
-        if radius_degree is None:
-            radius_degree = np.max(np.std([ra,dec],axis=1)*5)
+        if radius is None:
+            radius = np.max(np.std([ra,dec],axis=1)*5)
             
         out = super(PhotoMapCollection, self).download_catalogue(source=source,
                                                         set_it=set_it, force_it=force_it,
-                                                        radec=radec, radius_degree=radius_degree,
+                                                        radec=radec, radius=radius,
                                                         **kwargs)
         if self.has_catalogue() and match_catalogue:
             self.match_catalogue(deltadist=match_angsep)

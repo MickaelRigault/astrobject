@@ -109,8 +109,3 @@ class SNIFS_P( Instrument ):
         """ Time ob the observation in Modified Julian Date """
         return time.Time(self.header["DATE"]).mjd
 
-    # -------------------
-    # - Background hacking
-    #def _get_default_background_(self,*args,**kwargs):
-    #    return np.zeros(np.shape(self.rawdata))
-    
