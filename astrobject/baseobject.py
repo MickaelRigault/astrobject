@@ -1013,7 +1013,8 @@ class CatalogueHandler( BaseObject ):
                 radius = self.wcs.diag_size/1.8 # not 2 to have some room around
             else:
                 raise ValueError("Without wcs solution you need to provide 'radius'")
-        elif type(radius) == str:
+            
+        if type(radius) == str:
             if not radius.endswith("d"):
                 radius = "%sd"%radius
         else:
