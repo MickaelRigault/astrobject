@@ -1299,9 +1299,11 @@ class PhotoPointCollection( Collection ):
         else:
             self._load_table_(filename,**kwargs)
 
-    def _load_pkl_(self, filename, get_loaded_data=False):
+    def _load_pkl_(self, filename=None, get_loaded_data=False, fulldata=None ):
         """ """
-        fulldata = load_pkl(filename)
+        if fulldata is None:
+            fulldata = load_pkl(filename)
+            
         if "data" not in fulldata.keys():
             raise TypeError("Wrong pkl data format {data:data, ...}")
 
@@ -1650,7 +1652,7 @@ class PhotoPointCollection( Collection ):
         else:
             data = table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
                 else self.data
-        return {"data":data,
+        return {"data": np.asarray(data),
                 "target": self.target.data if self.has_target() else None,
                 "build": self._build_properties}
         

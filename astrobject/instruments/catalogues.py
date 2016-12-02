@@ -115,8 +115,8 @@ class GAIACatalogue( Catalogue ):
                        key_ra=key_ra,key_dec=key_dec)
         if empty:
             return
-        
-        self.load(catalogue_file,**kwargs)
+        if catalogue_file is not None:
+            self.load(catalogue_file,**kwargs)
     
     @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
@@ -210,8 +210,9 @@ class SDSSCatalogue( Catalogue ):
                        key_ra=key_ra,key_dec=key_dec)
         if empty:
             return
-        
-        self.load(catalogue_file,**kwargs)
+        if catalogue_file is not None:
+            self.load(catalogue_file,**kwargs)
+            
         self.set_starsid("cl",6)
     
     @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
@@ -304,9 +305,9 @@ class MASSCatalogue( Catalogue ):
                        key_ra=key_ra,key_dec=key_dec)
         if empty:
             return
+        if catalogue_file is not None:
+            self.load(catalogue_file,**kwargs)        
         
-        self.load(catalogue_file,**kwargs)        
-    
     @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
         #
@@ -432,8 +433,8 @@ class WISECatalogue( Catalogue ):
                        key_ra=key_ra,key_dec=key_dec)
         if empty:
             return
-        
-        self.load(catalogue_file,**kwargs)  
+        if catalogue_file is not None:
+            self.load(catalogue_file,**kwargs)  
     
     @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):

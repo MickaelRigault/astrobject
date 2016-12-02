@@ -4,12 +4,11 @@
 import warnings
 import numpy as np
 
-from astropy            import coordinates, units
-
+from astropy            import coordinates, units, table
 from ..baseobject       import WCSHandler, CatalogueHandler
 from ..photometry       import get_photopoint
 from ..collection       import BaseCollection, PhotoPointCollection
-from ..utils.tools      import kwargs_update
+from ..utils.tools      import kwargs_update, dump_pkl, load_pkl
 from ..utils.decorators import _autogen_docstring_inheritance
 
 
@@ -148,7 +147,7 @@ def get_photomapcollection( photomaps, wcs_extension=None, **kwargs ):
 def is_sepoutput(array):
     """
     """
-    from astropy import table
+
     if type(array) != np.ndarray:
         return False
     tsep = table.Table(array)
@@ -171,7 +170,6 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
 
     
     """
-    from astropy import table
     if table.table.Table not in sepoutput.__class__.__mro__:
         try:
             sepoutput = table.Table(sepoutput)
@@ -290,9 +288,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             self.create(photopoints,coords,wcs=wcs,catalogue=catalogue,**kwargs)
 
     # Super Loading including catmatch information
-    def _load_pkl_(self,filename):
+    def _load_pkl_(self,filename=None, **kwargs):
         # Super
-        datain = super(PhotoMap, self)._load_pkl_(filename,get_loaded_data=True)
+        datain = super(PhotoMap, self)._load_pkl_(filename,get_loaded_data=True,**kwargs)
         # Do you also have a catalog?
         if "catmatch" in datain.keys():
             if "idx_catalogue" in datain["catmatch"].keys() and \
@@ -324,6 +322,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
                 table.add_column(table.Column(self.coords_to_id(self.get("x"),self.get("y")),idkey))
             else:
                 table.add_column(table.Column(self.coords_to_id(self.get("ra"),self.get("dec")),idkey))
+                
         self._build_properties["idkey"] = idkey
             
     # =============================== #
@@ -1317,6 +1316,34 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
             else:
                 self.add_photomap(photomaps, **kwargs)
 
+
+    def writeto(self, filename, include_catatogue=True):
+        """ Dumpt the data (could including the catalog) in the given file """
+        if include_catatogue:
+            dump_pkl(self._fulldata, filename)
+        else:
+            dump_pkl({"photomaps" : {id_:self.photomaps[id_]._fulldata for id_ in self.list_id},
+                      "catalogue" : None}, filename)
+
+    def load(self, filename, match_catalogue=False, **kwargs):
+        """ load the data from the given file
+         **kwargs goes to the match_catalogue()
+         """
+        
+        datain = load_pkl(filename)
+        if "catalogue" in datain.keys() and datain["catalogue"] is not None:
+            from ..instruments.instrument import get_catalogue
+            self.set_catalogue( get_catalogue( table.Table(datain["catalogue"]), None ) )
+            
+        if "photomaps" in datain.keys():
+            for k,v in datain["photomaps"].items():
+                pmap = PhotoMap() if "a" not in v["data"] or "b" not in v["data"] else SepObject()
+                pmap._load_pkl_(fulldata=v)
+                self.add_photomap(pmap, id_=k, match_catalogue=False)
+
+        if match_catalogue:
+            self.match_catalogue( **kwargs)
+            
     # =================== #
     #   Main Methods      #
     # =================== #
@@ -1371,8 +1398,8 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
     # -------------- #
     def getcat(self, param, catindex):
         """ get method based on catindex entry(ies). """
-        return [self.photomaps[id_].getcat(param, catindex)
-                for id_ in self.list_id]
+        return np.asarray([self.photomaps[id_].getcat(param, catindex)
+                for id_ in self.list_id])
     
     # -------------- #
     #  Catalogue     #
@@ -1429,8 +1456,7 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
         fractionin = np.sum([self.photomaps[i].is_catindex_detected(detected_once) for i in self.list_id], axis=0)/float(self.nsources) if inclusion<1\
           else np.sum([self.photomaps[i].is_catindex_detected(detected_once) for i in self.list_id], axis=0)
 
-        return detected_once[fractionin>=inclusion]
-        
+        return detected_once[fractionin>=inclusion]        
 
     def catindex_to_index(self, catindex, cleanindex=False):
         """ Get the index of the individual photomaps associated to the given catindex
@@ -1483,7 +1509,8 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
         super(PhotoMapCollection, self).set_catalogue( catalogue, force_it=force_it, **kwargs)
         [self.photomaps[id_].set_catalogue(self.catalogue, fast_setup=True, **kwargs)
          for id_ in self.list_id]
-        
+
+                
     # =================== #
     #   Properties        #
     # =================== #
@@ -1491,3 +1518,8 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
     def photomaps(self):
         """ """
         return self._handler
+
+    @property
+    def _fulldata(self):
+        return {"photomaps" : {id_:self.photomaps[id_]._fulldata for id_ in self.list_id},
+                "catalogue" : np.asarray(self.catalogue.data)}

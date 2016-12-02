@@ -65,29 +65,56 @@ def fetch_catalogue(source,radec,radius,extracolumns=[],column_filters={"rmag":"
                                     "extracolumns=extracolumns,"+\
                                     "column_filters=column_filters,**kwargs)")
 
-def get_catalogue(filename, source,**kwargs):
+def get_catalogue(datafile, source, **kwargs):
     """ Reads the given catalogue file and open its corresponding Catalogue
 
     Parameters:
     -----------
-    filename: [string]
-        location of the catalogue file to open.
+    datafile: [string/ data]
+        location of the catalogue file to open or data already opened
         
     soource: [string]
         Name of the catalogue associated to the data (sdss/2mass/wise/etc)
-
+        If the file is already open, you can set None but better set the good
+        source if you know it
+        
     **kwargs goes to the Catalogue __init__
 
     Return
     ------
     Catalogue (corresponding Child's class)
     """
-    # Test if catalog exist
-    if not hasattr(catalogues, "%sCatalogue"%source.upper()):
-        raise ValueError("Unknown catalog %s"%source.upper())
+    if type(datafile) == str:
+        # Test if catalog exist
+        if not hasattr(catalogues, "%sCatalogue"%source.upper()):
+            raise ValueError("Unknown catalog %s"%source.upper())
+        
+        return eval("catalogues.%sCatalogue(datafile,**kwargs)"%source.upper())
+
+    return create_catalogue(datafile, source=source)
+        
+def create_catalogue(datacatalogue, source=None, **kwargs):
+    """ load a catalogue given the data. You can set the source if you know it, otherwise
+    the function will try to find out """
+    from astropy import table
+    if table.table.Table not in datacatalogue.__class__.__mro__:
+        try:
+            datacatalogue = table.Table(datacatalogue)
+        except:
+            raise TypeError("Cannot convert the input datacatalogue into astropy Table")
+    # - SDSS
+    if "objID" in datacatalogue.colnames    or (source is not None and source.lower()=="sdss"):
+        cat = catalogues.SDSSCatalogue()
+    # - Gaia
+    elif "Source" in datacatalogue.colnames or (source is not None and source.lower()=="gaia"):
+        cat = catalogues.GAIACatalogue()
+    elif "Jmag" in datacatalogue.colnames   or (source is not None and source.lower() in ["mass","2mass"]):
+        cat = catalogues.MASSCatalogue()
+    else:
+        raise TypeError("Unknwon catalogue source")
     
-    return eval("catalogues.%sCatalogue(filename,**kwargs)"%source.upper())
-    
+    cat.create(datacatalogue, None)
+    return cat
 
 def get_instrument(filename,astrotarget=None,**kwargs):
     """ Reads the given file and open its corresponding Instrument object.

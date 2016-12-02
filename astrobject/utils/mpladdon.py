@@ -458,9 +458,28 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
 # --------------------------- #
 @make_method(mpl.Axes)
 def colorbar(ax,cmap,vmin=0,vmax=1,label="",
-             fontsize="x-large",npoint=256,
-            **kwargs):
-    """
+             fontsize="x-large",**kwargs):
+    """ Set a colorbar in the given axis
+
+    Parameters
+    -----------
+    ax: [mpl's Axes]
+        Axis in which the colorbar will be drawn
+
+    cmap: [mpl's colormap]
+        A matplotlib colormap
+
+    vmin, vmax: [float,float] -optional-
+        Extend of the colormap, values of the upper and lower colors
+
+    label, fontsize: [string, string/float] -optional-
+        Label of the colorbar and its associated size
+     
+    **kwargs goes to matplotlib.colobar.ColorbarBase
+
+    Return
+    ------
+    colorbar
     """
     import matplotlib
     if "orientation" not in kwargs.keys():

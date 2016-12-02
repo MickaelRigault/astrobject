@@ -22,25 +22,29 @@ except ImportError:
     from distutils.core import setup
 
 def check_dependencies():
-   install_requires = []
+    install_requires = []
 
-   # Just make sure dependencies exist, I haven't rigorously
-   # tested what the minimal versions that will work are
-   # (help on that would be awesome)
-   try:
-       import astropy
-   except ImportError:
-       install_requires.append('astropy')
-   try:
-       import astroquery
-   except ImportError:
-       install_requires.append('astroquery')
-   try:
-       import sep
-   except ImportError:
-       install_requires.append('sep')
+    # Just make sure dependencies exist, I haven't rigorously
+    # tested what the minimal versions that will work are
+    # (help on that would be awesome)
+    try:
+        import propobject
+    except ImportError:
+        install_requires.append('propobject')
+    try:
+        import astropy
+    except ImportError:
+        install_requires.append('astropy')
+    try:
+        import astroquery
+    except ImportError:
+        install_requires.append('astroquery')
+    try:
+        import sep
+    except ImportError:
+        install_requires.append('sep')
 
-   return install_requires
+    return install_requires
 
 if __name__ == "__main__":
 

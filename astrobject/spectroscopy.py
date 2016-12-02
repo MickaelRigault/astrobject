@@ -12,7 +12,7 @@ from .utils.tools import shape_ajustment
 __all__ = ["get_spectrum"]
 
 
-def get_spectrum(filename,**kwargs):
+def get_spectrum(filename, **kwargs):
     """ create a spectrum having wavelength, flux, variance
     and associated methods
 
@@ -25,7 +25,7 @@ def get_spectrum(filename,**kwargs):
     ------
     Spectrum
     """
-    return Spectrum(filename,**kwargs).copy()
+    return Spectrum(filename,**kwargs).copy()    
 
 def get_cube():
     raise NotImplementedError("Not ready yet")
@@ -377,7 +377,8 @@ class Spectrum( TargetHandler ):
         self._properties['filename']      = filename
         self.create(tmp_lbda,data,
                     header=header,variance=variance,
-                    name = header["OBJECT"],
+                    name = header.get("OBJECT","unknown") if header is not None\
+                     else "unknown",
                     force_it=True)
         # - Done ! 
         # ----------
@@ -386,7 +387,7 @@ class Spectrum( TargetHandler ):
     def create(self, lbda, flux, header=None,
                variance=None, x_model=None,
                name=None, force_it=False, 
-               fixformat=True, k=4):
+               fixformat=True, k=4,**kwargs):
         """
         This creates the object based on the fundamental parameter
 
@@ -478,7 +479,7 @@ class Spectrum( TargetHandler ):
         #  Creation of the Object  #
         # ************************ #
         # -- Header 
-        self._properties['header'] = header
+        self._properties['header'] = pf.Header() if header is None else header
         # -- Data
         self._properties['y']      = np.asarray(flux).copy()
         # -- Wavelength
@@ -487,8 +488,8 @@ class Spectrum( TargetHandler ):
         self._properties['var']    = np.asarray(variance).copy() \
           if variance is not None else None
         # -- Name
-        self.name = self.header["OBJECT"] if name is None and "OBJECT" in header.keys() \
-          else str(name)
+        self.name = self.header["OBJECT"] if name is None and "OBJECT" in self.header.keys() \
+          else str(name) if name is not None else "unknown"
 
                 
     def writeto(self,savefile,saveerror=False,
@@ -785,3 +786,10 @@ class Spectrum( TargetHandler ):
         else:
             self._derived_properties['lbda'] = \
               self._derived_properties['rawlbda']
+
+
+
+
+class LbdaSpectrum( Spectrum ):
+    """ Child of spectrum allowing non stable lbda  """
+    

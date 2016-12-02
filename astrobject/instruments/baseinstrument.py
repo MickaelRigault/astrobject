@@ -15,7 +15,7 @@ from .. import astrometry
 from ..photometry import Image,get_photopoint
 from ..baseobject import BaseObject, WCSHandler
 from ..utils.decorators import _autogen_docstring_inheritance
-from ..utils.tools import kwargs_update,mag_to_flux,load_pkl,dump_pkl
+from ..utils.tools import kwargs_update, mag_to_flux, load_pkl, dump_pkl
 from ..utils import shape
 
 __all__ = ["Instrument"]
@@ -260,11 +260,11 @@ class Catalogue( WCSHandler ):
             fits = None
             header = None
             data = load_pkl(catalogue_file)
-            if not type(data) is TableColumns:
+            if not type(data) is Table:
                 try:
-                    data = TableColumns(data)
+                    data = Table(data)
                 except:
-                    print "WARNING Convertion of 'data' into astropy TableColumns failed"
+                    warnings.warn("Convertion of 'data' into astropy Table failed")
         else:
             fits   = None
             header = None
@@ -273,7 +273,7 @@ class Catalogue( WCSHandler ):
             
         # ---------------------
         # - Calling Creates
-        self.create(data,header,**kwargs)
+        self.create(data, header, **kwargs)
         self._properties["filename"] = catalogue_file
         self._derived_properties["fits"] = fits
 
@@ -306,7 +306,7 @@ class Catalogue( WCSHandler ):
         if self.has_data() and force_it is False:
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
-
+    
         self._properties["data"] = Table(data)
         self._properties["header"] = header if header is not None \
           else pf.Header()
