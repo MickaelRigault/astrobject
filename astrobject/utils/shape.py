@@ -18,7 +18,7 @@ try:
     
 except ImportError:
     _ERRORMESSAGE = "you do not have shapely installed."
-    warnings.warns(_ERRORMESSAGE + " Some function will not be accessible."+"\n"+"--> pip install Shapely")
+    warnings.warn(_ERRORMESSAGE + " Some function will not be accessible."+"\n"+"--> pip install Shapely")
     HAS_SHAPELY = False
 
 
