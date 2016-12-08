@@ -80,9 +80,9 @@ class BaseCollection(BaseObject):
             
             raise AttributeError("The object labeled %s has no get() method"%id_)
             
-        return [self._handler[id_].get(param, **kwargs)
+        return np.asarray([self._handler[id_].get(param, **kwargs)
                 if hasattr(self._handler[id_],"get") else has_no_get(id_)
-                for id_ in ids]
+                for id_ in ids])
             
     
     def get_id(self, containing):
