@@ -361,7 +361,7 @@ def wcsplot(ax, wcs, exp_order=10,
 # --------------------- #
 @make_method(mpl.Axes)
 def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
-                   cmap=mpl.cm.viridis,
+                   cmap=None,
                    cbar=True,cblabel="",cbarprop={},
                    **kwargs):
     """
@@ -380,7 +380,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
                                    set.
     - other options -
     
-    cmap: [mpl.cm]                 a colormap
+    cmap: [mpl.cm]                 a colormap. Default would be viridis if possible YlGnBu otherwise
     
     cbar: [bool or ax]             provide here an ax where the colorbar should be
                                    drawn. You can also set True to have a default one
@@ -395,7 +395,12 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
     """
     from scipy.spatial import Voronoi
     from matplotlib.collections import PolyCollection
-    
+    if cmap is None:
+        try:
+            cmap = mpl.cm.viridis
+        except:
+            warning.warns("Viridis is not available, you should update matplotlib")
+            cmap = mpl.cm.YlGnBu
     # --------------------
     # - Define the Cells
     npoint = np.shape(xy)[0]
