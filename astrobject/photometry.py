@@ -4,17 +4,18 @@
 """This module defines the photometric objects"""
 
 import warnings
-import numpy  as np
-from scipy import stats
-from astropy.io import fits as pf
-
+import numpy         as np
+from scipy       import stats
 from scipy.stats import sigmaclip
 
-from astropy     import units,coordinates
+# - Astropy
+from astropy       import units,coordinates
+from astropy.io    import fits as pf
 from astropy.table import Table
 
+# - Internal (astrobject)
 from . import astrometry
-from .baseobject import  TargetHandler, WCSHandler, Samplers, CatalogueHandler #, BaseObject
+from .baseobject  import TargetHandler, WCSHandler, Samplers, CatalogueHandler
 from .utils.shape import HAS_SHAPELY
 from .utils.tools import kwargs_update, flux_to_mag
 
@@ -28,20 +29,20 @@ def get_image(filename=None,astrotarget=None,**kwargs):
 
     Parameters
     ----------
+    filename: [string.fits] -optional-
+        fits file from where the image will be loaded
 
-    - options -
-
-    filename: [string.fits]    fits file from where the image will be loaded
-
-    astrotarget: [AstroTarget] An AstroTarget object you which to associate
-                               to this image.
+    astrotarget: [AstroTarget] -optional-
+        An AstroTarget object you which to associate
+        to this image.
                                                                   
-    - kwargs options, potentially non-exhaustive -
-    
-    empty: [bool]              Set True to load an empty object.
-                               
-    Return
-    ------
+    empty: [bool] -optional-
+       Set True to load an empty object.
+
+    kwargs goes to Image __init__
+                   
+    Returns
+    -------
     Image
     """
     return Image(filename,astrotarget=astrotarget,
@@ -56,34 +57,38 @@ def get_photopoint(lbda=None,flux=None,var=None,
     
     Parameters
     ----------
+    lbda: [float] -optional-
+        The central wavelength associated to the photometric points.
 
-    lbda: [float]              The central wavelength associated to the photometric
-                               points.
+    flux: [float] -optional-
+        The flux (*not magnitude*) of the photometric point.
 
-    flux: [float]              The flux (*not magnitude*) of the photometric point.
+    var: [float] -optional-
+        The variance associated to the point's flux.
 
-    var: [float]               The variance associated to the point's flux.
+    zp: [float] -optional-
+        Zeropoint of the instrument's image
 
-    zp: [float]                Zeropoint of the instrument's image
-
-    bandname: [string]         Name of the Bandpass though which the observation is made
-        
-    - option -
+    bandname: [string] -optional-
+        Name of the Bandpass though which the observation is made
     
-    empty: [bool]              Set True to return an empty object.
+    empty: [bool] -optional-
+        Set True to return an empty object.
 
-    - other options ; not exhautive ; goes to 'create' -
-
-    mjd: [float]               Modified Julian Data of the observation
+    mjd: [float] -optional-
+        Modified Julian Data of the observation
     
-    source: [string]           Staten the origin of the point (e.g. image, ...)
+    source: [string] -optional-
+        Staten the origin of the point (e.g. image, ...)
 
-    instrument_name:[string]   Give a name of the intrument that enable to take the
-                               photometric point.
-
-    **kwargs    extra entries will be save in the 'meta' property
-    Return
-    ------
+    instrument_name:[string] -optional-
+        Give a name of the intrument that enable to take the photometric point.
+                               
+    kwargs goes to PhotoPoint __init__,
+           extra entries will be save in the 'meta' property
+           
+    Returns
+    -------
     PhotoPoint
     """
     # -------------
@@ -110,23 +115,22 @@ def dictsource_2_photopoints(dictsource,**kwargs):
 
     Parameters
     ----------
-    dictsource: [dictionnary]      This dictionnary must have the following entries:
-                                   {
-                                   'flux': [list of fluxes],
-                                   'var': [list of associated variances],
-                                   'lbda': float-if-unique wavelength/[list of lbda]
-                                   - options -
-                                   'source': string/[list of sources],
-                                   'instrument_name': string/[list of instruments],
-                                   }
-                                   The array must all have the same size.
+    dictsource: [dictionnary]
+        This dictionnary must have the following entries:
+        {'flux': [list of fluxes],
+        'var': [list of associated variances],
+        'lbda': float-if-unique wavelength/[list of lbda]
+        - options -
+        'source': string/[list of sources],
+        'instrument_name': string/[list of instruments],
+        }
+        The array must all have the same size.
 
-                                   
     - kwargs options goes to all the looped PhotoPoint __init__-
     
-    Return
-    ------
-    list-of-PhotoPoints
+    Returns
+    -------
+    list of PhotoPoints
     """
     if type(dictsource) is not dict:
         raise TypeError("'dictsource' must be a dictionnary")
@@ -169,8 +173,9 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     __nature__ = "Image"
 
     PROPERTIES         = ["filename","rawdata","header","var","background"]
-    SIDE_PROPERTIES    = ["datamask","exptime"] # maybe Exptime should just be on flight
-    DERIVED_PROPERTIES = ["fits","data","sepobjects","backgroundmask","apertures_photos","fwhm"]
+    SIDE_PROPERTIES    = ["datamask","exptime"] 
+    DERIVED_PROPERTIES = ["fits","data","sepobjects","backgroundmask",
+                          "apertures_photos","fwhm"]
 
     # -------------------- #
     # Internal Properties  #
@@ -645,7 +650,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """
         if not self.has_sepobjects():
             raise AttributeError("sepobjects has not been set. Run sep_extract()")
-        if "__iter__" not in dir(idx):
+
+        if not hasattr(idx, "__iter__"):
             idx = [idx]
             
         x, y, a, b, theta = self.sepobjects.get(["x","y","a","b","theta"], mask=idx).T
@@ -744,7 +750,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             
         # -------------
         # - SEP Input 
-        gain = None if "_dataunits_to_electron" not in dir(self) else \
+        gain = None if not hasattr(self,"_dataunits_to_electron") else \
           self._dataunits_to_electron
         gain = kwargs.pop("gain",gain)
         # -----------------
@@ -911,7 +917,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         # -- If this is an instrument and not an image
         instrument_prop = {'lbda':self.lbda,"mjd":self.mjd,
-                           "bandname":self.bandname} if "lbda" in dir(self) else\
+                           "bandname":self.bandname} if hasattr(self,"lbda") else\
                            {}
         sepobjects = get_sepobject(o,ppointkwargs=instrument_prop)
         # ----------- #
@@ -950,7 +956,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     def _get_sep_extract_threshold_(self):
         """this will be used as a default threshold for sep_extract"""
         print "_get_sep_extract_threshold_ called"
-        if "_sepbackground" not in dir(self):
+        
+        if not hasattr(self,"_sepbackground")
                 _ = self.get_sep_background(update_background=False)
         return self._sepbackground.globalrms*1.5
     
@@ -1053,7 +1060,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             valuetoshow = toshow
         elif type(toshow) is not str:
             raise TypeError("'toshow' must be a string (self.'toshow') or a np.ndarray)"%toshow)
-        elif toshow not in dir(self):
+        elif not hasattr(self,"toshow"):
             raise ValueError("'%s' is not a known image parameter"%toshow)
         else:
             valuetoshow = eval("self.%s"%toshow)
@@ -1070,7 +1077,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             ax  = fig.add_axes([0.1,0.1,0.8,0.8])
             ax.set_xlabel("x",fontsize = "x-large")
             ax.set_ylabel("y",fontsize = "x-large")
-        elif "imshow" not in dir(ax):
+        elif not hasattr(ax,"imshow"):
             raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
                              "No imshow available")
         else:
@@ -1150,7 +1157,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         """
          # - Input test
-        if toshow not in dir(self):
+        if not hasattr(self,toshow):
             raise ValueError("'%s' is not a known image parameter"%toshow)
         valuetoshow = eval("self.%s"%toshow)
         if valuetoshow is None:
@@ -1164,7 +1171,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if ax is None:
             fig = mpl.figure(figsize=[8,8])
             ax  = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "hist" not in dir(ax):
+        elif not hasattr(ax,"hist"):
             raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
                              "No imshow available")
         else:
@@ -1295,7 +1302,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """
         # --------------
         # - ax parsing
-        if ax is None and ("_plot" not in dir(self) or "ax" not in self._plot.keys()):
+        if ax is None and (not hasattr(self,"_plot") or
+                            "ax" not in self._plot.keys()):
             raise ValueError('no ax defined')
         ax = self._plot['ax'] if ax is None else ax
         
@@ -1312,7 +1320,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
         # --------------
         # - ax parsing
-        if ax is None and ("_plot" not in dir(self) or "ax" not in self._plot.keys()):
+        if ax is None and (not hasattr(self,"_plot") or "ax" not in self._plot.keys()):
             raise ValueError('no ax defined')
         ax = self._plot['ax'] if ax is None else ax
         
@@ -1530,7 +1538,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     def _get_default_variance_(self):
         """
         """
-        if "_sepbackground" in dir(self):
+        if hasattr(self,"_sepbackground"):
             return self._sepbackground.rms()**2
         return None
         
@@ -1591,7 +1599,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """
         """
         if update_background:
-            if "_sepbackground" in dir(self):
+            if hasattr(self,"_sepbackground"):
                 self._measure_sep_background_(**self._sepbackground_prop)
                 if self._uses_default_background:
                     self.set_background(self._get_default_background_(),force_it=True)
@@ -1854,12 +1862,11 @@ class PhotoPoint( TargetHandler ):
         --------
         Value (or list)
         """
-        ## Tested, try except faster than if key in dir(self) and enable things like key="meta.keys()"
 
-        if "__iter__" in dir(key):
+        if hasattr(key, "__iter__"):
             return [self.get(key_,safeexit=safeexit) for key_ in key]
         
-        try: # if key in dir(self):
+        try:
             return eval("self.%s"%key)
         except:
             if key in self.meta.keys():
@@ -1927,7 +1934,7 @@ class PhotoPoint( TargetHandler ):
             axm.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize = "x-large")
             axf.set_ylabel(r"$\mathrm{frequency}$",     fontsize = "x-large")
             
-        elif "hist" not in dir(axes[0]):
+        elif not hasattr(axes,"hist"):
             raise TypeError("The given 'axes' most likely are not a matplotlib axes. "+\
                              "No hist available")
         else:
