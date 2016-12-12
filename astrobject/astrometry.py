@@ -91,15 +91,7 @@ class _MotherWCS_( object ):
 
     # ---------------- #
     # - Converstion  - #
-    # ---------------- #
-    def world2pix_ellipse(self, centroid_radec, vertex_radec, covertex_radec):
-        """ """
-        return self.world2pix(centroid_radec),self.world2pix(vertex_radec), self.world2pix(covertex_radec)
-
-    def pix2world_ellipse(self, centroid_pix, vertex_pix, covertex_pix):
-        """ """
-        return self.pix2world(centroid_pix),self.pix2world(vertex_pix), self.pix2world(covertex_pix)
-    
+    # ---------------- #    
         
     def units_to_pixels(self,units_, target=None):
         """units should be a parsable string or a astropy units"""

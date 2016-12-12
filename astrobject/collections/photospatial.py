@@ -678,7 +678,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             return None
         
         x,y,a,b,theta = self.get_ellipse_values(mask=idxaround)
-        pix_x, pix_y = self.coords_to_pixel(ra,dec)
+        pix_x, pix_y  = self.coords_to_pixel(ra,dec)
 
         dist = np.asarray([[idx_,distance.pdist([[0,0],
                                                  np.dot(np.asarray([[np.cos(theta[i]), -np.sin(theta[i])],[np.sin(theta[i]), np.cos(theta[i])]]).T,
@@ -1204,9 +1204,27 @@ class SepObject( PhotoMap ):
 
     def get_ellipse_values(self, mask=None):
         """ returns the x, y, a, b, theta for the sep objects """
+        if mask is not None and len(mask)==1:
+            return self.get(["x","y","a","b","theta"], mask=mask)[0]
         return self.get(["x","y","a","b","theta"], mask=mask).T
 
-    
+    def project_ellipse(self, idx, target_wcs):
+        """ """
+        x,y,a,b,theta = self.get_ellipse_values(idx if hasattr(idx,"__iter__") else [idx])
+        xa,ya = np.cos(theta)*a + x, np.sin(theta)*a + y
+        xb,yb = np.cos(theta-3*np.pi/2)*b + x, np.sin(theta-3*np.pi/2)*b + y
+        # - Move to Ra Dec where things are the same for everyone
+        centroid, vertex, covertex = self.wcs.pix2world([x,xa,xb],[y,ya,yb])
+        # - Move back this points using the new wcs
+        x_new, y_new  = target_wcs.world2pix(*centroid)
+        xa_new,ya_new = target_wcs.world2pix(*vertex)
+        xb_new,yb_new = target_wcs.world2pix(*covertex)
+        # - convert back to x,y,a,b,theta
+        a_new = np.sqrt((xa_new-x_new)**2+(ya_new-y_new)**2)
+        b_new = np.sqrt((xb_new-x_new)**2+(yb_new-y_new)**2)
+        theta_new = np.arctan((ya_new-y_new)/(xa_new-x_new))
+        return x_new, y_new, a_new, b_new, theta_new
+        
     def get_ellipse_mask(self,width, height, r=3, apply_catmask=False):
         """
         This method returns a boolean mask of the detected ellipses
