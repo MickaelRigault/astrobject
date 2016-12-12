@@ -957,7 +957,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """this will be used as a default threshold for sep_extract"""
         print "_get_sep_extract_threshold_ called"
         
-        if not hasattr(self,"_sepbackground")
+        if not hasattr(self,"_sepbackground"):
                 _ = self.get_sep_background(update_background=False)
         return self._sepbackground.globalrms*1.5
     
@@ -1060,7 +1060,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             valuetoshow = toshow
         elif type(toshow) is not str:
             raise TypeError("'toshow' must be a string (self.'toshow') or a np.ndarray)"%toshow)
-        elif not hasattr(self,"toshow"):
+        elif not hasattr(self,toshow):
             raise ValueError("'%s' is not a known image parameter"%toshow)
         else:
             valuetoshow = eval("self.%s"%toshow)

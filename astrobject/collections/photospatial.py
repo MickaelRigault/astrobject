@@ -501,8 +501,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         # all the index[bool_] entries have a catidx associated. But some may have several
         # If so len(catindexmask) would be greater. Hence we run a slower, but accurate technique
         if len(catindexmask)>len(index[bool_]):
-            warnings.warn("At least one index has several catindex matched. First used")
-            return np.asarray([self.catmatch["idx_catalogue"][np.argwhere(self.catmatch["idx"]==i)[0]][0]
+            warnings.warn("At least one index has several catindex matched. Closest used")
+            return np.asarray([self.catmatch["idx_catalogue"][np.argwhere(self.catmatch["idx"]==i)[np.argmin(self.catmatch["angsep_arcsec"][self.catmatch["idx"]==i])]][0]
                 for i in index[bool_]])
                     
         return np.concatenate(self.catmatch["idx_catalogue"][catindexmask])
@@ -528,7 +528,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         # If so len(indexmask) would be greater. Hence we run a slower, but accurate technique
         if len(indexmask)>len(catindex[bool_]):
             warnings.warn("At least one catalogue entry has several index matched. First used  ")
-            return np.asarray([self.catmatch["idx"][np.argwhere(self.catmatch["idx_catalogue"]==i)[0]][0]
+            return np.asarray([self.catmatch["idx"][np.argwhere(self.catmatch["idx_catalogue"]==i)[np.argmin(self.catmatch["angsep_arcsec"][self.catmatch["idx"]==i])]][0]
                 for i in catindex[bool_]])
                     
         return np.concatenate(self.catmatch["idx"][indexmask])
@@ -605,7 +605,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     # ------------- #
     # -- Access Index
     def get_host_idx(self, target=None, coords=None,  catid=None,
-                     radius=30, runits="kpc", scaleup=3, max_galdist=3):
+                     radius=30, runits="kpc", scaleup=3, max_galdist=3,
+                     verbose=False):
 
         """
         It first searches galaxies in a given radius and then returns
@@ -640,6 +641,11 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             assumed hostless.
             Set this to None to ignore this test.
 
+        // general options
+
+        verbose: [bool]
+            Print additional information
+        
         Returns
         -------
         [int] / None # None if no host detected
@@ -662,6 +668,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         idxaround,idxaround_dist = self.get_idx_around(ra, dec,
                                                        radius*self.units_to_pixels(runits, target=target)*self.wcs.pix_indeg.value,
                                                        runits="degree")
+        if verbose:
+            print idxaround,idxaround_dist
+            
         # --- No host around --- #
         if len(idxaround) == 0:
             print("No detected host within the given search limits: ", radius, runits)
@@ -673,7 +682,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         dist = np.asarray([[idx_,distance.pdist([[0,0],
                                                  np.dot(np.asarray([[np.cos(theta[i]), -np.sin(theta[i])],[np.sin(theta[i]), np.cos(theta[i])]]).T,
                                                         [pix_x-x[i],pix_y-y[i]])], # coords_aligned = rotation matrix . coord_xy
-                                                        "wminkowski", w=[1/(a[i]*scaleup),1/(b[i]*scaleup)])]
+                                                        "wminkowski", w=[1./(a[i]*scaleup),1./(b[i]*scaleup)])]
                                     for i,idx_ in enumerate(idxaround)
                                         if not self.has_catalogue() or \
                                         (idx_ in self.catmatch["idx"] and not \
@@ -968,8 +977,7 @@ class SepObject( PhotoMap ):
 
     # - Ellipse
     def display_ellipses(self, ax, idx=None, scaleup=2.5,
-                         draw=True,
-                         fc="None", ec="k"):
+                         draw=True, fc="None", ec="k"):
         """ draw the requested ellipse on the axis """
         ells = self.get_detected_ellipses(scaleup=scaleup,
                                           mask=idx if hasattr(idx, "__iter__") or idx is None\
@@ -982,7 +990,7 @@ class SepObject( PhotoMap ):
             ax.add_patch(ell)
         if draw:
             ax.figure.canvas.draw()
-        
+
     def show_ellipses(self,ax=None,
                       savefile=None,show=True,
                       apply_catmask=True,stars_only=False,nonstars_only=False,

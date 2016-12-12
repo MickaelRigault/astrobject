@@ -923,8 +923,9 @@ class HostImageCollection( ImageCollection ):
     # - GETTER - #
     # ---------- #
     def get_host_sepid(self, image_id, catid=None, **kwargs):
-        """ get the sepobject entry for of the host for the given
-        image_id. You can select a given catid, otherwise,
+        """ get the sepobject entry of the host for the given
+        image_id.
+        You can select a given catid, otherwise,
         this will use the current catid if it exists
         Returns
         -------
