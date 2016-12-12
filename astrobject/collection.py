@@ -972,7 +972,7 @@ class HostImageCollection( ImageCollection ):
             return np.concatenate([[x],[y],self.ref_host_ellipse[2:]]), False
         
         # = has the data
-        return self.images[id_]["image"].sepobjects.get_idx_ellipse(idx), True
+        return self.images[id_]["image"].sepobjects.get_ellipse_values(idx if hasattr(idx, "__iter__") else [idx]).T, True
 
     
     def get_photopoints(self, scaleup=3, refid=None,

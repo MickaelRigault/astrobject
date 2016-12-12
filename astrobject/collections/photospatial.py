@@ -491,6 +491,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         """
         if "__iter__" not in dir(index):
             catindex = [index]
+            
         index = np.asarray(index)
         
         bool_ = np.in1d( index, self.catmatch["idx"] )
@@ -676,7 +677,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             print("No detected host within the given search limits: ", radius, runits)
             return None
         
-        x,y,a,b,theta = self.get(["x","y","a","b","theta"], mask = idxaround).T
+        x,y,a,b,theta = self.get_ellipse_values(mask=idxaround)
         pix_x, pix_y = self.coords_to_pixel(ra,dec)
 
         dist = np.asarray([[idx_,distance.pdist([[0,0],
@@ -763,15 +764,6 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         return self.catalogue.get_idx_around(ra, dec, radius.value,
                                              runits=radius.unit.name,
                                              wcs_coords=True)
-
-    # -- Ellipse Shape
-    def get_idx_ellipse(self, idx):
-        """ get the ellipse parameters ("x","y","a","b","theta") for the given idx.
-        
-        idx could be a single idx, a list of index or a bolean mask.
-        """
-        return self.get(["x","y","a","b","theta"],
-                        mask=idx if hasattr(idx, "__iter__") or idx is None else [idx])[0]
         
     # -- Masking Tool
     def get_indexes(self,isolated_only=False,
@@ -1204,11 +1196,16 @@ class SepObject( PhotoMap ):
         # - Properties
         ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
                         t*units.radian.in_units("degree"))
-                for x,y,a,b,t in self.get(["x","y","a","b","theta"],mask=mask)]
+                for x,y,a,b,t in self.get_ellipse_values(mask=mask).T]
         if not contours:
             return ells
         from ...utils.shape import patch_to_polygon
         return patch_to_polygon(ells)
+
+    def get_ellipse_values(self, mask=None):
+        """ returns the x, y, a, b, theta for the sep objects """
+        return self.get(["x","y","a","b","theta"], mask=mask).T
+
     
     def get_ellipse_mask(self,width, height, r=3, apply_catmask=False):
         """
