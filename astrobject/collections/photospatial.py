@@ -1209,8 +1209,13 @@ class SepObject( PhotoMap ):
         return self.get(["x","y","a","b","theta"], mask=mask).T
 
     def project_ellipse(self, idx, target_wcs):
-        """ """
+        """ grab the ellipse coordinate of the given idx entry and project them
+        in the new wcs system using self.project_ellipse_to_wcs() """
         x,y,a,b,theta = self.get_ellipse_values(idx if hasattr(idx,"__iter__") else [idx])
+        return self.project_ellipse_to_wcs(x,y,a,b,theta, target_wcs)
+    
+    def project_ellipse_to_wcs(self, x,y,a,b,theta, target_wcs):
+        """ Get the x,y, a, b, theta values in the new wcs system. """
         xa,ya = np.cos(theta)*a + x, np.sin(theta)*a + y
         xb,yb = np.cos(theta-3*np.pi/2)*b + x, np.sin(theta-3*np.pi/2)*b + y
         # - Move to Ra Dec where things are the same for everyone
