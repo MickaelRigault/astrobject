@@ -22,7 +22,8 @@ from .utils.tools import kwargs_update, flux_to_mag
 __all__ = ["get_image","get_photopoint"]
 
 
-def get_image(filename=None,astrotarget=None,**kwargs):
+def get_image(filename=None, astrotarget=None,
+              **kwargs):
     """
     Initalize the image by giving its filelocation (*filename*). This
     will load it using the load() method.
@@ -186,7 +187,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # =========================== #
     def __init__(self,filename=None,
                  astrotarget=None,data_index=0,
-                 dataslice0=[0,None],dataslice1=[0,None],
+                 dataslice0=None,dataslice1=None,
                  empty=False,**kwargs):
         """
         Initalize the image by giving its filelocation (*filename*). This
@@ -212,7 +213,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if filename is not None:
             force_it = kwargs.pop("force_it",True)
             self.load(filename,force_it=force_it,
-                      dataslice0=dataslice0,dataslice1=dataslice1,
+                      dataslice0=dataslice0,
+                      dataslice1=dataslice1,
                       **kwargs)
         # - Set the target if any
         if astrotarget is not None:
@@ -239,7 +241,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ------------------- #
     def load(self,filename,index=None,
              force_it=False, background=None,
-             dataslice0=[0,None],dataslice1=[0,None]):
+             dataslice0=None,dataslice1=None):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
@@ -248,21 +250,25 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
         Parameters
         ----------
-        filename: [string.fits]    The file containing the fits data
+        filename: [string.fits]
+            The file containing the fits data
 
-        - options -
-
-        dataslice0/1 [2D-array]    load only the data within the given boundaries.
-                                   The 0-offset will be accessible in self._dataoffset
-                                   and will be passed to the wcs solution.
-                                   None means no limits
+        dataslice0, dataslice1: [2D-array, 2D-array] -optional-
+            load only the data within the given boundaries.
+            The 0-offset will be accessible in self._dataoffset
+            and will be passed to the wcs solution.
+            None means no limits.
+            None will be converted to [0,-1]
         
-        index: [int]               The fits entry that contains the data
-                                   If None, this will fetch it in the build_properties
+        index: [int]
+            The fits entry that contains the data.
+            If None, this will fetch it in the build_properties
 
-        force_it: [bool]           If the data already exist, this method
-                                   will raise an execption except if you set
-                                   *force_it* to True. Be Careful with this.
+        force_it: [bool]
+            If the data already exist, this method will raise an
+            exception except if you set *force_it* to True.
+            Be Careful with this.
+            
         Return
         ------
         Void
@@ -291,7 +297,11 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ---------- #
         # - Data   - #
         # ---------- #
-
+        if dataslice0 is None:
+            dataslice0 = [0,-1]
+        if dataslice1 is None:
+            dataslice1 = [0,-1]
+    
         data = fits[index].data[dataslice0[0]:dataslice0[1],
                                 dataslice1[0]:dataslice1[1]]
         self._build_properties["dataslice0"] = dataslice0
