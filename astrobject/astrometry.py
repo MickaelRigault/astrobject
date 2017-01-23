@@ -250,7 +250,7 @@ class WCS(pyWCS,_MotherWCS_):
     @property
     def pix_indeg(self):
         """Size in degree. Returns astropy Quantity in degree"""
-        [cd1_1,cd1_2],[cd2_1,cd2_2] = self.wcs.cd
+        [cd1_1,cd1_2],[cd2_1,cd2_2] = self.wcs.cd if hasattr(self.wcs,"cd") else self.pixel_scale_matrix
         pxl = np.sqrt(cd1_1**2+cd2_1**2),np.sqrt(cd1_2**2+cd2_2**2)
     
         if (pxl[0]-pxl[1])/pxl[0] < 1e-2 : # equal to 1%

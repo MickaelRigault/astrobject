@@ -30,6 +30,7 @@ class Instrument( Image ):
     # ---------------- #
     #  PhotoPoints     #
     # ---------------- #
+    
     def _aperture_to_photopoint_(self,count,err,flag):
         """ convert the aperture output to a photopoints """
         

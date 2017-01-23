@@ -676,10 +676,12 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         if len(idxaround) == 0:
             print("No detected host within the given search limits: ", radius, runits)
             return None
-        
+            
         x,y,a,b,theta = self.get_ellipse_values(mask=idxaround)
         pix_x, pix_y  = self.coords_to_pixel(ra,dec)
-
+        if len(idxaround) == 1:
+            x,y,a,b,theta = [x],[y],[a],[b],[theta]
+            
         dist = np.asarray([[idx_,distance.pdist([[0,0],
                                                  np.dot(np.asarray([[np.cos(theta[i]), -np.sin(theta[i])],[np.sin(theta[i]), np.cos(theta[i])]]).T,
                                                         [pix_x-x[i],pix_y-y[i]])], # coords_aligned = rotation matrix . coord_xy

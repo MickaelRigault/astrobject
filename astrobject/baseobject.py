@@ -104,6 +104,10 @@ class Samplers( BaseObject ):
             return
         if sampler is not None:
             self.set_samplers(sampler)
+
+    def __call__(self):
+        return self.samplers
+    
     # =================== #
     #   Main Methods      #
     # =================== #

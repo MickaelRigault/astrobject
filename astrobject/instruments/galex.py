@@ -9,9 +9,9 @@ from astropy.io      import fits as pf
 from astropy         import time
 
 # - local dependencies
-from .baseinstrument import Instrument
+from .baseinstrument    import Instrument
 from ..utils.decorators import _autogen_docstring_inheritance
-from ..utils.tools   import kwargs_update
+from ..utils.tools      import kwargs_update
 
 GALEX_INFO= {"fuv":{"lbda":1516,"ABmag0":18.82},
              "nuv":{"lbda":2267,"ABmag0":20.08},
@@ -67,8 +67,8 @@ class GALEX( Instrument ):
     instrument_name = "GALEX"
 
     def set_sky(self, filename=None, skydata=None,
-                derive_variance=True):
-        """ Provide the Sky file image or directly the sky data
+                set_background=True):
+        """ Provide the Sky file image or directly the skydata (a Galex Object)
         (in galex filename format they have the skybg label).
         This will set the sky that you can access using self.sky.
         The Variance will be updated except if derive_variance is False
@@ -91,15 +91,14 @@ class GALEX( Instrument ):
         if self.has_target() and self.has_sky():
             self.sky.set_target(self.target)
             
-        # - set the variance
-        if derive_variance:
-            self._derive_variance_()
+        # - skybg are is the background of the image:
+        if set_background:
+            self.set_background(self.sky.rawdata, force_it=True)
 
     def _derive_variance_(self):
-        """ Build the variance image based on the sky+data assuming pure photon noise. """
+        """ Build the variance image based on the sky+data (=raw int data) assuming pure photon noise. """
         # Pure Photon Noise
-        self._properties["var"] = np.sqrt(self.sky.rawdata*self.exposuretime + \
-                                           self.rawdata*self.exposuretime) / self.exposuretime
+        self._properties["var"] = np.sqrt(self.rawdata*self.exposuretime) / self.exposuretime
                 
     def _get_default_background_(self,*args,**kwargs):
         return np.zeros(np.shape(self.rawdata))
@@ -131,6 +130,13 @@ class GALEX( Instrument ):
 
     # ----------------
     #  GALEX Specific
+    @property
+    def var(self):
+        """ variance image. Poisson noise only in Galex. Based on rawdata of 'int' """
+        if self._properties["var"] is None:
+            self._derive_variance_()
+        return self._properties["var"]
+    
     @property
     def sky(self):
         """ """
