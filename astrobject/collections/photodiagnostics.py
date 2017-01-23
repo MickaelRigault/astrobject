@@ -315,7 +315,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
             self.nsamplers = nsamplers
 
         self._set_color_samplers_()
-        i_ = self.photopoints["i"].magsamplers.samplers[:self.nsamplers]
+        i_ = self.photopoints["i"].photosamplers.mag[:self.nsamplers]
         # -- Convert that to masses    
         nodisp_sampler   = taylor_mass_relation(i_,self.gi_priored_sample,
                                                 self.target.distmpc)
@@ -355,20 +355,20 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
                             ec=mpl.cm.binary(0.8,1.), zorder=6), **kwargs)
         
         # - Plots    - #
-        _ = self.photopoints["i"].magsamplers.show(ax=ax, fancy_xticklabel=False,
+        _ = self.photopoints["i"].photosamplers.show(mag=True,
+                                            ax=ax, fancy_xticklabel=False,
                                             show_legend=False, show_model=False, show=False,
                                             ec=mpl.cm.copper(0.5),fc=mpl.cm.copper(0.5,0.2),
-                                          bins=prop["bins"], show_estimate=False,xscale=False)
-        _ = self.photopoints["g"].magsamplers.show(ax=ax, fancy_xticklabel=False,
+                                            bins=prop["bins"], show_estimate=False,xscale=False)
+        _ = self.photopoints["g"].photosamplers.show(mag=True,
+                                            ax=ax, fancy_xticklabel=False,
                                             show_legend=False,show_model=False,show=False,
                                             ec=mpl.cm.Greens(0.8),fill=False,
-                                          bins=prop["bins"], show_estimate=False,xscale=False)
+                                            bins=prop["bins"], show_estimate=False,xscale=False)
         # - Main g-i
         x = np.linspace(-1,3,1e3)
 
-        
-        # - likelihood
-        
+        # - likelihood        
         axcolor.hist(self.gi_samplers.samplers, label=r"$\mathrm{Likelihood}$",**prop)
         
         # - prior
@@ -482,18 +482,18 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
 
     def _set_color_samplers_(self):
         """ """
-        self.photopoints["i"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
-        self.photopoints["g"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2)
+        self.photopoints["i"].draw_photosamplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
+        self.photopoints["g"].draw_photosamplers(nsamplers=self.nsamplers*2)
         
-        neff = np.min([self.photopoints["g"].magsamplers.nsamplers,
-                       self.photopoints["i"].magsamplers.nsamplers,self.nsamplers])
+        neff = np.min([self.photopoints["g"].photosamplers.nsamplers,
+                       self.photopoints["i"].photosamplers.nsamplers,self.nsamplers])
         if neff != self.nsamplers:
             warnings.warn("Reduced effective number of sampler (%d -> %d)for the mass because of too many nans"%(self.nsamplers, neff))
             self.nsamplers = neff
 
         # -- g and i samplers
-        g_ = self.photopoints["g"].magsamplers.samplers[:self.nsamplers]
-        i_ = self.photopoints["i"].magsamplers.samplers[:self.nsamplers]
+        g_ = self.photopoints["g"].photosamplers._magsamples.get_random_samplers(self.nsamplers)
+        i_ = self.photopoints["i"].photosamplers._magsamples.get_random_samplers(self.nsamplers)
         
         # -- Set the gi_sampler consequently
         self.gi_samplers.set_samplers(g_ - i_)

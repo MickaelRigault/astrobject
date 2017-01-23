@@ -850,11 +850,12 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                 self._derived_properties["sepobjects"] = None
                 # -- No need to conserve that
                 del self._rmsep
-                
+
             return self._sepbackground.back()
         
         if update_background:
             self.set_background(self._sepbackground.back(),force_it=True)
+            
         if not doublepass:
             return self._sepbackground.back()
             
@@ -1621,71 +1622,146 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 # Base Object Classes: PhotoPoint     #
 #                                     #
 #######################################
-class MagSamplers( Samplers ):
+class PhotoSamplers( Samplers ):
     """ Object used to accurately estimate the magnitude in the PhotoPoint Class """
-    PROPERTIES = ["flux", "fluxerror", "lbda"]
+    PROPERTIES         = ["lbda"]
+    DERIVED_PROPERTIES = ["magsamples"]
 
-    def __init__(self, flux=None, fluxerr=None, lbda=None, empty=False ):
+    def __init__(self, fluxsamples, lbda=None, empty=False ):
         """ Initialize the Samplers. Remark that all flux, fluxerr and lbda
         are requested to draw the samplers"""
         self.__build__()
         if empty:
             return
-        if flux is not None: self._properties["flux"] = flux
-        if fluxerr is not None: self._properties["fluxerr"] = fluxerr
-        if lbda is not None: self._properties["lbda"] = lbda
-            
-            
-    def draw_samplers(self, nsamplers=None, negativeflux_mag=None):
-        """ draw new samplers """
-        if self.lbda is None:
-            raise AttributeError("Unknown 'lbda' cannot go from flux to magnitude")
-        if self.flux is None or self.fluxerr is None:
-            raise AttributeError("Unknown 'flux' or 'fluxerr' cannot draw magnitudes")
         
-        if nsamplers is not None:
-            self.nsamplers = nsamplers
-            
-        mags = flux_to_mag(np.random.normal(loc=self.flux, scale=self.fluxerr,
-                                       size=self.nsamplers),
-                            None,self.lbda)[0]
-        if negativeflux_mag is None:
+        self.set_samplers(fluxsamples)
+        if lbda is not None: self.set_lbda(lbda)
+
+    # =================== #
+    #   Main Methods      #
+    # =================== #
+    def set_lbda(self, lbda, derive_mag=True, negative_fluxmag=None):
+        """ set the effective wavelength (in Angstrom) of the filter used to get the flux. 
+        This is requested to get magnitudes. 
+        If you derive the magnitudes (derived_mag=True) you can set the `negative_fluxmag`.
+        If None, the negative fluxes will be ignored.
+        """
+        self._properties["lbda"] = lbda
+        if derive_mag:
+            self.derive_magsamples(negative_fluxmag=negative_fluxmag)
+
+    def derive_magsamples(self, negative_fluxmag=None):
+        """ Builds self.magsamples based on samplers(fluxes) and lbda using `flux_to_mag` """
+        mags = flux_to_mag(self.samplers,None,self.lbda)[0]
+        if negative_fluxmag is None:
             mags = mags[mags==mags]
         else:
-            mags[mags!=mags] = negativeflux_mag
-            
-        self.nsamplers = len(mags)
-        self._derived_properties['samplers'] = mags
+            mags[mags==mags] = negative_fluxmag
 
+        s = Samplers()
+        s.set_samplers(mags)
+        self._derived_properties["magsamples"] = s
+    
+    def draw_samplers(self, nsamplers=None, negativeflux_mag=None):
+        """ draw new samplers """
+        raise AttributeError("No Samples can be Drawn for PhotoSamplers. Set flux using set_samplers")
+
+    # =================== #
+    #   Super It          #
+    # =================== #
+    def get_estimate(self, mag=False):
+        """ Estimation of the True parameters based on the current samplers.
+        Parameters
+        ----------
+        mag: [bool] -optional-
+            This will returns the estimate of the flux (samplers) except if this is 
+            True. If so the estimate of the magnitude is returned (derived from the flux)
+        
+        Returns
+        -------
+        value [+sigma, -sigma] (such that value = 50% , value+sigma=84%, value-sigma=16%)
+        """
+        if mag is False:
+            return super(PhotoSamplers,self).get_estimate()
+        
+        return self._magsamples.get_estimate()
+
+
+    def show(self, mag=False,
+                savefile=None, show=True, ax=None,
+                show_model=True, propmodel={}, xlabel="",
+                fancy_xticklabel=False, kde=False,
+                show_legend=True, logscale=False,
+                show_estimate= True,xscale=True,yscale=True,
+                **kwargs):
+        """ Show the samplers and the derived rv_distribution (scipy.stats)
+
+        Parameters
+        ----------
+        mag: [bool] -optional-
+            Show the magnitude distribution instead of the flux one.
+
+
+        kde: [bool] -optional-
+            Show a kde shape instead of an histogram.
+            
+        Return
+        ------
+        dict (plot information)
+        """
+        if mag is False:
+            return super(PhotoSamplers,self).show(savefile=savefile, show=show, ax=ax,
+                                                      show_model=show_model, propmodel=propmodel,
+                                                      xlabel=xlabel,
+                                                      fancy_xticklabel=fancy_xticklabel, kde=kde,
+                                                      show_legend=show_legend, logscale=logscale,
+                                                      show_estimate=show_estimate, xscale=xscale,yscale=yscale,
+                                                      **kwargs)
+        return self._magsamples.show(savefile=savefile, show=show, ax=ax,
+                                     show_model=show_model, propmodel=propmodel,
+                                     xlabel=xlabel,
+                                     fancy_xticklabel=fancy_xticklabel, kde=kde,
+                                     show_legend=show_legend, logscale=logscale,
+                                     show_estimate=show_estimate, xscale=xscale,yscale=yscale,
+                                     **kwargs)
+    
     def _set_rvdist_(self):
         """ set the rvdistribution.
         This method defines which kind of rv_continuous distribution you use
         """
-        return stats.lognorm( *stats.lognorm.fit(self.samplers, self.samplers.std(),
-                                                scale=1, loc=np.median(self.samplers)))
+        return stats.norm( *stats.norm.fit(self.samplers, scale=self.samplers.std(),loc=np.median(self.samplers)))
     @property
     def rvdist_info(self):
         """ information about the rvdistribution """
-        return r"$\mathrm{lognormal}$"
+        return r"$\mathrm{normal}$"
 
     # ================ #
     #   Properties     #
     # ================ #
     @property
     def flux(self):
-        """ """
-        return self._properties["flux"]
-
+        return self()
+    
     @property
-    def fluxerr(self):
-        """ """
-        return self._properties["fluxerr"]
+    def mag(self):
+        return self._magsamples()
+    
+    @property
+    def _magsamples(self):
+        """ AB magnitude samples derived from the input fluxes (samplers)"""
+        if self._derived_properties["magsamples"] is None:
+            if self.lbda is None:
+                raise AttributeError("lbda not set.")
+            self.derive_magsamples()
+            
+        return self._derived_properties["magsamples"]
     
     @property
     def lbda(self):
         """ """
         return self._properties["lbda"]
-    
+
+        
 class PhotoPoint( TargetHandler ):
     """This Class hold the basic information associated to
     a photometric point"""
@@ -1694,12 +1770,14 @@ class PhotoPoint( TargetHandler ):
     
     PROPERTIES         = ["lbda","flux","var","mjd","bandname","zp"]
     SIDE_PROPERTIES    = ["source","intrument_name","zpsys","meta"]
-    DERIVED_PROPERTIES = ["magsamplers"] 
+    DERIVED_PROPERTIES = ["photosamplers"] 
     
     # =========================== #
     # = Constructor             = #
     # =========================== #
-    def __init__(self,lbda=None,flux=None,var=None,mjd=None,
+    def __init__(self,lbda=None,
+                 flux=None,var=None,
+                 mjd=None,
                  bandname=None,zp=None,zpsys="ab",
                  empty=False,**kwargs):
         """
@@ -1969,7 +2047,7 @@ class PhotoPoint( TargetHandler ):
     # =========================== #
     def _reset_derived_prop_(self):
         """ reset the derived and recorded properties """
-        self._derived_properties["magsamplers"] = None
+        self._derived_properties["photosamplers"] = None
         
     # =========================== #
     # = Properties and Settings = #
@@ -2118,38 +2196,76 @@ class PhotoPoint( TargetHandler ):
         return [flux_to_mag(self.flux-np.sqrt(self.var),None,self.lbda)[0]-self.mag,
                 self.mag-flux_to_mag(self.flux+np.sqrt(self.var),None,self.lbda)[0] ]
 
-
-    
-    # - Magnitude based on sampler
-    @property
-    def magsamplers(self, testsize=5000):
-        """ Samplers used to derive the magnitude law. This is based on Sampling draw based on flux measurements """
-        if self._derived_properties["magsamplers"] is None:
-            m = MagSamplers(self.flux, np.sqrt(self.var), self.lbda )
-            m.draw_samplers(testsize)
-            self._derived_properties["magsamplers"] = m
-            
-        return  self._derived_properties["magsamplers"]
-        
-    @property
-    def magdist(self):
-        """ distribution (lognormal) of the magnitude.
-        This assumes the fluxes are normaly distributed.
-
-        Return
-        ------
-        scipy's stats.lognorm initialized
-
-        Example
-        -------
-        get the pdf of the magnitude distribution: self.magdist.pdf(x)
-        """
-        return self.magsamplers.rvdist
-    
     @property
     def magabs(self):
         if not self.has_target():
             raise AttributeError("No target defined, I can't get the distance")
         return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
 
+    # ==================== #
+    #   Sampler Part       #
+    # ==================== #
+    # - Magnitude based on sampler
+    @property
+    def photosamplers(self, testsize=5000):
+        """ Samplers used to derive the magnitude law. This is based on Sampling draw based on flux measurements """
+        if self._derived_properties["photosamplers"] is None:
+            self.draw_photosamplers(testsize)
+        return  self._derived_properties["photosamplers"]
+            
+    def draw_photosamplers(self, nsamplers=5000):
+        """ Set the photosamplers object defining the number of samples available. """
+        self._derived_properties["photosamplers"] = \
+          PhotoSamplers( np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=nsamplers),
+                             lbda = self.lbda)
 
+class CountsPhotoPoint( PhotoPoint ):
+    
+    PROPERTIES = ["datacounts","bkgdcounts", "exposure_time"] 
+        
+    
+    def cps_to_flux(self, counts):
+        """ converts counts into flux """
+        return counts* 10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2)
+
+    def set_flux(set_flux):
+        """ """
+        
+    # ================= #
+    #  Properties       #
+    # ================= #
+    # -------------
+    # - Counts
+    @property
+    def datacounts(self):
+        return self._properties["datacounts"]
+        
+    @property
+    def bkgdcounts(self):
+        return self._properties["skycounts"]
+
+    @property
+    def exptime(self):
+        return self._properties["exposure_time"]
+
+    # -------------
+    # - Derived
+    @property
+    def cps(self):
+        """ Data counts per seconds """
+        return self.datacounts / self.exptime
+
+    @property
+    def cps_err(self):
+        """ Errors of counts per seconds """
+        return np.sqrt(self.datacounts + self.bkgdcounts) / self.exptime
+    
+    @property
+    def flux(self):
+        return self.cps_to_flux(self.cps)
+
+    @property
+    def var(self):
+        return self.cps_to_flux(self.cps_err)**2
+
+    
