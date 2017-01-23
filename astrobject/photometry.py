@@ -49,23 +49,32 @@ def get_image(filename=None, astrotarget=None,
     return Image(filename,astrotarget=astrotarget,
                  **kwargs)
                  
-def get_photopoint(lbda=None,flux=None,var=None,
-                   zp=None,bandname=None,
-                   mjd=None,source=None,
-                   instrument_name=None,**kwargs):
+def get_photopoint(flux=None,var=None,
+                   datacounts=None, bkgdcounts=None, exptime=None,
+                   lbda=None, zp=None,bandname=None,mjd=None,
+                   source=None, instrument_name=None,**kwargs):
     """ object containing photometric point information based on
     flux and effective wavelength.
     
     Parameters
     ----------
+    
+    // Setting: PhotoPoint vs. CountsPhotoPoint //
+       -> One must been set !
+    
+    / - PhotoPoint
+    flux, var: [float] 
+        The flux (*not magnitude*) and variance of the photometric point.
+        
+    / - CountsPhotoPoint
+    datacounts, bkgdcounts, exptime: [floats]
+        Counts (no counts per second) associated to the data and the backgound (sky)
+        and exposure time (in second)
+
+    // General PhotoPoint Information //
+
     lbda: [float] -optional-
         The central wavelength associated to the photometric points.
-
-    flux: [float] -optional-
-        The flux (*not magnitude*) of the photometric point.
-
-    var: [float] -optional-
-        The variance associated to the point's flux.
 
     zp: [float] -optional-
         Zeropoint of the instrument's image
@@ -94,17 +103,28 @@ def get_photopoint(lbda=None,flux=None,var=None,
     """
     # -------------
     # - Parser
-    if "variance" in kwargs.keys() and var is None:
-        var = kwargs.pop("variance")
     if "wavelength" in kwargs.keys() and lbda is None:
         lbda = kwargs.pop("wavelength")
     if "zpsystem" in kwargs.keys():
         kwargs["zpsys"] = kwargs.pop("zpsystem")
-        
-    return PhotoPoint(lbda,flux,var,source=source,
-                      instrument_name=instrument_name,
-                      mjd=mjd,zp=zp,bandname=bandname,
-                      **kwargs)
+
+    # PhotoPoints (flux normally distributed)
+    if flux is not None:
+        if "variance" in kwargs.keys() and var is None:
+            var = kwargs.pop("variance")
+            
+        return PhotoPoint(flux=flux,var=var,lbda=lbda,source=source,
+                        instrument_name=instrument_name,
+                        mjd=mjd,zp=zp,bandname=bandname,
+                        **kwargs)
+    # CountsPhotoPoints (Counts Poissonly distributed)
+    if datacounts is not None:
+        return CountsPhotoPoint(datacounts=datacounts, bkgdcounts=bkgdcounts, exptime=exptime,
+                                lbda=lbda,source=source,
+                                instrument_name=instrument_name,
+                                mjd=mjd,zp=zp,bandname=bandname,
+                                **kwargs)
+    raise ValueError("flux (and var) or datacounts (and bkgdcounts and exptime) must be defined.")
 
 # ========================== #
 #  Internal Tool             #
@@ -1761,119 +1781,101 @@ class PhotoSamplers( Samplers ):
         """ """
         return self._properties["lbda"]
 
-        
-class PhotoPoint( TargetHandler ):
-    """This Class hold the basic information associated to
-    a photometric point"""
 
-    __nature__ = "PhotoPoint"
-    
-    PROPERTIES         = ["lbda","flux","var","mjd","bandname","zp"]
+
+class BasePhotoPoint( TargetHandler ):
+    """ Base (virtual) Class for the PhotoPoints.
+
+    Child Classes must define the `draw_photosamplers` that could 
+    be based e.g. on fluxes and errors or on counts and exposure time.
+
+    Inherating Classes in Astrobject:
+       - PhotoPoint (flux normally distributed with sigma = error )
+       - CountPhotoPoints (Counts follow a pure Poisson distribution)
+
+    """
+    __nature__ = "PhotoPoint" # To Be Removed
+
+    PROPERTIES         = ["lbda","mjd","bandname","zp"] # flux/err or Counts
     SIDE_PROPERTIES    = ["source","intrument_name","zpsys","meta"]
-    DERIVED_PROPERTIES = ["photosamplers"] 
+    DERIVED_PROPERTIES = ["photosamplers"]
+
     
-    # =========================== #
-    # = Constructor             = #
-    # =========================== #
-    def __init__(self,lbda=None,
-                 flux=None,var=None,
-                 mjd=None,
-                 bandname=None,zp=None,zpsys="ab",
-                 empty=False,**kwargs):
+    def __init__(self, lbda=None, bandname=None, zp=None, 
+                     mjd=None, empty=False,**kwargs):
         """
         Initialize the PhotoPoint object
 
         Parameters
         ----------
-
-        lbda: [float]              The central wavelength associated to the photometric
-                                   points.
-
-        flux: [float]              The flux (*not magnitude*) of the photometric point.
-
-        var: [float]               The variance associated to the point's flux.
-
-        mjd: [float]               Modify Julian Date of the Observation
-
-        bandpass: [string]         Name of the Bandpass though which the observation is made
-
-        zp: [float]                Zeropoint of the instrument's image
+        lbda: [float] -optional-
+            Effective wavelength (in Angstrom) of the bandpass (filter)
+            If the bandname is known by sncosmo, you can let that to None.
         
-        - option -
+        bandname: [string] -optional-
+            name of the band used to derive the flux. 
+            If you set this you can access the 'sncosmo bandpass'.
 
-        empty: [bool]              Set True to return an empty object.
-        
-        - other options ; not exhautive ; goes to 'create' -
+        mjd: [float] -optional-
+            Modified Julian date of the observation.
 
-        source: [string]           Staten the origin of the point (e.g. image, ...)
+        zp: [float] -optional-
+            the zeropoint (in ABmag) of the instrument used to
+            derive the photopoint. 
 
-        instrument_name:[string]   Give a name of the intrument that enable to take the
-                                   photometric point.
+        **kwargs goes to the method `create`. Any Non-standard entry will be set 
+        to the `meta` value, which can then be accessed using the `get` method.
 
-        *META*  any additional key will be stored as a dictionary accessible with the meta entry
-        and more generally with the get() method.
-        
-        Return
-        ------
+        Returns
+        -------
         Void
         """
         self.__build__()
         if empty:
             return
-        prop = kwargs_update(dict(mjd=mjd,zp=zp,bandname=bandname),
+        prop = kwargs_update(dict(lbda=lbda, bandname=bandname,mjd=mjd, zp=zp),
                              **kwargs)
-        self.create(lbda,flux,var,**prop)    
-            
-    # =========================== #
-    # = Main Methods            = #
-    # =========================== #
-    def create(self,lbda,flux,var,
-               source=None,instrument_name=None,
-               mjd=None,zp=None,bandname=None,zpsys="ab",
-               force_it=False,**meta):
-        """
-        This method creates the object by setting the fundamental parameters.
-
+        self.create(**prop)
         
-        Parameters:
-        -----------
+    # ================== #
+    #   Main Tools       #
+    # ================== #
+    def create(self, lbda=None, source=None, instrument_name=None,
+               mjd=None, zp=None, bandname=None, zpsys="ab",
+               force_it=False, **meta):
+        
+        """ builds the core of the object by setting the fundamental parameters.
+       
+        (Remark that flux (or counts etc) are not defined here. 
+        You are incourage to super this method to included them.)
+        
+        Parameters
+        ----------
 
-        lbda,flux,var: [floats]    'lbda' is the effective wavelength (in Angstrom) of the
-                                   bandpass through which the 'flux' and the 'var' (variance) have
-                                   been measured.
+        lbda: [float] -optional-
+            Effective wavelength (in Angstrom) of the bandpass (filter)
+            If the bandname is known by sncosmo, you can let that to None.
+        
+        bandname: [string] -optional-
+            name of the band used to derive the flux. 
+            If you set this you can access the 'sncosmo bandpass'.
 
-        - options -
+        mjd: [float] -optional-
+            Modified Julian date of the observation.
 
-        mjd: [float]               Modified Julian date of the observation.
-
-        zp: [float]                the zeropoint (in ABmag) of the instrument used to
-                                   derive the photopoint. This is convinient when several photopoints
-                                   are combined.
+        zp: [float] -optional-
+            the zeropoint (in ABmag) of the instrument used to
+            derive the photopoint. 
                                    
-        source: [string]           is method used the measure this photometric point (e.g. image, spectrum...)
-        
+        source, instrument_name: [strings] -optional-
+            source: method used the measure this photometric point (e.g. image, spectrum...)
+            instrument_name: instrument used to measure the photopoint (e.g. sdss)                                   
 
-        instrument_name: [string]  set here the name of the instrument used to derive this photopoint
-                                   (e.g. sdss)
-
-        bandname: [string]         name of the band used to derive the flux. If you set this you can
-                                   access the 'sncosmo bandpass'.
-
-        Returns:
-        --------
-        Void
-        
+        Returns
+        -------
+        Void        
         """
-        if self.flux is not None and not force_it:
-            raise AttributeError("object is already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-                    
-        # ****************** #
-        # * Creation       * #
-        # ****************** #
         self._properties["lbda"] = np.float(lbda) if lbda is not None else None
-        self.set_flux(flux, var, force_it=True)
-        
         self._side_properties["source"] = source
         self._side_properties["instrument_name"] = instrument_name
         self._side_properties["meta"] = meta
@@ -1884,62 +1886,7 @@ class PhotoPoint( TargetHandler ):
         self.bandname = bandname
         self._update_()
 
-
-    def set_flux(self, flux, var, force_it=False):
-        """ Define the flux of the photopoint. This defines the rest of the object
-        """
-        if self._properties["flux"] is not None and not force_it:
-            raise AttributeError("'flux' already defined."+\
-                    " Set force_it to True if you really known what you are doing")
-                    
-        self._properties["flux"] = np.float(flux)
-        self._properties["var"]  = np.float(var) if var is not None else np.NaN
-        self._reset_derived_prop_()
-        
-        
-    def remove_flux(self, flux, var=None):
-        """ this flux quantity will be removed from the current flux"""
-        self.set_flux(self._properties["flux"] - flux,
-                      self._properties["var"] - var if var is not None else\
-                      self.var)
-                      
-
-    def apply_extinction(self, ebmv, r_v=3.1, law="fitzpatrick99"):
-        """ correct the flux and variance for the given extinction.
-        if embv is negative, this will remove flux (i.e. simulate dust absorption).
-        use a positive ebmv to correct for dust extinction.
-        The resulting flux will be higher.
-        """
-        # - Do you have extinction installed
-        try:
-            import extinction
-        except ImportError:
-            raise ImportError("install the python library 'extinction', pip install extinction. See http://extinction.readthedocs.io")
-        
-        # - Select the extinction law
-        law= law.lower()
-        if law not in extinction.__all__:
-            raise ValueError("Unknown extinction law. This are available"+", ".join([l for l in extinction.__all__ if l not in ["apply,Fitzpatrick99"]]))
-
-        dustlaw = eval("extinction.%s"%law)
-        if law == "fitzpatrick99":
-            base_rv = extinction.Fitzpatrick99().r_v
-            if r_v != base_rv:
-                warnings.warn("Fitzpatrick99 have fixed r_v of %.1f"%base_rv)
-                print "WARNING Fitzpatrick99 have fixed r_v of %.1f"%base_rv
-            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv)
-        else:
-            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv, base_rv)
-
-        # - Correction factor
-        flux_corr = extinction.apply(ext_mag, [1])
-        
-        # - Correct the current flux
-        self.set_flux(self.flux/flux_corr[0], self.var/flux_corr[0]**2, force_it=True)
-                
-    # --------- #
-    #  PLOTTER  #
-    # --------- #
+    
     def get(self, key, safeexit=False):
         """ Generic method to access information of the instance.
         Taken either from the instance itself self.`key` or from the meta parameters.
@@ -1964,10 +1911,12 @@ class PhotoPoint( TargetHandler ):
             warnings.warn("No instance or meta key %s. NaN returned"%key)
             return np.NaN
 
-    # ----------- #
-    #  PLOTTING   #
-    # ----------- #
-    def display(self,ax,toshow="flux",function_of_time=False,**kwargs):
+    # ------------ #
+    #  Plotter     #
+    # ------------ #
+    def display(self, ax, toshow="flux",
+                    function_of_time=False,
+                    **kwargs):
         """This method enable to display the current point
         in the given matplotlib axes"""
         # - Test if there is data
@@ -1979,7 +1928,7 @@ class PhotoPoint( TargetHandler ):
         if toshow == "flux":
             dy= np.sqrt(self.var) if self.var is not None else None
         elif toshow == "mag":
-            dy= np.sqrt(self.magvar) if self.magvar is not None else None
+            dy= self.mag_err
             
 
         # -----------
@@ -1996,70 +1945,17 @@ class PhotoPoint( TargetHandler ):
         self._plot["plot"] = pl
         self._plot["prop"] = prop
         return self._plot
-    
-    def show(self, savefile=None,axes=None, propmodel={}, **kwargs):
-        """ display the flux and magnitude distribution
-        as well as its associated modeling
-        
-        Parameters
-        ----------
 
-        Return
-        ------
-        dict (containing the relevent plot data)
-        """
-        # -- Setting -- #
-        from .utils.mpladdon import figout
-        import matplotlib.pyplot as mpl
-        self._plot = {}
-        
-        if axes is None or len(axes) != 2:
-            fig = mpl.figure(figsize=[10,5])
-            axf  = fig.add_axes([0.1,0.1,0.8,0.8])
-            axm  = fig.add_axes([0.1,0.1,0.8,0.8])
-            
-            axf.set_xlabel(r"$\mathrm{flux\ []}$",      fontsize = "x-large")
-            axm.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize = "x-large")
-            axf.set_ylabel(r"$\mathrm{frequency}$",     fontsize = "x-large")
-            
-        elif not hasattr(axes,"hist"):
-            raise TypeError("The given 'axes' most likely are not a matplotlib axes. "+\
-                             "No hist available")
-        else:
-            axf, axm = axes
-            fig = axf.figure
-
-        # -- properties -- #
-        prop = kwargs_update(dict(histtype="step", bins=50, normed=True,
-                    lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
-                    ec=mpl.cm.Blues(1.,1.)),
-                    **kwargs)
-        
-        propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2,
-                                        label=self.rvdist_info),
-                    **propmodel)
-        
-        # -- Da Plots -- #
-        print "TO BE FINISHED"
-            
-    # =========================== #
-    # = Internal Methods        = #
-    # =========================== #
+    # ==================== #
+    #  Internal Methods    #
+    # ==================== #
     def _reset_derived_prop_(self):
         """ reset the derived and recorded properties """
         self._derived_properties["photosamplers"] = None
-        
-    # =========================== #
-    # = Properties and Settings = #
-    # =========================== #
-    @property
-    def data(self):
-        """ dictionary containing the basic information of the PhotoPoint (potential meta data *not* returned)"""
-        dico = {}
-        for d_ in ["flux","var","lbda","mjd","bandname","zp","zpsys"]:
-            dico[d_] = self.get(d_)
-        return dico
-    
+
+    # ==================== #
+    #   Properties         #
+    # ==================== #
     @property
     def lbda(self):
         if self._properties['lbda'] is None and self.bandname is not None:
@@ -2071,26 +1967,6 @@ class PhotoPoint( TargetHandler ):
                 warnings.warn("No wavelength provided and unknown (by sncosmo) `bandname`")
             
         return self._properties['lbda']
-
-    @property
-    def flux(self):
-        return self._properties["flux"]
-
-    @property
-    def fluxdist(self):
-        """ Distribution of the fluxes, assuming a normal distribution
-        Return
-        ------
-        scipy's stats.norm (initialized)
-        """
-        return stats.norm(loc=self.flux,scale=np.sqrt(self.var))
-    
-    @property
-    def var(self):
-        return self._properties["var"]
-
-    def has_data(self):
-        return not self.flux is None
 
     @property
     def mjd(self):
@@ -2179,33 +2055,26 @@ class PhotoPoint( TargetHandler ):
     
     # ------------
     # - Derived
-    
-    # magnitudes - Might be moved to sampler dependency
     @property
     def mag(self):
-        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[0]
+        """ Magnitude estimated thought the sampling flux sampling """
+        return self.photosamplers.get_estimate(mag=True)[0]
+    
     @property
-    def magvar(self):
-        return flux_to_mag(self.flux,np.sqrt(self.var),self.lbda)[1] ** 2    
-
-    @property
-    def mag_asymerr(self):
-        """ this returns non assumetric errors around the magnitude:
-        mag-mag_from_flux+err
-        """
-        return [flux_to_mag(self.flux-np.sqrt(self.var),None,self.lbda)[0]-self.mag,
-                self.mag-flux_to_mag(self.flux+np.sqrt(self.var),None,self.lbda)[0] ]
+    def mag_err(self):
+        """ Error on magnitude estimated though the flux sampling """
+        return self.photosamplers.get_estimate(mag=True)[1:]
 
     @property
     def magabs(self):
+        """ Sift of the magnitude given the target distance (requires target set.)"""
         if not self.has_target():
             raise AttributeError("No target defined, I can't get the distance")
         return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
 
-    # ==================== #
-    #   Sampler Part       #
-    # ==================== #
-    # - Magnitude based on sampler
+    # ------------ #
+    #  Sampler     #
+    # ------------ #
     @property
     def photosamplers(self, testsize=5000):
         """ Samplers used to derive the magnitude law. This is based on Sampling draw based on flux measurements """
@@ -2215,35 +2084,278 @@ class PhotoPoint( TargetHandler ):
             
     def draw_photosamplers(self, nsamplers=5000):
         """ Set the photosamplers object defining the number of samples available. """
+        raise NotImplementedError("You need to define the `draw_photosamplers` method (inherating BasePhotoPoint)")
+
+
+
+# ========================== #
+#                            #
+#  Flux Normal PhotoPoint    #
+#                            #
+# ========================== #    
+class PhotoPoint( BasePhotoPoint ):
+    """This Class hold the basic information associated to
+    a photometric point"""
+    
+    PROPERTIES         = ["flux","var"]
+    
+    # =========================== #
+    # = Constructor             = #
+    # =========================== #
+    def __init__(self, flux, var=None,
+                     lbda=None, mjd=None,
+                     bandname=None, zp=None,**kwargs):
+        """
+        Initialize the PhotoPoint object
+
+        Parameters
+        ----------
+
+        
+        Returns
+        -------
+        Void
+        """
+        super(PhotoPoint,self).__init__(flux=flux, var=var,
+                                        lbda=lbda, mjd=mjd,
+                                        bandname=bandname, zp=zp,
+                                        **kwargs)
+            
+    # ===================== #
+    #   Main Methods        #
+    # ===================== #
+    #  Requested by BasePhotoPoint
+    def draw_photosamplers(self, nsamplers=5000):
+        """ Set the photosamplers object defining the number of samples available. """
         self._derived_properties["photosamplers"] = \
           PhotoSamplers( np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=nsamplers),
                              lbda = self.lbda)
 
-class CountsPhotoPoint( PhotoPoint ):
+
+    def create(self, flux, var,
+               lbda=None, source=None, instrument_name=None,
+               mjd=None, zp=None, bandname=None, zpsys="ab",
+               force_it=False, **meta):
+        
+        """ builds the core of the object by setting the fundamental parameters.
+        (Remark that the flux, counts etc are defined independently)
+        
+        Parameters
+        ----------
+        flux, var: [float, float/None]
+            Flux and variance. The Variance can be set to None
+
+        lbda: [float] -optional-
+            Effective wavelength (in Angstrom) of the bandpass (filter)
+            If the bandname is known by sncosmo, you can let that to None.
+        
+        bandname: [string] -optional-
+            name of the band used to derive the flux. 
+            If you set this you can access the 'sncosmo bandpass'.
+
+        mjd: [float] -optional-
+            Modified Julian date of the observation.
+
+        zp: [float] -optional-
+            the zeropoint (in ABmag) of the instrument used to
+            derive the photopoint. 
+                                   
+        source, instrument_name: [strings] -optional-
+            source: method used the measure this photometric point (e.g. image, spectrum...)
+            instrument_name: instrument used to measure the photopoint (e.g. sdss)                                   
+
+        Returns
+        -------
+        Void        
+        """
+        super(PhotoPoint, self).create(lbda=lbda, source=source, instrument_name=instrument_name,
+                                       mjd=mjd, zp=zp, bandname=bandname, zpsys=zpsys,
+                                       **meta)
+        self.set_flux(flux, var)
+
+
+        
+    def set_flux(self, flux, var):
+        """ Define the flux of the photopoint. This defines the rest of the object
+        """                    
+        self._properties["flux"] = np.float(flux)
+        self._properties["var"]  = np.float(var) if var is not None else np.NaN
+        self._reset_derived_prop_()
+        
+        
+    def remove_flux(self, flux, var=None):
+        """ this flux quantity will be removed from the current flux"""
+        self.set_flux(self._properties["flux"] - flux,
+                      self._properties["var"] - var if var is not None else\
+                      self.var)
+                      
+    def apply_extinction(self, ebmv, r_v=3.1, law="fitzpatrick99"):
+        """ correct the flux and variance for the given extinction.
+        if embv is negative, this will remove flux (i.e. simulate dust absorption).
+        use a positive ebmv to correct for dust extinction.
+        The resulting flux will be higher.
+        """
+        # - Do you have extinction installed
+        try:
+            import extinction
+        except ImportError:
+            raise ImportError("install the python library 'extinction', pip install extinction. See http://extinction.readthedocs.io")
+        
+        # - Select the extinction law
+        law= law.lower()
+        if law not in extinction.__all__:
+            raise ValueError("Unknown extinction law. This are available"+", ".join([l for l in extinction.__all__ if l not in ["apply,Fitzpatrick99"]]))
+
+        dustlaw = eval("extinction.%s"%law)
+        if law == "fitzpatrick99":
+            base_rv = extinction.Fitzpatrick99().r_v
+            if r_v != base_rv:
+                warnings.warn("Fitzpatrick99 have fixed r_v of %.1f"%base_rv)
+                print "WARNING Fitzpatrick99 have fixed r_v of %.1f"%base_rv
+            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv)
+        else:
+            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv, base_rv)
+
+        # - Correction factor
+        flux_corr = extinction.apply(ext_mag, [1])
+        
+        # - Correct the current flux
+        self.set_flux(self.flux/flux_corr[0], self.var/flux_corr[0]**2, force_it=True)
+                
+    # =========================== #
+    # = Properties and Settings = #
+    # =========================== #
+    @property
+    def data(self):
+        """ dictionary containing the basic information of the PhotoPoint (potential meta data *not* returned)"""
+        dico = {}
+        for d_ in ["flux","var","lbda","mjd","bandname","zp","zpsys"]:
+            dico[d_] = self.get(d_)
+        return dico
+
+    @property
+    def flux(self):
+        return self._properties["flux"]
+    
+    @property
+    def var(self):
+        return self._properties["var"]
+
+    def has_data(self):
+        return not self.flux is None
+
+# ========================== #
+#                            #
+#  Flux Poisson PhotoPoint   #
+#                            #
+# ========================== #
+class CountsPhotoPoint( BasePhotoPoint ):
     
     PROPERTIES = ["datacounts","bkgdcounts", "exposure_time"] 
+
+    #  Requested by BasePhotoPoint
+    def draw_photosamplers(self, nsamplers=5000):
+        """ Set the photosamplers object defining the number of samples available. """
+        self._derived_properties["photosamplers"] = \
+          PhotoSamplers( (np.random.poisson(lam=self.totalcounts, size=nsamplers) - self.bkgdcounts) / self.exptime ,
+                             lbda = self.lbda)
         
-    
+    def create(self, datacounts, bkgdcounts, exptime,
+               lbda=None, source=None, instrument_name=None,
+               mjd=None, zp=None, bandname=None, zpsys="ab",
+               force_it=False, **meta):
+        
+        """ builds the core of the object by setting the fundamental parameters.
+        (Remark that the flux, counts etc are defined independently)
+        
+        Parameters
+        ----------
+        datacounts, bkgdcounts: [floats]
+            Counts (no counts per second) associated to the data and the backgound (sky)
+
+        exptime: [float]
+            Time (in second) of the exposure.
+
+        lbda: [float] -optional-
+            Effective wavelength (in Angstrom) of the bandpass (filter)
+            If the bandname is known by sncosmo, you can let that to None.
+        
+        bandname: [string] -optional-
+            name of the band used to derive the flux. 
+            If you set this you can access the 'sncosmo bandpass'.
+
+        mjd: [float] -optional-
+            Modified Julian date of the observation.
+
+        zp: [float] -optional-
+            the zeropoint (in ABmag) of the instrument used to
+            derive the photopoint. 
+                                   
+        source, instrument_name: [strings] -optional-
+            source: method used the measure this photometric point (e.g. image, spectrum...)
+            instrument_name: instrument used to measure the photopoint (e.g. sdss)                                   
+
+        Returns
+        -------
+        Void        
+        """
+        super(CountPhotoPoint, self).create(lbda=lbda, source=source, instrument_name=instrument_name,
+                                       mjd=mjd, zp=zp, bandname=bandname, zpsys=zpsys,
+                                       **meta)
+        self.set_counts(datacounts, bkgdcounts, exptime)
+        
+    # --------- #
+    #  SETTER   #
+    # --------- #
+    def set_counts(self, datacounts, bkgdcounts, exptime=None):
+        """ """
+        self._properties["datacounts"] = datacounts
+        self._properties["bkgdcounts"] = bkgdcounts
+        if exptime is not None:
+            self._properties["exposure_time"] = exptime
+            
+        self._reset_derived_prop_()
+        
+    # --------- #
+    #  Tools    #
+    # --------- #
     def cps_to_flux(self, counts):
         """ converts counts into flux """
-        return counts* 10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2)
+        return counts * 10**(-(2.406+self.zp) / 2.5 ) / (self.lbda**2)
 
-    def set_flux(set_flux):
-        """ """
-        
     # ================= #
     #  Properties       #
     # ================= #
+    @property
+    def data(self):
+        return {
+            'bandname':   self.bandname,
+            'datacounts': self.datacounts,
+            'bkgdcounts': self.bkgdcounts,
+            'exptime':    self.exptime,
+            'lbda':       self.lbda,
+            'mjd':        self.mjd,
+            'zp':         self.zp,
+            'zpsys':      self.zpsys
+            }
+    
     # -------------
     # - Counts
     @property
     def datacounts(self):
+        """ Counts associated to the source (data) """
         return self._properties["datacounts"]
         
     @property
     def bkgdcounts(self):
+        """ Counts associated to the background (non data) """
         return self._properties["skycounts"]
-
+    
+    @property
+    def totalcounts(self):
+        """ Sum of the data and background counts """
+        return self.datacounts + self.bkgdcounts
+    
     @property
     def exptime(self):
         return self._properties["exposure_time"]
@@ -2258,7 +2370,7 @@ class CountsPhotoPoint( PhotoPoint ):
     @property
     def cps_err(self):
         """ Errors of counts per seconds """
-        return np.sqrt(self.datacounts + self.bkgdcounts) / self.exptime
+        return np.sqrt(self.totalcounts) / self.exptime
     
     @property
     def flux(self):

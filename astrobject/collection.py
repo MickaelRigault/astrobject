@@ -1048,7 +1048,7 @@ class HostImageCollection( ImageCollection ):
                     mag_cat = img.bandname[-1]+"mag"
                     mag, mag_err = self.catalogue.data[ self.catalogue.id_to_idx( self.host_catid)][mag_cat,"e_"+mag_cat][0].data
                     flux, err = tools.mag_to_flux(mag, mag_err,img.lbda)
-                    pps.append(get_photopoint(img.lbda, flux, err**2,
+                    pps.append(get_photopoint(lbda=img.lbda, flux=flux, var=err**2,
                                         source="catalogue",mjd=img.mjd,
                                         zp=img.mab0, bandname=img.bandpass.name,
                                         instrument_name=self.catalogue.source_name))
