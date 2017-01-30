@@ -239,7 +239,7 @@ class ImageCollection( Collection, CatalogueHandler ):
     # ========================= #
     # = Images IO             = #
     # ========================= #
-    def add_image(self,new_image,load_catalogue=True, **kwargs):
+    def add_image(self,new_image,load_catalogue=True, imageid = None, **kwargs):
         """
         This method enables to save the given image in the self.images container (dict).
         To save speed and memory the given is saved as it is i.e., if its a filename
@@ -258,6 +258,10 @@ class ImageCollection( Collection, CatalogueHandler ):
         load_catalogue: [bool]     run the 'download_catalogue' method to
                                    download the corresponding catalogue if
                                    it does not exist yet.
+
+        imageid: [string]
+            Provide the name of the image. If None, a default one will be used.
+
         Return
         ------
         Void
@@ -266,17 +270,40 @@ class ImageCollection( Collection, CatalogueHandler ):
         # What should be loaded  - #
         # ------------------------ #
         if type(new_image) == str:
-            idloaded = self._add_image_file_(new_image)
+            idloaded = self._add_image_file_(new_image,imageid=imageid)
         
         elif "__nature__" in dir(new_image) and new_image.__nature__ != "Image":
-            idloaded = self._add_astroimage_(new_image)
+            idloaded = self._add_astroimage_(new_image,imageid=imageid)
         else:
             # -- Issue
             raise TypeError("the given new_image must be a image-file or an astrobject imnage")
         if load_catalogue:
             self.download_catalogue(id_=idloaded)
             
+    def set_catalogue(self, catalogue, force_it=False,
+                      fast_setup=False):
+        """ attach a catalogue to the current instance.
+        you can then access it through 'self.catalogue'.
 
+        The current instance's wcs solution is passed to the calague.
+
+        Parameters
+        ----------
+        fast_setup: [bool] -optional-
+            No Test to automatic wcs association, pure setting
+        Returns
+        -------
+        Void
+        """
+        super(ImageCollection, self).set_catalogue(catalogue, force_it=force_it,
+                                                   fast_setup=fast_setup)
+        if self.has_host():
+            self.host.set_catalogue(self.catalogue)
+            
+        #for id_ in self.list_id:
+        #    if self.images[id_]["image"] is not None:
+        #        self.images[id_]["image"].set_catalogue(self.catalogue)
+                    
     def load_images(self,verbose=True, **kwargs):
         """
         """
@@ -638,6 +665,36 @@ class ImageCollection( Collection, CatalogueHandler ):
     # ========================== #
     # = Show                   = #
     # ========================== #
+    def show_stamps(self, bands=None, maxcol=3, zoom=30, zunit="arcsec",
+                        add_refellipse=True, scaleup=5, ellprop={}):
+        """ """
+        from matplotlib.patches import Ellipse
+        
+        if bands is None:
+            bands = self.list_id
+            
+        if len(bands) < maxcol:
+            maxcol == len(bands)
+            
+        nrow = ( len(bands)-1 ) // maxcol + 1
+        fig = mpl.figure(figsize=[10,3*nrow])
+
+        prop = kwargs_update( dict(facecolor="None", edgecolor="k", lw=2),
+                                     **ellprop)
+        for i,b in enumerate(bands):
+            ax = fig.add_subplot(nrow, maxcol, i+1)
+            im = self.get_image(b)
+            im.show(ax=ax, zoomon="target", zoom=zoom*im.units_to_pixels("arcsec"))
+            if add_refellipse:
+                x,y,a,b,theta = self.host.get_ref_ellipse_in(b)
+                ell = Ellipse([x,y], a*scaleup, b*scaleup,
+                                theta*units.radian.in_units("degree"),
+                                **prop)
+                ell.set_clip_box(ax.bbox)
+                ax.add_patch(ell)
+
+        fig.show()
+        
     def show_skypatches(self,ax=None,
                         savefile=None,show=True,
                         fc="None",ec="k",
@@ -705,14 +762,15 @@ class ImageCollection( Collection, CatalogueHandler ):
     # =============== #
     # = IO images   = #
     # =============== #
-    def _add_image_file_(self,imagefile):
+    def _add_image_file_(self,imagefile, imageid=None):
         """
         """
         # -- Load a file
         if not inst.is_known_instrument_file(imagefile):
             raise TypeError("the given new_image file is not an image of a known instrument")
-
-        ID = imagefile.split("/")[-1]
+        
+        ID = imagefile.split("/")[-1] if imageid is None else imageid
+            
         self.images[ID] = {
             "file":imagefile,
             "image":None
@@ -725,19 +783,21 @@ class ImageCollection( Collection, CatalogueHandler ):
             
         return ID
     
-    def _add_astroimage_(self,astroimage):
+    def _add_astroimage_(self,astroimage, imageid=None):
         """
         """
         # -- Load an image
-        if new_image.filename is not None:
-            ID = new_image.filename.split("/")[-1]
+        if imageid is not None:
+            ID = imageid
+        elif astroimage.filename is not None:
+            ID = astroimage.filename.split("/")[-1]
         else:
             ID = "image%d"%len(self.images.keys())
 
         self.images[ID] = {
-            "file":new_image.filename,
-            "image":new_image,
-            "wcs":new_image.wcs if new_image.has_wcs() else None
+            "file":astroimage.filename,
+            "image":astroimage,
+            "wcs":astroimage.wcs if astroimage.has_wcs() else None
             }
         return ID
         
@@ -767,14 +827,18 @@ class ImageCollection( Collection, CatalogueHandler ):
     # ------------------ #
     # - Host Tricks    - #
     # ------------------ #
+    def has_host(self):
+        """ Tests if a host has been set"""
+        return self.host is not None
+    
     @property
     def host(self):
         """ HostImageCollection linked to the current instance.
         It requires that this istance has a target set."""
         if self._side_properties["hostcollection"] is None:
             if not self.has_target():
-                raise AttributeError(" You need to set a target to have access to the host collection")
-                
+                warnings.warn(" You need to set a target to have access to the host collection")
+                return None
             host = HostImageCollection(empty=True)
             host.link_to(self)
             self._side_properties["hostcollection"] = host
@@ -832,13 +896,14 @@ class HostImageCollection( ImageCollection ):
         self._properties["handler"]     = imagecollection._handler
         if imagecollection.target is not None:
             self.set_target(imagecollection.target)
+            
         if imagecollection.catalogue is not None:
             self.set_catalogue(imagecollection.catalogue)
         
     # ---------- #
     # - SETTER - #
     # ---------- #
-    def set_reference_image(self, id_, fetch_hostid=False, **kwargs):
+    def set_reference_image(self, id_, fetch_hostid=False, extractprop={}, **kwargs):
         """
         **kwargs goes to the fetch_catalogue_id() method
         """
@@ -846,6 +911,12 @@ class HostImageCollection( ImageCollection ):
             raise ValueError("%s is not a known id. These are: "+", ".join(self.list_id))
         
         self._properties["refid"] = id_
+        if not self.refimage.has_sepobjects():
+            self.refimage.sep_extract(**extractprop)
+
+        if not self.refimage.has_catalogue() and self.has_catalogue():
+            self.refimage.set_catalogue(self.catalogue)
+            
         if fetch_hostid:
             self.fetch_catalogue_id(**kwargs)
 
@@ -942,12 +1013,35 @@ class HostImageCollection( ImageCollection ):
             
         # - Cat ID provided
         if catid is not None or self.host_catid is not None:
-            catidx = self.images[image_id]["image"].catalogue.id_to_idx(self.host_catid if self.host_catid is not None else catid)
+            catidx = self.images[image_id]["image"].catalogue.id_to_idx(self.host_catid
+                                                            if self.host_catid is not None else catid)
             return self.images[image_id]["image"].sepobjects.catindex_to_index(catidx) if \
                catidx in self.images[image_id]["image"].sepobjects.catmatch["idx_catalogue"] else\
                None
         else:
             return self.images[image_id]["image"].sepobjects.get_host_idx(self.target, **kwargs)
+
+    # ------------------ #
+    #  Global Ellipse    #
+    # ------------------ #
+    def get_ref_ellipse(self):
+        """ Returns the x, y, a, b, theta parameters 
+        if sep object associated to the catalogue id. """
+        if not self.has_refid():
+            raise AttributeError("Reference id not set. run self.set_reference_image()")
+        
+        return self.get_host_ellipse(self.refid)[0]
+
+    def get_ref_ellipse_in(self,id_):
+        """ get the reference ellipse and projects it from the reference image
+        into the given `id_` image
+        Returns
+        -------
+        x, y, a, b, theta
+        """
+        x, y, a, b, theta = self.get_ref_ellipse()
+        return self.refimage.sepobjects.project_ellipse_to_wcs(x, y, a, b, theta,
+                                                        self.images[id_]["wcs"])
         
     def get_host_ellipse(self, id_, **kwargs):
         """ get the host ellipse contours for the given image id.
@@ -1064,6 +1158,7 @@ class HostImageCollection( ImageCollection ):
     # ------------ #
     # - PLOTTER  - #
     # ------------ #
+        
     def show(self, fig=None, savefile=None, show=True,
              scaleup=3, ellipse_prop={}, id_to_show=None,
               **kwargs):
@@ -1131,7 +1226,9 @@ class HostImageCollection( ImageCollection ):
     # ================== #
 
     # = Reference
-    
+    @property
+    def host(self):
+        return None
     @property
     def refid(self):
         """ The id defined as reference image. """
