@@ -117,7 +117,8 @@ def get_photopoint(flux=None,var=None,
                         instrument_name=instrument_name,
                         mjd=mjd,zp=zp,bandname=bandname,
                         **kwargs)
-    # CountsPhotoPoints (Counts Poissonly distributed)
+    
+    # CountsPhotoPoint (Counts Poissonly distributed)
     if datacounts is not None:
         return CountsPhotoPoint(datacounts=datacounts, bkgdcounts=bkgdcounts, exptime=exptime,
                                 lbda=lbda,source=source,
@@ -689,11 +690,12 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                                  ellipse_args=dict(a=a, b=b, theta=theta),
                                  aptype="ellipse", **kwargs)
         
-    def get_aperture(self,x,y,radius=None,
+    def get_aperture(self, x, y, radius=None,
                      runits="pixels",wcs_coords=False,
                      aptype="circle",subpix=5,
                      ellipse_args={"a":None,"b":None,"theta":None},
                      annular_args={"rin":None,"rout":None},
+                     on="data",
                      **kwargs):
         """
         This method uses K. Barary's Sextractor python module SEP
@@ -705,68 +707,83 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         Parameters
         ----------
 
-        x:[float]                  Pixel coordinate of the second ("fast") axis
-                                   (so x in the in imshow). In pixels
+        x: [float]                  
+            Pixel coordinate of the second ("fast") axis
+            (so x in the in imshow). In pixels
                                    
-        y:[float]                  Pixel coordinate of the first ("slow") axis
-                                   (so y in the in imshow). In pixels
+        y: [float]                  
+            Pixel coordinate of the first ("slow") axis
+            (so y in the in imshow). In pixels
                                    
         (other aperture arguments are required be depend on the type of
         aperture photometry *aptype* is choosen)
                                    
         - options - 
+        
+        on: [string] -optional-
+            On which variable should the aperture be made? 
+            By default `self.data`. If you are not sure, do not change this.
 
-        aptype: [string]           Type of Aperture photometry used.
-                                   -circle  => set radius
-                                   -ellipse => set all ellipse_args entries
-                                   -circan  => set all annulus_args entries
-                                   -ellipan => set all ellipse_args entries
-                                              set all annulus_args entries
-                                    (no other type allowed)
+
+        aptype: [string]           
+            Type of aperture photometry used.
+            -circle  => set radius
+            -ellipse => set all ellipse_args entries
+            -circan  => set all annulus_args entries
+            -ellipan => set all ellipse_args entries
+            (no other type allowed)
                                                
         
-        radius: [float]            Size of the circle radius. In pixels.
-                                   (This is used only if aptype is circle)
+        radius: [float]            
+            Size of the circle radius.
+            (This is used only if aptype is circle)
                                    
-        runits: [str/astropy.units] The unit of the radius
+        runits: [str/astropy.units] 
+            The unit of the radius (used to convert radius in pixels)
 
-        wcs_coords: [bool]         Set True if x,y are ra,dec coordinates
+        wcs_coords: [bool]         
+            Set True if x,y are ra,dec coordinates
         
-        subpix: [int]              Division of the real pixel to perform the
-                                   circle to square overlap.
+        subpix: [int]              
+            Division of the real pixel to perform the
+            circle to square overlap.
 
-        ellipse_args: [dict]       The ellipse parameter that must be filled if
-                                   atype is ellipse of ellipan.
+        ellipse_args: [dict]       
+            The ellipse parameter that must be filled if
+            atype is ellipse of ellipan.
 
-        annular_args: [dict]       The annular parameter that must be filled if
-                                   atype is circan of ellipan.
+        annular_args: [dict]       
+            The annular parameter that must be filled if
+            atype is circan of ellipan.
 
         
         - other options ; not exhautive ; goes to sep.sum_*aptype* - 
 
-        gain: [float]              You can manually set the image gain. Otherwise
-                                   this method will look for the key 'self._gain'
-                                   and set None if it does not find it.
+        gain: [float]              
+            You can manually set the image gain. Otherwise
+            this method will look for the key 'self._gain'
+            and set None if it does not find it.
 
-        var: [2d-array/float]      You can manually set the variance of the image.
-                                   Otherwise, this will look for self.var. If this
-                                   is None and and sepbackground has been created
-                                   the sepbackground.rms()**2 will be used as a
-                                   variance proxy. If not, None is set to var.
+        var: [2d-array/float]      
+            You can manually set the variance of the image.
+            Otherwise, this will look for self.var. If this
+            is None and and sepbackground has been created
+            the sepbackground.rms()**2 will be used as a
+            variance proxy. If not, None is set to var.
                                    
         See other sep options like: 'mask=None, maskthresh=0.0, bkgann=None...'
-        
         
         Return
         ------
         sum, sumerr, flags (0 if no flag given)
         """
+        
         import sep
         # - This should be moved in a c-lib
         if aptype not in ["circle","circann","ellipse","ellipan"]:
             raise ValueError("the given aptype (%s) is not a "+\
                              "known/implemeted sep aperture"%aptype)
-
+        
         # ---------------
         # Input Parsing
         # - radius
@@ -793,7 +810,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # gain = ADU per Electron, data = ADU/s
         # - Circle
         if aptype == "circle":
-            return sep.sum_circle(self.data,x,y,r_pixels,subpix=subpix,
+            return sep.sum_circle( eval("self.%s"%on), x, y, r_pixels,subpix=subpix,
                             var=var,gain=gain,**kwargs)
 
         # - Annulus
@@ -803,7 +820,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                 raise ValueError("You must set the annular arguments 'annular_arg'")
             
             rin,rout = [annular_args[k] for k in ["rin","rout"]]
-            sepout= sep.sum_circann(self.data,x,y,rin,rout,
+            sepout= sep.sum_circann(eval("self.%s"%on),x,y,rin,rout,
                                   r_pixels,subpix=subpix,
                                   var=var,gain=gain,**kwargs)
         # - Ellipse
@@ -812,7 +829,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                 raise ValueError("You must set the ellipse arguments 'ellipse_arg'")
             
             a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
-            sepout= sep.sum_ellipse(self.data,x,y,a,b,theta,
+            sepout= sep.sum_ellipse(eval("self.%s"%on),x,y,a,b,theta,
                                     r_pixels,subpix=subpix,
                                     var=var,gain=gain,**kwargs)
         # - Elliptical Annulus
@@ -824,12 +841,13 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             
             rin,rout = [annular_args[k] for k in ["rin","rout"]]
             a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
-            sepout= sep.sum_ellipan(self.data,x,y,a,b,theta,rin,rout,
+            sepout= sep.sum_ellipan(eval("self.%s"%on),x,y,a,b,theta,rin,rout,
                                     r_pixels,subpix=subpix,
                                     var=var,gain=gain,**kwargs)
         # ===================================
         # = Return of the aperture extraction
         return sepout
+
     
     # ------------------- #
     # - WCS Tools       - #
@@ -883,11 +901,18 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         self._rmsep = clean_sep
         return self.get_sep_background(update_background=True)
 
+
+    def _get_sep_threshold_(self, thresh):
+        """ Trick to automatically get the proper threshold for SEP extract """
+        if thresh is None:
+            return self._get_sep_extract_threshold_() if self.var is None\
+              else np.nanmean(np.sqrt(self.var[~np.isinf(self.var)]))*1.5
+        return thresh
     
     def sep_extract(self,thresh=None,returnobjects=False,
                     set_catalogue=True,match_catalogue=True,
                     matching_distance=None,
-                    min_objects=2,
+                    min_objects=2, on="data",
                     **kwargs):
         """
         This module is based on K. Barbary's python module of Sextractor SEP.
@@ -911,8 +936,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             If the current instance has a catalogue, it will be
             transfered to the SexOutput object created.
             Set False to avoid that.
-                                   
-                                   
+                                        
         returnobjects: [bool]
             Change the output of this function. if True the extracted
             objects are recorded and returned (self.sepobjects)
@@ -924,7 +948,10 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             set (automatic threshold) than a lower threshold will be assigned
             and relaunch. This is only made once.
              
-        
+        on: [string] -optional-
+            On which variable should the extraction be made?  
+            By default `self.data`. If you are not sure, do not change this.
+
         - others options -
 
         kwargs                     goes to set.extract
@@ -938,19 +965,18 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         from collections import get_sepobject
 
         
-        if thresh is None:
-            thresh = self._get_sep_extract_threshold_() if self.var is None\
-              else np.nanmean(np.sqrt(self.var[~np.isinf(self.var)]))*1.5
-        else:
+        if thresh is not None:
             min_objects = None
             
-        o = extract(self.data,thresh,**kwargs)
+        thresh = self._get_sep_threshold_(thresh)
+            
+        o = extract(eval("self.%s"%on), thresh,**kwargs)
         
         # -- If this is an instrument and not an image
         instrument_prop = {'lbda':self.lbda,"mjd":self.mjd,
                            "bandname":self.bandname} if hasattr(self,"lbda") else\
                            {}
-        sepobjects = get_sepobject(o,ppointkwargs=instrument_prop)
+        sepobjects = get_sepobject(o, ppointkwargs=instrument_prop)
         # ----------- #
         #  What next? #
         # ----------- #
@@ -1009,6 +1035,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
              ax=None,show=True,zoomon=None,zoom=200,zunits="pixels",
              show_sepobjects=False,propsep={},
              show_catalogue=False,proptarget={},
+             add_colorbar=False,
              **kwargs):
         """
         Display the 2D-image. The displayed information can be "data", "background",
@@ -1143,10 +1170,15 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                                    **proptarget)
 
         if show_sepobjects and self.has_sepobjects():
-            self.sepobjects.display(ax,
-                                    **propsep)
+            self.sepobjects.display(ax, **propsep)
+            
         if show_catalogue and self.has_catalogue():
             self.display_catalogue(ax,wcs_coords=False)
+        # ----------- #
+        #  ColorBar
+        if add_colorbar:
+            cbar = fig.colorbar(im)
+            cbar.set_label(toshow)
         # ----------- #
         # - Zoom      #
         if zoomon is not None:
@@ -1513,12 +1545,12 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         return True if self.sepobjects is not None and self.sepobjects.has_data() \
           else False
           
-    @property
-    def sepmask(self,r=10):
+    def derive_sepmask(self, r):
+        """ area where SEP detected an object scaled up by `r`. See derive_sepmask"""
         if not self.has_sepobjects():
             raise AttributeError("No sepobjects loaded. Run sep_extract")
         return self.sepobjects.get_ellipse_mask(self.width,self.height,r=r)
-                
+    
     # FWHM
     @property
     def fwhm(self):
@@ -1578,7 +1610,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         return self.get_sep_background(*args,**kwargs)
 
     
-    def _measure_sep_background_(self,**kwargs):
+    def _measure_sep_background_(self,scaleup_sepmask=10, add_mask=None,
+                                 apply_sepmask=True, **kwargs):
         """
         """
         from sep import Background
@@ -1593,12 +1626,19 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         else:
             maskdata = None
             
-        if self.has_sepobjects():
-            masksep = self.sepmask
+        if self.has_sepobjects() and apply_sepmask:
+            masksep = self.derive_sepmask(scaleup_sepmask)
             mask = masksep+maskdata if maskdata is not None else\
               masksep
         else:
             mask = maskdata
+
+            
+        if add_mask is not None:
+            if np.shape(add_mask) != self.shape:
+                raise ValueError(" the input add_mask does not have the requested shape")
+            
+            mask = mask + add_mask if mask is not None else add_mask
         # ---------------
         # - masking sign tested
         self._derived_properties["backgroundmask"] = mask
@@ -1636,7 +1676,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                     self.set_background(self._get_default_background_(),force_it=True)
                 
         self._derived_properties["data"] = self.rawdata - self.background
-        
+
 #######################################
 #                                     #
 # Base Object Classes: PhotoPoint     #
@@ -1744,16 +1784,6 @@ class PhotoSamplers( Samplers ):
                                      show_legend=show_legend, logscale=logscale,
                                      show_estimate=show_estimate, xscale=xscale,yscale=yscale,
                                      **kwargs)
-    
-    def _set_rvdist_(self):
-        """ set the rvdistribution.
-        This method defines which kind of rv_continuous distribution you use
-        """
-        return stats.norm( *stats.norm.fit(self.samplers, scale=self.samplers.std(),loc=np.median(self.samplers)))
-    @property
-    def rvdist_info(self):
-        """ information about the rvdistribution """
-        return r"$\mathrm{normal}$"
 
     # ================ #
     #   Properties     #
@@ -1791,7 +1821,7 @@ class BasePhotoPoint( TargetHandler ):
 
     Inherating Classes in Astrobject:
        - PhotoPoint (flux normally distributed with sigma = error )
-       - CountPhotoPoints (Counts follow a pure Poisson distribution)
+       - CountsPhotoPoint (Counts follow a pure Poisson distribution)
 
     """
     __nature__ = "PhotoPoint" # To Be Removed
@@ -2257,7 +2287,7 @@ class CountsPhotoPoint( BasePhotoPoint ):
     def draw_photosamplers(self, nsamplers=5000):
         """ Set the photosamplers object defining the number of samples available. """
         self._derived_properties["photosamplers"] = \
-          PhotoSamplers( (np.random.poisson(lam=self.totalcounts, size=nsamplers) - self.bkgdcounts) / self.exptime ,
+          PhotoSamplers( self.cps_to_flux( (np.random.poisson(lam=self.totalcounts, size=nsamplers) - self.bkgdcounts) / self.exptime) ,
                              lbda = self.lbda)
         
     def create(self, datacounts, bkgdcounts, exptime,
@@ -2299,7 +2329,7 @@ class CountsPhotoPoint( BasePhotoPoint ):
         -------
         Void        
         """
-        super(CountPhotoPoint, self).create(lbda=lbda, source=source, instrument_name=instrument_name,
+        super(CountsPhotoPoint, self).create(lbda=lbda, source=source, instrument_name=instrument_name,
                                        mjd=mjd, zp=zp, bandname=bandname, zpsys=zpsys,
                                        **meta)
         self.set_counts(datacounts, bkgdcounts, exptime)
@@ -2349,7 +2379,7 @@ class CountsPhotoPoint( BasePhotoPoint ):
     @property
     def bkgdcounts(self):
         """ Counts associated to the background (non data) """
-        return self._properties["skycounts"]
+        return self._properties["bkgdcounts"]
     
     @property
     def totalcounts(self):

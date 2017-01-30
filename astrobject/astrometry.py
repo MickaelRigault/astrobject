@@ -125,6 +125,7 @@ class _MotherWCS_( object ):
         self._image_width  = width
         self._image_height = height
         self._reload_contours = True
+        self._reload_contours_pxl = True
         self._image_offset = -np.asarray([offset0,offset1])
 
 
@@ -188,9 +189,12 @@ class _MotherWCS_( object ):
     @property
     def contours_pxl(self,**kwargs):
         """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
-        x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
-                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
-        return shape.get_contour_polygon(x,y)
+        if not hasattr(self,"_contour_pxl") or\
+           ( hasattr(self,"_reload_contours_pxl") and self._reload_contours_pxl ):
+            x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
+                            np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+            self._contour_pxl = shape.get_contour_polygon(x,y)
+        return self._contour_pxl
     
     def has_contours(self):
         return self.contours is not None

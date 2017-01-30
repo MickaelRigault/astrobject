@@ -294,7 +294,7 @@ class Samplers( BaseObject ):
         
             
         # - show estimate
-        pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_) if show_model and not logscale else None
+        pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_) if show_model and self.rvdist is not None and not logscale else None
         if show_estimate:
             if not logscale:
                 ax.axvline(med, color="0.5", zorder=2)

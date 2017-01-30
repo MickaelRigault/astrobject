@@ -10,6 +10,7 @@ from astropy         import time
 
 # - local dependencies
 from .baseinstrument    import Instrument
+from ..photometry       import get_photopoint
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools      import kwargs_update
 
@@ -95,6 +96,147 @@ class GALEX( Instrument ):
         if set_background:
             self.set_background(self.sky.rawdata, force_it=True)
 
+
+    def _aperture_to_photopoint_(self, *args, **kwargs):
+        """ convert the aperture output to a photopoints. 
+        Galex specialty with SkyBackground """
+
+        if not self.has_sky():
+            return super(GALEX,self)._aperture_to_photopoint_( *args, **kwargs )
+
+        datacps, bkgdcps = args
+        datacounts = datacps[0]*self.exposuretime
+        bkgdcounts = bkgdcps[0]*self.exposuretime
+        
+        # ------------------
+        # - One Photopoint
+        if "__iter__" not in dir(datacounts):
+            return get_photopoint(lbda=self.lbda,
+                                  datacounts=datacounts,
+                                  bkgdcounts=bkgdcounts,
+                                  exptime=self.exposuretime,
+                                  source="image",mjd=self.mjd,
+                                  zp=self.mab0,bandname=self.bandpass.name,
+                                  instrument_name=self.instrument_name)
+        # -----------------------
+        # - Several Photopoints
+        return [get_photopoint(lbda=self.lbda,
+                                datacounts=datacounts_,
+                                bkgdcounts=bkgdcounts_,
+                                exptime=self.exposuretime,
+                                source="image",mjd=self.mjd,
+                                zp=self.mab0,bandname=self.bandpass.name,
+                                   instrument_name=self.instrument_name)
+                    for datacounts_,bkgdcounts_ in zip(datacounts,bkgdcounts)]
+        
+    def get_aperture(self, x, y, radius=None,
+                     runits="pixels",wcs_coords=False,
+                     aptype="circle",subpix=5,
+                     ellipse_args={"a":None,"b":None,"theta":None},
+                     annular_args={"rin":None,"rout":None},
+                     on="data",
+                     **kwargs):
+        """
+        This method uses K. Barary's Sextractor python module SEP
+        to measure the aperture photometry. See details here:
+        sep.readthedocs.org/en/v0.4.x/apertures.html
+        *Remark* you can use the radec option to give x,y as radec coordinates.
+        This will only works if you have a wcs solution loaded.
+        
+        Parameters
+        ----------
+
+        x: [float]                  
+            Pixel coordinate of the second ("fast") axis
+            (so x in the in imshow). In pixels
+                                   
+        y: [float]                  
+            Pixel coordinate of the first ("slow") axis
+            (so y in the in imshow). In pixels
+                                   
+        (other aperture arguments are required be depend on the type of
+        aperture photometry *aptype* is choosen)
+                                   
+        - options - 
+        
+        on: [string] -optional-
+            On which variable should the aperture be made? 
+            By default `self.data`. If you are not sure, do not change this.
+
+
+        aptype: [string]           
+            Type of aperture photometry used.
+            -circle  => set radius
+            -ellipse => set all ellipse_args entries
+            -circan  => set all annulus_args entries
+            -ellipan => set all ellipse_args entries
+            (no other type allowed)
+                                               
+        
+        radius: [float]            
+            Size of the circle radius.
+            (This is used only if aptype is circle)
+                                   
+        runits: [str/astropy.units] 
+            The unit of the radius (used to convert radius in pixels)
+
+        wcs_coords: [bool]         
+            Set True if x,y are ra,dec coordinates
+        
+        subpix: [int]              
+            Division of the real pixel to perform the
+            circle to square overlap.
+
+        ellipse_args: [dict]       
+            The ellipse parameter that must be filled if
+            atype is ellipse of ellipan.
+
+        annular_args: [dict]       
+            The annular parameter that must be filled if
+            atype is circan of ellipan.
+
+        
+        - other options ; not exhautive ; goes to sep.sum_*aptype* - 
+
+        gain: [float]              
+            You can manually set the image gain. Otherwise
+            this method will look for the key 'self._gain'
+            and set None if it does not find it.
+
+        var: [2d-array/float]      
+            You can manually set the variance of the image.
+            Otherwise, this will look for self.var. If this
+            is None and and sepbackground has been created
+            the sepbackground.rms()**2 will be used as a
+            variance proxy. If not, None is set to var.
+                                   
+        See other sep options like: 'mask=None, maskthresh=0.0, bkgann=None...'
+        
+        Return
+        ------
+        if not sky signal set:
+            sum, sumerr, flags (0 if no flag given)
+        if a sky signal exists:
+            sum, sumerr, flags (0 if no flag given) on raw data +
+            sum, sumerr, flags (0 if no flag given) on sky raw data
+        """
+        propfit = kwargs_update( dict(radius=radius,
+                       runits=runits,wcs_coords=wcs_coords,
+                       aptype=aptype,subpix=subpix,
+                       ellipse_args=ellipse_args,
+                       annular_args=annular_args,on=on), **kwargs)
+        # = Returns the regular aperture
+        if not self.has_sky():
+            warnings.warn("No Sky Background set. Only regular aperture photometry returned")
+            return super(GALEX, self).get_aperture( x, y, **propfit)
+        # = Returns both data and background
+        _ = propfit.pop("on",None)
+        return [super(GALEX, self).get_aperture( x, y, on="rawdata", **propfit),
+                super(GALEX, self).get_aperture( x, y, on="sky.rawdata", **propfit)]
+    
+    # ================== #
+    #   Internal         #
+    # ================== #    
     def _derive_variance_(self):
         """ Build the variance image based on the sky+data (=raw int data) assuming pure photon noise. """
         # Pure Photon Noise

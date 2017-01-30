@@ -79,8 +79,9 @@ def get_sepobject(sepoutput, ppointkwargs={},
 
     # - good to go.
     pmap = SepObject(photopoints=inputphotomap["ppoints"],
-                         coords=inputphotomap["coords"],
-                         wcs_coords=False, **kwargs)
+                     coords=inputphotomap["coords"],
+                     wcs_coords=False, **kwargs)
+    
     ids_sorting = [pmap.coords_to_id(x,y)
                        for x,y in zip(inputphotomap["meta"][xkey].data,
                                       inputphotomap["meta"][ykey].data)]
@@ -176,7 +177,7 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
         except:
             raise TypeError("the given 'sexoutput' cannot be converted into astropy's Table")
 
-    ppoints = [get_photopoint(lbda,t_["flux"],None,
+    ppoints = [get_photopoint(lbda=lbda,flux=t_["flux"],var=None,
                           source="sepextract",**kwargs)
                           for t_ in sepoutput]
         
@@ -245,8 +246,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     DERIVED_PROPERTIES = ["catmatch"]
 
     
-    def __init__(self, photopoints=None,coords=None,
-                 filein=None,empty=False,wcs=None,catalogue=None,
+    def __init__(self, photopoints=None, coords=None,
+                 filein=None, empty=False, wcs=None,
+                 catalogue=None,
                  **kwargs):
         """
 
@@ -884,7 +886,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     def list_id(self):
         """ """
         if not self.fromtable:
-            return super(PhotoMap, self).list_id
+            list_ = super(PhotoMap, self).list_id
+            return np.asarray(list_)[np.argsort([float(l.split(",")[1]) for l in list_])] # y aligned
         
         return self.get(self._build_properties["idkey"])
     
@@ -1161,7 +1164,12 @@ class SepObject( PhotoMap ):
     
     def get_median_ellipse(self,mask=None,clipping=[3,3]):
         
-        """ This methods look for the stars and return the mean ellipse parameters """
+        """ This methods look for the stars and return the mean ellipse parameters 
+
+        Returns
+        -------
+        [a, std_a], [b, std_b], [theta, std_theta]
+        """
         from scipy.stats import sigmaclip
         if not self.has_catalogue():
             warnings.warn("No catalogue loaded, not catalogue masking avialable")
