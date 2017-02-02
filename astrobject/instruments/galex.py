@@ -116,7 +116,8 @@ class GALEX( Instrument ):
                                   bkgdcounts=bkgdcounts,
                                   exptime=self.exposuretime,
                                   source="image",mjd=self.mjd,
-                                  zp=self.mab0,bandname=self.bandpass.name,
+                                  zp=self.mab0,
+                                  bandname=self.bandname,
                                   instrument_name=self.instrument_name)
         # -----------------------
         # - Several Photopoints
@@ -125,7 +126,7 @@ class GALEX( Instrument ):
                                 bkgdcounts=bkgdcounts_,
                                 exptime=self.exposuretime,
                                 source="image",mjd=self.mjd,
-                                zp=self.mab0,bandname=self.bandpass.name,
+                                zp=self.mab0,bandname=self.bandname,
                                    instrument_name=self.instrument_name)
                     for datacounts_,bkgdcounts_ in zip(datacounts,bkgdcounts)]
         
@@ -231,8 +232,9 @@ class GALEX( Instrument ):
             return super(GALEX, self).get_aperture( x, y, **propfit)
         # = Returns both data and background
         _ = propfit.pop("on",None)
-        return [super(GALEX, self).get_aperture( x, y, on="rawdata", **propfit),
-                super(GALEX, self).get_aperture( x, y, on="sky.rawdata", **propfit)]
+        var = propfit.pop("var",None)
+        return [super(GALEX, self).get_aperture( x, y, on="rawdata",var=var, **propfit),
+                super(GALEX, self).get_aperture( x, y, on="sky.rawdata",var=var, **propfit)]
     
     # ================== #
     #   Internal         #

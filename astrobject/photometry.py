@@ -2116,7 +2116,9 @@ class BasePhotoPoint( TargetHandler ):
         """ Set the photosamplers object defining the number of samples available. """
         raise NotImplementedError("You need to define the `draw_photosamplers` method (inherating BasePhotoPoint)")
 
-
+    def has_data(self):
+        """ is self.flux defined """
+        return self.flux is not None
 
 # ========================== #
 #                            #
@@ -2271,9 +2273,6 @@ class PhotoPoint( BasePhotoPoint ):
     def var(self):
         return self._properties["var"]
 
-    def has_data(self):
-        return not self.flux is None
-
 # ========================== #
 #                            #
 #  Flux Poisson PhotoPoint   #
@@ -2286,8 +2285,11 @@ class CountsPhotoPoint( BasePhotoPoint ):
     #  Requested by BasePhotoPoint
     def draw_photosamplers(self, nsamplers=5000):
         """ Set the photosamplers object defining the number of samples available. """
+        from .utils.statbox import continuous_poisson
+        contpoisson = continuous_poisson(self.totalcounts)
+        
         self._derived_properties["photosamplers"] = \
-          PhotoSamplers( self.cps_to_flux( (np.random.poisson(lam=self.totalcounts, size=nsamplers) - self.bkgdcounts) / self.exptime) ,
+          PhotoSamplers( self.cps_to_flux( (contpoisson.rvs(size=nsamplers) - self.bkgdcounts) / self.exptime) ,
                              lbda = self.lbda)
         
     def create(self, datacounts, bkgdcounts, exptime,

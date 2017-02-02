@@ -9,7 +9,7 @@ from astropy import coordinates, table, units
 import matplotlib.pyplot as mpl
 
 from .baseobject import BaseObject, TargetHandler, CatalogueHandler
-from .photometry import get_photopoint
+from .photometry import get_photopoint, Image
 from .instruments import instrument as inst
 from .utils.tools import kwargs_update, load_pkl, dump_pkl
 from .utils.shape import draw_polygon, HAS_SHAPELY
@@ -198,7 +198,7 @@ class ImageCollection( Collection, CatalogueHandler ):
         self.create(images,catalogue=catalogue,**kwargs)
 
         
-    def create(self,images,catalogue=None,**kwargs):
+    def create(self,images, catalogue=None, imageid=None,**kwargs):
         """
         Loop over the images end add them to the instance. See add_image
         """
@@ -211,7 +211,10 @@ class ImageCollection( Collection, CatalogueHandler ):
         elif type(catalogue) is not bool: 
             self.set_catalogue(catalogue)
 
-        [self.add_image(i_,load_catalogue=catalogue,**kwargs) for i_ in images
+        if imageid is None:
+            imageid = [None]*len(images)
+            
+        [self.add_image(i_,load_catalogue=catalogue,imageid=id_, **kwargs) for i_,id_ in zip(images, imageid) 
          if i_ is not None]
 
     def set_target(self,newtarget, set_to_images=True):
@@ -272,7 +275,7 @@ class ImageCollection( Collection, CatalogueHandler ):
         if type(new_image) == str:
             idloaded = self._add_image_file_(new_image,imageid=imageid)
         
-        elif "__nature__" in dir(new_image) and new_image.__nature__ != "Image":
+        elif Image in new_image.__class__.__mro__:
             idloaded = self._add_astroimage_(new_image,imageid=imageid)
         else:
             # -- Issue
@@ -581,7 +584,7 @@ class ImageCollection( Collection, CatalogueHandler ):
 
     def get_host_photopoints(self, scaleup=3, reference_id=None, catid=None,
                              target=None, prop_hostsearch={},
-                             verbose=False, force_refid_ellipse=False,
+                             verbose=False, force_ref_ellipse=False,
                              **kwargs):
         """
         This modules enables to get a new ImageCollection containing only
@@ -661,14 +664,21 @@ class ImageCollection( Collection, CatalogueHandler ):
                     self.set_catalogue(new_cat)
                 else:
                     self.catalogue.merge(new_cat)
-    
+            if self.images[id_]["image"] is not None and not self.images[id_]["image"].has_catalogue():
+                self.images[id_]["image"].set_catalogue(self.catalogue)
+                
     # ========================== #
     # = Show                   = #
     # ========================== #
-    def show_stamps(self, bands=None, maxcol=3, zoom=30, zunit="arcsec",
-                        add_refellipse=True, scaleup=5, ellprop={}):
+    def show_stamps(self, savefile=None, show=True,
+                    bands=None, maxcol=3, zoom=50, zunit="arcsec",
+                    add_refellipse=True, scaleup=3, ellprop={}):
         """ """
         from matplotlib.patches import Ellipse
+        from .utils.mpladdon    import figout
+        
+        if not self.has_host():
+            raise AttributeError("Host not defined.")
         
         if bands is None:
             bands = self.list_id
@@ -681,19 +691,29 @@ class ImageCollection( Collection, CatalogueHandler ):
 
         prop = kwargs_update( dict(facecolor="None", edgecolor="k", lw=2),
                                      **ellprop)
-        for i,b in enumerate(bands):
+        for i,b_ in enumerate(bands):
             ax = fig.add_subplot(nrow, maxcol, i+1)
-            im = self.get_image(b)
-            im.show(ax=ax, zoomon="target", zoom=zoom*im.units_to_pixels("arcsec"))
+            im = self.get_image(b_)
+            im.show(ax=ax, zoomon="target", zoom=zoom*im.units_to_pixels("arcsec"),
+                        show=False)
             if add_refellipse:
-                x,y,a,b,theta = self.host.get_ref_ellipse_in(b)
-                ell = Ellipse([x,y], a*scaleup, b*scaleup,
+                x,y,a,b,theta = self.host.get_ref_ellipse_in(b_)
+                # 2* since Ellipse in Matplotlib want diameter
+                ell = Ellipse([x,y], 2*a*scaleup, 2*b*scaleup,
                                 theta*units.radian.in_units("degree"),
                                 **prop)
                 ell.set_clip_box(ax.bbox)
                 ax.add_patch(ell)
-
-        fig.show()
+                # - Cleaning
+                ax.text(0.95,0.95, b_, va="top", ha="right", transform=ax.transAxes,
+                        bbox=dict(facecolor=mpl.cm.binary(0.1,0.8), edgecolor="k"))
+                ax.set_xticks([])
+                ax.set_yticks([])
+                # - Highlight reference
+                if b_ == self.host.refid:
+                    [s_.set_linewidth(2) for s_ in ax.spines.values()]
+        
+        fig.figout(savefile=savefile, show=show)
         
     def show_skypatches(self,ax=None,
                         savefile=None,show=True,
@@ -994,6 +1014,11 @@ class HostImageCollection( ImageCollection ):
     # - GETTER - #
     # ---------- #
     def get_host_sepid(self, image_id, catid=None, **kwargs):
+        """ DEPRECATED. use get_sepid"""
+        print " DEPRECATED. use get_sepid"
+        return self.get_sepid( image_id, catid=catid, **kwargs)
+    
+    def get_sepid(self, image_id, catid=None, **kwargs):
         """ get the sepobject entry of the host for the given
         image_id.
         You can select a given catid, otherwise,
@@ -1030,7 +1055,7 @@ class HostImageCollection( ImageCollection ):
         if not self.has_refid():
             raise AttributeError("Reference id not set. run self.set_reference_image()")
         
-        return self.get_host_ellipse(self.refid)[0]
+        return self.get_ellipse(self.refid)[0]
 
     def get_ref_ellipse_in(self,id_):
         """ get the reference ellipse and projects it from the reference image
@@ -1042,8 +1067,13 @@ class HostImageCollection( ImageCollection ):
         x, y, a, b, theta = self.get_ref_ellipse()
         return self.refimage.sepobjects.project_ellipse_to_wcs(x, y, a, b, theta,
                                                         self.images[id_]["wcs"])
-        
+
     def get_host_ellipse(self, id_, **kwargs):
+        """ DEPRECATED. use get_ellipse """
+        print "DEPRECATED. use get_ellipse"
+        return self.get_ellipse(id_, **kwargs)
+
+    def get_ellipse(self, id_, **kwargs):
         """ get the host ellipse contours for the given image id.
         
         Returns
@@ -1054,7 +1084,7 @@ class HostImageCollection( ImageCollection ):
         if not self.images[id_]["image"].has_sepobjects():
             self.images[id_]["image"].sep_extract()
             
-        idx = self.get_host_sepid(id_, catid = self.host_catid, **kwargs)
+        idx = self.get_sepid(id_, catid = self.host_catid, **kwargs)
         
         # = has the data
         if idx is None:
@@ -1068,10 +1098,30 @@ class HostImageCollection( ImageCollection ):
         # = has the data
         return self.images[id_]["image"].sepobjects.get_ellipse_values(idx if hasattr(idx, "__iter__") else [idx]).T, True
 
+    def get_petrorad(self, refid=None):
+        """ Measures the Petrosian Radius as defined by SDSS 
+        based on data from the given refid.
+        SDSS uses twice this radius to get the petroMag
+        """
+        import sep
+        from scipy import optimize
+        if refid is None:
+            data_     = self.refimage.data
+            x,y,a,b,t = self.get_ref_ellipse()
+        else:
+            data_ = self.get_image(refid).data
+            x,y,a,b,t = self.get_ellipse(refid)[0]
+
+        def rp_lim_res(rp):
+            return np.abs(0.2-sep.sum_ellipann(data_, x,y,a,b,t, rp*0.8,rp*1.2)[0] / sep.sum_ellipse(data_, x,y,a,b,t, rp)[0] )
+        
+        return optimize.fmin(rp_lim_res,
+                             2., disp=0)[0]
+
     
     def get_photopoints(self, scaleup=3, refid=None,
                         verbose=False, use_cat_mags=False,
-                        force_refid_ellipse=False,
+                        force_ref_ellipse=False,
                         **kwargs):
         """
         This modules enables to get a new ImageCollection containing only
@@ -1110,6 +1160,7 @@ class HostImageCollection( ImageCollection ):
         # - Get the PhotoPoints
         # No Host identified
         if self.host_catid is None and self.has_catalogue():
+            print "not catid set."
             photopoints = PhotoPointCollection(empty=True)
             
         # Host identified
@@ -1119,18 +1170,7 @@ class HostImageCollection( ImageCollection ):
                 #  Our data
                 img = self.get_image(id_)
                 if not use_cat_mags:
-                    [x,y,a,b,theta], notforced = self.get_host_ellipse(id_ if not force_refid_ellipse else\
-                                                                       self.refid,
-                                                                       scaleup=scaleup)
-                    if force_refid_ellipse:
-                        notforced = id_ == self.refid
-                        
-                    if verbose:
-                        print "x,y position", x,y
-                        print "a,b,theta, ",a,b,theta
-                        print "band, ", img.bandname
-                        print "ellipse param from reference image", not notforced
-    
+                    x,y,a,b,theta = self.get_ref_ellipse_in(id_) if force_ref_ellipse else self.get_ellipse(id_)[0]
                     pps.append(img.get_photopoint(x, y, radius=scaleup, runits="pixels",
                                                   ellipse_args=dict(a=a, b=b, theta=theta),
                                                   aptype="ellipse", getlist=True,**kwargs))
@@ -1147,8 +1187,7 @@ class HostImageCollection( ImageCollection ):
                                         zp=img.mab0, bandname=img.bandpass.name,
                                         instrument_name=self.catalogue.source_name))
                     
-                
-            photopoints = PhotoPointCollection(photopoints=pps)
+            photopoints = PhotoPointCollection(photopoints=pps, ids=self.list_id)
         
         # - Set the target
         photopoints.set_target(self.target)
@@ -1158,7 +1197,21 @@ class HostImageCollection( ImageCollection ):
     # ------------ #
     # - PLOTTER  - #
     # ------------ #
-        
+    def display_ref_ellipse(self, ax, id_, scaleup, **prop):
+        """ """
+        from matplotlib.patches import Ellipse
+        x,y,a,b,theta = self.get_ref_ellipse_in(id_)
+        prop = kwargs_update({"facecolor":"None", "edgecolor":"k"},**kwargs_)
+        ell= Ellipse([x,y],a*scaleup,b*scaleup,
+                    theta*units.radian.in_units("degree"),
+                    **prop)
+
+        ell.set_clip_box(ax.bbox)
+        ax.add_patch(ell)
+        if draw:
+            ax.figure.canvas.draw()
+        return ell
+    
     def show(self, fig=None, savefile=None, show=True,
              scaleup=3, ellipse_prop={}, id_to_show=None,
               **kwargs):
@@ -1202,7 +1255,7 @@ class HostImageCollection( ImageCollection ):
                 
             self.images[id_]["image"].show(ax =ax, show=False, **show_prop)
             try:
-                ellip_data, notforced = self.get_host_ellipse(id_)
+                ellip_data, notforced = self.get_ellipse(id_)
                 add_ellipse(ax, ellip_data, ls= "-" if notforced else "--",
                             **kwargs_update({"lw":2},**ellipse_prop))
             except:
@@ -1229,6 +1282,7 @@ class HostImageCollection( ImageCollection ):
     @property
     def host(self):
         return None
+    
     @property
     def refid(self):
         """ The id defined as reference image. """
@@ -1241,7 +1295,13 @@ class HostImageCollection( ImageCollection ):
     @property
     def ref_host_ellipse(self):
         """ """
-        return self.get_host_ellipse(self.refid)[0]
+        print "DEPRECATED. use ref_ellipse"
+        return self.ref_ellipse
+    
+    @property
+    def ref_ellipse(self):
+        """ """
+        return self.get_ellipse(self.refid)[0]
     
     @property
     def refimage(self):

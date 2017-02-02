@@ -54,8 +54,8 @@ class Instrument( Image ):
     
         
     @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
-    def get_photopoint(self,x,y,radius=None,runits="pixels",
-                       aptype="circle",wcs_coords=False,getlist=False,
+    def get_photopoint(self,x, y, radius=None, runits="pixels",
+                       aptype="circle", wcs_coords=False, getlist=False,
                        **kwargs):
         #
         # Returns a PhotoPoint
