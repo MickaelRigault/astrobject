@@ -3,7 +3,7 @@
 
 """This modules has some basics numpy based statisitical tools """
 import numpy         as np
-from scipy       import stats
+from scipy       import stats, special
 __all__ = ["kfold_it",
            "pearson_coef","spearman_rank_coef","ks_test","aicc"]
 
@@ -113,9 +113,9 @@ def aicc(k,L,n,logL_given=False):
 
 
 # ========================== #
-#
+#                            #
 #   Sampler Tools            #
-#
+#                            #
 # ========================== #
 def gaussian_kde(*arg,**kwargs):
     """ scipy.stats' gaussian kde with 2 additional methods:
@@ -143,11 +143,101 @@ def gaussian_kde(*arg,**kwargs):
             
     return kde
 
+def continuous_poisson(mu, *args, **kwargs):
+    """ Similar to a poisson distribution from scipy.stats except that it accept non integer values.
     
+    Please see caveats on the input parameters descriptions
+    Implemented and tested continuous variables
+    - pdf
+    - cdf
+    - rvs
+    
+    Parameters
+    ----------
+    mu: [float]
+        characteristic parameter of the poisson distribution
+        Caveats: for consistency mu<0.25 is set to 0 i.e. pdf(x) = exp(-x)
+        
+    Returns
+    -------
+    array (pdf with the size of x). 
+    """
+    p_ = poissoncont_gen(name="poissoncont", longname='Continuous Poisson')
+    return p_(mu)
+
+class poissoncont_gen(stats._discrete_distns.poisson_gen):
+    """
+    Child of poisson distribution. 
+    pdf, rvs and cdf have been implemented to support continuous input
+    """
+    def _xrange_nonzero_(self, mu):
+            """ extreme x values are fixed to 0:
+            - x<=0 
+            - x value much greater than mu [x> max(30,mu+5*sqrt(mu))] 
+            (for computing efficiency reasons.)
+            """
+            return np.max([0,mu-np.sqrt(mu)*6]), np.max([50,mu+np.sqrt(mu)*6])
+        
+    def pdf(self, x, mu, **kwargs):
+            """ Hand made continuous version of the poisson distribution 
+        
+            Parameters
+            ----------
+            x: [array]
+                value where the pdf will be estimated pdf(x)
+                Caveats: extreme x values are fixed to 0:
+                - x<=0 or below mu-5*sqrt(mu)
+                - x value much greater than mu [x> max(50,mu+6*sqrt(mu))] 
+                (for computing efficiency reasons.)
+
+            Returns
+            -------
+            array (size of x)
+            """
+            xrange = self._xrange_nonzero_(mu)
+            
+            if hasattr(x,"__iter__"):
+                x = np.asarray(x) 
+                Poisson_continuous = np.zeros(len(x))    
+                flag_measure_it    = (x>=xrange[0]) & (x<xrange[1])
+                Poisson_continuous[flag_measure_it] =  np.exp(-x[flag_measure_it]) if mu<=0.25 else \
+                  mu**x[flag_measure_it] * np.exp(-mu) / special.gamma(1+x[flag_measure_it])
+                return Poisson_continuous      
+
+            return 0 if (x>=xrange[0]) or (x<xrange[1]) else np.exp(-x) if mu<=0.25 else \
+                  mu**x * np.exp(-mu) / special.gamma(1+x)
+            
+    def rvs(self, mu,size=None, nsample=1e3, **kwargs):
+            """ random distribution following the estimated pdf.
+            random values drawn from a finite sampling of `nsample` points
+            
+            Caveats: For computing efficiency reasons the random points are drawn
+                     from central values i.e. these are impossible:
+                     - x<=0 or below mu-5*sqrt(mu)
+                     - x value much greater than mu [x> max(50,mu+6*sqrt(mu))] 
+                 
+            Returns
+            -------
+            array (`size` random points)
+            """
+            # faster than resample
+            xrange = self._xrange_nonzero_(mu)
+            x = np.linspace(xrange[0], xrange[1], nsample)
+            return np.random.choice(x, p= self.pdf(x, mu) / self.pdf(x, mu).sum(), size=size)
+
+    def cdf(self, x, mu, **kwargs):
+        """ Cumulative distribution function for continuous poisson distribution """
+        if not hasattr(self, "_cdfsample"):
+            # - just get it once
+            self._cdfsample = self.rvs(mu, size=1e4, nsample=1e4)
+        if hasattr(x,"__iter__"):
+            return np.asarray([float(len(self._cdfsample[self._cdfsample<x_]))/ 1e4
+                        for x_ in x])
+        return float(len(self._cdfsample[self._cdfsample<x]))/ 1e4
 # ========================== #
-#
+#                            #
 #   Outlier Rejection        #
-#
+#                            #
 # ========================== #
 def grubbs_criterion(npoints, alpha=0.05, twosided=True):
     """ The value (in sigma) above which a point is an outlier

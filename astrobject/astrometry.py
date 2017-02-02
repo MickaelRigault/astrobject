@@ -125,6 +125,7 @@ class _MotherWCS_( object ):
         self._image_width  = width
         self._image_height = height
         self._reload_contours = True
+        self._reload_contours_pxl = True
         self._image_offset = -np.asarray([offset0,offset1])
 
 
@@ -188,9 +189,12 @@ class _MotherWCS_( object ):
     @property
     def contours_pxl(self,**kwargs):
         """Based on the contours (in wcs) and wcs2pxl, this draws the pixels contours"""
-        x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
-                          np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
-        return shape.get_contour_polygon(x,y)
+        if not hasattr(self,"_contour_pxl") or\
+           ( hasattr(self,"_reload_contours_pxl") and self._reload_contours_pxl ):
+            x,y = np.asarray([self.world2pix(ra_,dec_) for ra_,dec_ in
+                            np.asarray(self.contours.exterior.xy).T]).T # switch ra and dec ;  checked
+            self._contour_pxl = shape.get_contour_polygon(x,y)
+        return self._contour_pxl
     
     def has_contours(self):
         return self.contours is not None
@@ -250,7 +254,7 @@ class WCS(pyWCS,_MotherWCS_):
     @property
     def pix_indeg(self):
         """Size in degree. Returns astropy Quantity in degree"""
-        [cd1_1,cd1_2],[cd2_1,cd2_2] = self.wcs.cd
+        [cd1_1,cd1_2],[cd2_1,cd2_2] = self.wcs.cd if hasattr(self.wcs,"cd") else self.pixel_scale_matrix
         pxl = np.sqrt(cd1_1**2+cd2_1**2),np.sqrt(cd1_2**2+cd2_2**2)
     
         if (pxl[0]-pxl[1])/pxl[0] < 1e-2 : # equal to 1%

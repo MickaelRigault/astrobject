@@ -12,7 +12,7 @@ from astropy.io import fits as pf
 from astropy.io import ascii
 # - local
 from .. import astrometry
-from ..photometry import Image,get_photopoint
+from ..photometry import Image, get_photopoint
 from ..baseobject import BaseObject, WCSHandler
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update, mag_to_flux, load_pkl, dump_pkl
@@ -30,6 +30,7 @@ class Instrument( Image ):
     # ---------------- #
     #  PhotoPoints     #
     # ---------------- #
+    
     def _aperture_to_photopoint_(self,count,err,flag):
         """ convert the aperture output to a photopoints """
         
@@ -39,13 +40,13 @@ class Instrument( Image ):
         # ------------------
         # - One Photopoint
         if "__iter__" not in dir(flux):
-            return get_photopoint(self.lbda,flux,var,
+            return get_photopoint(lbda=self.lbda, flux=flux, var=var,
                             source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
         # -----------------------
         # - Several Photopoints\
-        return [get_photopoint(self.lbda,flux_,var_,
+        return [get_photopoint(lbda=self.lbda,flux=flux_,var=var_,
                             source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
                             instrument_name=self.instrument_name)
@@ -53,11 +54,11 @@ class Instrument( Image ):
     
         
     @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
-    def get_photopoint(self,x,y,radius=None,runits="pixels",
-                       aptype="circle",wcs_coords=False,getlist=False,
+    def get_photopoint(self,x, y, radius=None, runits="pixels",
+                       aptype="circle", wcs_coords=False, getlist=False,
                        **kwargs):
         #
-        # Be returns a PhotoPoint
+        # Returns a PhotoPoint
         #
         pp = self._aperture_to_photopoint_(*self.get_aperture(x,y,radius=radius,runits=runits,
                                                             aptype=aptype,wcs_coords=wcs_coords,
@@ -81,7 +82,7 @@ class Instrument( Image ):
     def get_target_photopoint(self,radius=None,runits="pixels",
                               aptype="circle",**kwargs):
         #
-        # Be returns a PhotoPoint
+        # Returns a PhotoPoint
         #
         if not self.has_target():
             return AttributeError("No 'target' loaded")

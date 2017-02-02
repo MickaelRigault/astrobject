@@ -315,7 +315,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
             self.nsamplers = nsamplers
 
         self._set_color_samplers_()
-        i_ = self.photopoints["i"].magsamplers.samplers[:self.nsamplers]
+        i_ = self.photopoints["i"].photosamplers.mag[:self.nsamplers]
         # -- Convert that to masses    
         nodisp_sampler   = taylor_mass_relation(i_,self.gi_priored_sample,
                                                 self.target.distmpc)
@@ -351,37 +351,53 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         # -----------
         # - Property
         prop = kwargs_update(dict(histtype="step", bins=20, normed=True, 
-                            lw="2",fill=True, fc=mpl.cm.binary(0.2,0.4),
+                            lw="2",fill=False,
                             ec=mpl.cm.binary(0.8,1.), zorder=6), **kwargs)
         
         # - Plots    - #
-        _ = self.photopoints["i"].magsamplers.show(ax=ax, fancy_xticklabel=False,
+        _ = self.photopoints["i"].photosamplers.show(mag=True,
+                                            ax=ax, fancy_xticklabel=False,
                                             show_legend=False, show_model=False, show=False,
                                             ec=mpl.cm.copper(0.5),fc=mpl.cm.copper(0.5,0.2),
-                                          bins=prop["bins"], show_estimate=False)
-        _ = self.photopoints["g"].magsamplers.show(ax=ax, fancy_xticklabel=False,
+                                            bins=prop["bins"], show_estimate=False,xscale=False)
+        _ = self.photopoints["g"].photosamplers.show(mag=True,
+                                            ax=ax, fancy_xticklabel=False,
                                             show_legend=False,show_model=False,show=False,
                                             ec=mpl.cm.Greens(0.8),fill=False,
-                                          bins=prop["bins"], show_estimate=False)
+                                            bins=prop["bins"], show_estimate=False,xscale=False)
         # - Main g-i
         x = np.linspace(-1,3,1e3)
 
-        # - sample
-        axcolor.hist(self.gi_priored_sample, **prop)
-
-        # - measured and prior
-        axcolor_prior.plot(x, self.gi_samplers.pdf(x)/self.gi_samplers.pdf(x).max(),
-                           "k--", alpha=0.7, lw=2,
-                           scalex=False, label=r"$\mathrm{Likelihood}$")
+        # - likelihood        
+        axcolor.hist(self.gi_samplers.samplers, label=r"$\mathrm{Likelihood}$",**prop)
         
+        # - prior
         axcolor_prior.plot(x, g_i_prior(x)/g_i_prior(x).max(),
-                           "k-", alpha=0.7, lw=2, scalex=False, zorder=3,
+                           "k--", alpha=0.7, lw=2, scalex=False, zorder=3,
                            label=r"$\mathrm{Prior}$")
+        # - Posterior
+        kde = stats.gaussian_kde(self.gi_priored_sample)
+        axcolor_prior.fill_between(x, kde.pdf(x)/kde.pdf(x).max(), lw=2, 
+                                   edgecolor=mpl.cm.binary(0.9,0.7),
+                                   facecolor=mpl.cm.Blues(0.8, 0.5),
+                                   label=r"$\mathrm{Posterior}$")
+
+        
+        
         # - Derived Mass
         self.show(ax=axmass, fancy_xticklabel=False,
                 show_legend=False, show_model=False,show=False,
-                show_estimate=True, **prop)
-
+                show_estimate=True, kde=True,
+                 edgecolor=mpl.cm.binary(0.9,1),
+                  facecolor=mpl.cm.binary(0.5, 0.2))
+        
+        v_ = self.get_estimate()
+        axmass.text(0.05,0.95,
+                    r"$\log(\mathrm{M_*/M_{\odot}}) = %.2f ^{+%.2f}_{-%.2f}$"%(v_[0],v_[1],v_[2]),
+                    transform=axmass.transAxes, va="top",ha="left",
+                    color="k", bbox=dict(facecolor='w', alpha=0.5, edgecolor="None"),
+                   fontsize="x-large")
+                        
         # -- infor and fancy
         
         ax.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize="xx-large")
@@ -390,16 +406,16 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
 
 
         axcolor.set_xlim(-0.5,2)
-        
+
         axcolor_prior.legend(loc="upper right", fontsize="x-large", frameon=False)
         axcolor_prior.set_ylim(0,1.0*1.2)
         axcolor.set_ylim(0,axcolor.get_ylim()[1]*1.2)
 
         _ = [ax_.set_yticks([]) for ax_ in fig.axes]
-        fig.suptitle(r"$\mathrm{Derivation\ of\ the\ Stellar\ Mass:\ %s}$"%self.target.name,
+        fig.suptitle(r"$\mathrm{Derivation\ of\ the\ Local\ Stellar\ Mass:\ %s}$"%self.target.name,
                     fontsize="xx-large")
-
-        fig.figout(savefile=savefile, show=show)#"/Users/mrigault/snfgit/papers/snfhost_lssfr/PLOTS/local_mass_builder_%s"%self.target.name)
+        
+        fig.figout(savefile=savefile, show=show)
 
     # --------- #
     #  I/O      #
@@ -466,18 +482,18 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
 
     def _set_color_samplers_(self):
         """ """
-        self.photopoints["i"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
-        self.photopoints["g"].magsamplers.draw_samplers(nsamplers=self.nsamplers*2)
+        self.photopoints["i"].draw_photosamplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
+        self.photopoints["g"].draw_photosamplers(nsamplers=self.nsamplers*2)
         
-        neff = np.min([self.photopoints["g"].magsamplers.nsamplers,
-                       self.photopoints["i"].magsamplers.nsamplers,self.nsamplers])
+        neff = np.min([self.photopoints["g"].photosamplers.nsamplers,
+                       self.photopoints["i"].photosamplers.nsamplers,self.nsamplers])
         if neff != self.nsamplers:
             warnings.warn("Reduced effective number of sampler (%d -> %d)for the mass because of too many nans"%(self.nsamplers, neff))
             self.nsamplers = neff
 
         # -- g and i samplers
-        g_ = self.photopoints["g"].magsamplers.samplers[:self.nsamplers]
-        i_ = self.photopoints["i"].magsamplers.samplers[:self.nsamplers]
+        g_ = self.photopoints["g"].photosamplers._magsamples.get_random_samplers(self.nsamplers)
+        i_ = self.photopoints["i"].photosamplers._magsamples.get_random_samplers(self.nsamplers)
         
         # -- Set the gi_sampler consequently
         self.gi_samplers.set_samplers(g_ - i_)

@@ -104,6 +104,10 @@ class Samplers( BaseObject ):
             return
         if sampler is not None:
             self.set_samplers(sampler)
+
+    def __call__(self):
+        return self.samplers
+    
     # =================== #
     #   Main Methods      #
     # =================== #
@@ -215,15 +219,19 @@ class Samplers( BaseObject ):
     #  PLOT     #
     # --------- #
     def show(self, savefile=None, show=True, ax=None,
-             show_model=True, propmodel={}, xlabel="", fancy_xticklabel=False,
+             show_model=True, propmodel={}, xlabel="",
+             fancy_xticklabel=False, kde=False,
              show_legend=True, logscale=False,
-             show_estimate= True,
+             show_estimate= True,xscale=True,yscale=True,
              **kwargs):
         """ Show the samplers and the derived rv_distribution (scipy.stats)
 
         Parameters
         ----------
 
+        kde: [bool] -optional-
+            Show a kde shape instead of an histogram.
+            
         Return
         ------
         dict (plot information)
@@ -247,29 +255,46 @@ class Samplers( BaseObject ):
             fig = ax.figure
         # -------------
         # - Prop
-        prop = kwargs_update(dict(histtype="step", bins=40, normed=True,
-                    lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
-                    ec=mpl.cm.Blues(1.,1.)),
-                    **kwargs)
-        
+        if not kde:
+            prop = kwargs_update(dict(histtype="step", bins=40, normed=True,
+                        lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
+                        ec=mpl.cm.Blues(1.,1.)),
+                        **kwargs)
+        else:
+            prop = kwargs_update(dict(lw="2",edgecolor=mpl.cm.binary(0.9,1),
+                                      facecolor=mpl.cm.binary(0.5, 0.2)),
+                                **kwargs)
+            
         propmodel_ = kwargs_update(dict(scalex=False, color="g",lw=2,
                                         label=self.rvdist_info),
                     **propmodel)
         # -------------
         # - Samplers
+        med,highmed,lowmed = self.get_estimate()
+        xrange = self.samplers.min()-lowmed,self.samplers.max()+highmed
+        if logscale:
+            xrange = np.log10(np.asarray(xrange))
+        x = np.linspace(xrange[0],xrange[1],1e4)
+        
         if not self.has_samplers():
             warnings.warn("Samplers created for the plot method")
             self.draw_samplers()
-            
-        h = ax.hist(self.samplers if not logscale else np.log10(self.samplers), **prop)
-        
-        med,highmed,lowmed = self.get_estimate()
-        # - show estimate
-        xrange = self.samplers.min()-lowmed,self.samplers.max()+highmed
-        
-        x = np.linspace(xrange[0],xrange[1],1e4)
 
-        pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_) if show_model and not logscale else None
+        if not kde:
+            h = ax.hist(self.samplers if not logscale else np.log10(self.samplers), **prop)
+        else:
+            kde = stats.gaussian_kde(self.samplers if not logscale else np.log10(self.samplers))
+            
+            normed = 1. if "normed" in prop.keys() and not prop["normed"] else kde.pdf(x).max()
+            for name in prop.keys():
+                if name in ["bins", "prop","histtype"]:
+                    prop.pop(name)
+                    
+            h = ax.fill_between(x, kde.pdf(x)/normed, **prop)
+        
+            
+        # - show estimate
+        pl = ax.plot(x,self.rvdist.pdf(x), **propmodel_) if show_model and self.rvdist is not None and not logscale else None
         if show_estimate:
             if not logscale:
                 ax.axvline(med, color="0.5", zorder=2)
@@ -285,8 +310,10 @@ class Samplers( BaseObject ):
             legend_ = ax.legend(loc="upper left", frameon=False, fontsize="large")
 
         # -- out
-            
-        ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1]*1.2) # for the legend
+        if yscale:
+            ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1]*1.2) # for the legend
+        if xscale:
+            ax.set_xlim(xrange[0],xrange[1])
         # - Fancy
         
         if fancy_xticklabel:

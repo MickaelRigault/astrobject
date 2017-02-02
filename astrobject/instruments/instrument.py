@@ -10,10 +10,11 @@ import hst
 import stella
 import ptf
 import snifs
+import galex
 
 __all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
 
-KNOWN_INSTRUMENTS = ["sdss","snifs","hst","stella","ptf"]
+KNOWN_INSTRUMENTS = ["sdss","galex","hst","snifs","ptf","stella"]
 
 
 def fetch_catalogue(source,radec,radius,extracolumns=[],column_filters={"rmag":"5..25"},**kwargs):
@@ -52,7 +53,6 @@ def fetch_catalogue(source,radec,radius,extracolumns=[],column_filters={"rmag":"
     -------
     Catalogue
     """
-    
     if type(radec) is not str:
         if len(radec) != 2: raise TypeError("radec must be a string ('ra dec') or a 2D array ([ra,dec])")
         radec = "%f %f"(radec[0],radec[1])
@@ -116,9 +116,9 @@ def create_catalogue(datacatalogue, source=None, **kwargs):
     cat.create(datacatalogue, None)
     return cat
 
-def get_instrument(filename,astrotarget=None,**kwargs):
+def get_instrument(filename, astrotarget=None,**kwargs):
     """ Reads the given file and open its corresponding Instrument object.
-    Known instruments are (might not be exhaustive): SDSS / HST / PTF  
+    Known instruments are (might not be exhaustive): SDSS / HST / PTF  / GALEX / SNIFS
 
     Parameters
     ----------
@@ -133,28 +133,11 @@ def get_instrument(filename,astrotarget=None,**kwargs):
     ------
     Instrument (the corresponding Child's object)
     """
-    # - SDSS 
-    if sdss.is_sdss_file(filename):
-        return sdss.sdss(filename,astrotarget=astrotarget,
-                    **kwargs)
-    # - SNIFS
-    if snifs.is_snifs_file(filename):
-        return snifs.snifs(filename,astrotarget=astrotarget,
-                    **kwargs)
-    # - HST     
-    if hst.is_hst_file(filename):
-        return hst.hst(filename,astrotarget=astrotarget,
-                    **kwargs)
-    # - STELLA
-    if stella.is_stella_file(filename):
-        return stella.stella(filename,astrotarget=astrotarget,
-                    **kwargs)
-    # - PTF
-    if ptf.is_ptf_file(filename):
-        return ptf.ptf(filename,astrotarget=astrotarget,
-                    **kwargs)
-    
-    # - Nothing else...
+    for instrument in KNOWN_INSTRUMENTS:
+        if not eval("%s.is_%s_file(filename)"%(instrument,instrument)):
+            continue
+        return eval("%s.%s(filename,astrotarget=astrotarget,**kwargs)"%(instrument,instrument))
+
     raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
                      "these are:"+", ".join(KNOWN_INSTRUMENTS))
 
@@ -172,27 +155,11 @@ def which_band_is_file(filename):
     ------
     String (name of the photometric band)
     """
-    # - SDSS 
-    if sdss.is_sdss_file(filename):
-        return sdss.which_band_is_file(filename)
+    for instrument in KNOWN_INSTRUMENTS:
+        if not eval("%s.is_%s_file(filename)"%(instrument,instrument)):
+            continue
+        return eval("%s.which_band_is_file(filename)"%instrument)
 
-    # - SDSS 
-    if snifs.is_snifs_file(filename):
-        return snifs.which_band_is_file(filename)
-
-    # - HST     
-    if hst.is_hst_file(filename):
-        return hst.which_band_is_file(filename)
-    
-    # - STELLA
-    if stella.is_stella_file(filename):
-        return stella.which_band_is_file(filename)
-
-    # - PTF
-    if ptf.is_ptf_file(filename):
-        return ptf.which_band_is_file(filename)
-    
-    # - Nothing else...
     raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
                      "these are:"+", ".join(KNOWN_INSTRUMENTS))
 
@@ -208,26 +175,11 @@ def which_obs_mjd(filename):
     ------
     float (MJD)
     """
-    # - SDSS 
-    if sdss.is_sdss_file(filename):
-        return sdss.which_obs_mjd(filename)
+    for instrument in KNOWN_INSTRUMENTS:
+        if not eval("%s.is_%s_file(filename)"%(instrument,instrument)):
+            continue
+        return eval("%s.which_obs_mjd(filename)"%instrument)
 
-    # - SDSS 
-    if snifs.is_snifs_file(filename):
-        return snifs.which_obs_mjd(filename)
-
-    # - HST     
-    if hst.is_hst_file(filename):
-        return hst.which_obs_mjd(filename)
-    
-    # - STELLA
-    if stella.is_stella_file(filename):
-        return stella.which_obs_mjd(filename)
-
-    # - PTF
-    if ptf.is_ptf_file(filename):
-        return ptf.which_obs_mjd(filename)
-    
     # - Nothing else...
     raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
                      "these are:"+", ".join(KNOWN_INSTRUMENTS))
@@ -255,28 +207,18 @@ def get_instrument_wcs(filename):
     This function enables to load the wcs solution only, not opening the
     full image. This might be useful to avoid opening large images
     """
-    from ..  import astrometry
-    # - SDSS 
-    if sdss.is_sdss_file(filename):
-        index = sdss.DATAINDEX
-
-    # - SNIFS
-    elif snifs.is_snifs_file(filename):
-        index = snifs.DATAINDEX
+    from .. import astrometry
     
-    # - HST     
-    elif hst.is_hst_file(filename):
-        index = hst.DATAINDEX
-    # - STELLA
-    elif stella.is_stella_file(filename):
-        index = stella.DATAINDEX
-    # - PTF
-    elif ptf.is_ptf_file(filename):
-        index = ptf.DATAINDEX
-        
-    else:
-        # - Nothing else...
+    index="notset"
+    for instrument in KNOWN_INSTRUMENTS:
+        if not eval("%s.is_%s_file(filename)"%(instrument,instrument)):
+            continue
+        index = eval("%s.DATAINDEX"%instrument)
+        break
+    
+    if index == "notset":
         raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
                         "these are:"+", ".join(KNOWN_INSTRUMENTS))
+    
     # -- good to go
     return astrometry.wcs(filename,extension=index)
