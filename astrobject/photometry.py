@@ -562,6 +562,34 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ------------------- #
     # - get Methods     - #
     # ------------------- #
+    def get_ellipann_mask(self, x, y, a, b, theta, rin, rout):
+        """ Mask array for ellipse annulus (based on sep) 
+        (True for pixels inside the elliptical annulus)
+
+        Prameters
+        ---------
+        x,y: array_like
+            Center of the ellipse(s)
+
+        a, b, theta: array_like
+            Parameters defining the extent of the ellipses
+        
+        rin, rout:
+            Inner and Outer radiii (in units of a,b) of the annulus
+            
+        Returns
+        -------
+        masked array (shape of the data)
+        """
+        from sep import mask_ellipse
+        ellipsemask_o    = np.asarray(np.zeros((self.height,self.width)),dtype="bool")
+        ellipsemask_i = np.asarray(np.zeros((self.height,self.width)),dtype="bool")
+
+        mask_ellipse( ellipsemask_o, x, y, a, b, theta, r= rout)
+        mask_ellipse( ellipsemask_i, x, y, a, b, theta, r= rin )
+
+        return ~ ((~ellipsemask_o) + ellipsemask_i)
+    
     # ----------- #
     #  Aperture   #
     # ----------- #
@@ -695,7 +723,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                      aptype="circle",subpix=5,
                      ellipse_args={"a":None,"b":None,"theta":None},
                      annular_args={"rin":None,"rout":None},
-                     on="data",
+                     on="data", syserr = 0,
                      **kwargs):
         """
         This method uses K. Barary's Sextractor python module SEP
@@ -800,6 +828,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         gain = None if not hasattr(self,"_dataunits_to_electron") else \
           self._dataunits_to_electron
         gain = kwargs.pop("gain",gain)
+
         # -----------------
         # - Variance Trick
         var = kwargs.pop("var",self.var)
@@ -844,6 +873,12 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             sepout= sep.sum_ellipan(eval("self.%s"%on),x,y,a,b,theta,rin,rout,
                                     r_pixels,subpix=subpix,
                                     var=var,gain=gain,**kwargs)
+
+        if syserr is not None:
+            fl_,err_,flag_ = sepout
+            err_ += syserr
+            return fl_,err_,flag_
+        
         # ===================================
         # = Return of the aperture extraction
         return sepout
@@ -1285,7 +1320,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         # ----------- #
         # - Where     #
-        fig  = mpl.figure(figsize=[16,8])
+        fig  = mpl.figure(figsize=[12,6])
         axB  = fig.add_axes([0.1, 0.1,0.4,0.8])
         axM  = fig.add_axes([0.52,0.1,0.4,0.8])
         
@@ -1611,7 +1646,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
     
     def _measure_sep_background_(self,scaleup_sepmask=10, add_mask=None,
-                                 apply_sepmask=True, **kwargs):
+                                    apply_sepmask=True, **kwargs):
         """
         """
         from sep import Background

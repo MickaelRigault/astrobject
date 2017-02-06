@@ -139,6 +139,7 @@ class HST( Instrument ):
         
     def get_contours(self,pixel=True):
         """ """
+        print "GETTING CONTOURS"
         # To Be Fasten
         from ..utils import shape
         if pixel:
@@ -146,6 +147,7 @@ class HST( Instrument ):
             y = [1154,1027,-1,114,self.height,2056,1038,1166]
             #x,y= [-1,19,self.width,2060],[-1,2056,114,self.height]
             return shape.polygon.Polygon(zip(x,y))
+
         
         x,y = np.asarray([self.pixel_to_coords(x_,y_) for x_,y_ in
                           np.asarray(self.get_contours(pixel=True).exterior.xy).T]).T # switch ra and dec ;  checked
@@ -240,6 +242,7 @@ class HST( Instrument ):
         if self._side_properties["datamask"] is None and _NAN_OUTSIDE_DATA:
             self._side_properties["datamask"] = ~self._flagdata
         return self._side_properties["datamask"]
+    
     # ------------------------
     # - Image Data Reduction
     @property

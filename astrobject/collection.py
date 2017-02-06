@@ -327,40 +327,20 @@ class ImageCollection( Collection, CatalogueHandler ):
         and to reload_data() if not and dataslicing differ from what have been loaded before.
         
         """
-        self._test_id_(id)
-        
-        slice = np.asarray([ dataslice0 if dataslice0 is not None else [0,-1],
-                                dataslice1 if dataslice1 is not None else [0,-1]]).copy()
-        if slice[0][-1] == -1 or slice[1][-1] == -1:
-            from astropy.io.fits import getheader
-            h = getheader(self.images[id]["file"]) if self.images[id]["image"] is None else\
-              self.images[id]["image"].header               
-            slice[0][-1] = h["NAXIS2"] if slice[0][-1] == -1 else slice[0][-1]
-            slice[1][-1] = h["NAXIS1"] if slice[1][-1] == -1 else slice[1][-1]
-            
-        # --------------------
-        # - image already exist
+        self._test_id_(id)            
+        # -----------------------
+        # - image not loaded yet
         if self.images[id]["image"] is None:
-            self._load_image_(id,dataslice0=slice[0],
-                                 dataslice1=slice[1],
+            self._load_image_(id,dataslice0=dataslice0,
+                                 dataslice1=dataslice1,
                               **kwargs)
-            return self.get_image(id,dataslice0=slice[0],
-                                    dataslice1=slice[1],reload=False)
 
         im = self.images[id]["image"]
-        # ------------------
-        # - Check if slicing ok
-        # - No need to realod because of -1 stuffs
-        if (np.any(slice[0] != np.asarray(im._build_properties["dataslice0"])) or\
-            np.any(slice[1] != np.asarray(im._build_properties["dataslice1"]))) and \
-            reload:
-            # -- Remark: This updates the self.images[id]["image"]
-            im.reload_data( slice[0], slice[1],**kwargs)
-            
         # ---------------
         # Target
         if not im.has_target() and self.has_target():
             im.set_target(self.target, test_inclusion=HAS_SHAPELY)
+            
         # ---------------
         # Catalogue
         if load_catalogue and self.has_catalogue() and not im.has_catalogue():
@@ -1113,7 +1093,7 @@ class HostImageCollection( ImageCollection ):
             x,y,a,b,t = self.get_ellipse(refid)[0]
 
         def rp_lim_res(rp):
-            return np.abs(0.2-sep.sum_ellipann(data_, x,y,a,b,t, rp*0.8,rp*1.2)[0] / sep.sum_ellipse(data_, x,y,a,b,t, rp)[0] )
+            return np.abs(0.2- sep.sum_ellipann(data_, x,y,a,b,t, rp*0.8,rp*1.2)[0] / sep.sum_ellipse(data_, x,y,a,b,t, rp)[0] )
         
         return optimize.fmin(rp_lim_res,
                              2., disp=0)[0]
