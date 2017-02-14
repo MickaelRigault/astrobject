@@ -5,7 +5,7 @@
 import numpy  as np
 import warnings
 from astropy.io import fits as pf
-
+import matplotlib.pyplot as mpl
 from .baseobject import TargetHandler
 from .utils.tools import shape_ajustment
 
@@ -129,10 +129,108 @@ def headerparameter2lbda(npix,step,start):
 # Spectro Object Classes              #
 #                                     #
 #######################################
-class Spectrum( TargetHandler ):
+class BaseSpectrum( TargetHandler ):
+    PROPERTIES = ["wave","flux","errors"]
+
+    # =================== #
+    #   Main Methods      #
+    # =================== #
+    def __init__(self, wave=None, flux=None, errors=None, astrotarget=None):
+        """ """
+        self.__build__()
+        if wave is not None:
+            self.set_wave(wave)
+        if flux is not None:
+            self.set_flux(flux, errors)
+        if astrotarget is not None:
+            self.set_target(astrotarget)
+        
+    # --------- #
+    # SETTER    #
+    # --------- #
+    def set_wave(self, wave, force_it=False):
+        """ Sets the wavelength. 
+        If a flux is already set, this is test if the size of the 
+        given `wave` matches that of the flux. 
+        Set force_it to True to ignore that.
+        
+        """
+        if self.has_flux() and len(wave) != len(self.flux) and not force_it:
+            raise ValueError("the size given wavelength does not match the current flux. Set force_it to True to ignore this test")
+        self._properties['wave'] = np.asarray(wave)
+          
+    def set_flux(self, flux, errors=None, force_it=True):
+        """ Sets the flux of the spectrum """
+        if self.wave is not None and len(flux) != len(self.wave) and not force_it:
+            raise ValueError("the size given flux does not match the current wavelength. Set force_it to True to ignore this test")
+        if errors is not None and len(flux) != len(errors):
+            raise ValueError("flux and errors must have the same dimension")
+        
+        self._properties['flux'] = np.asarray(flux)
+        self._properties['errors'] = np.asarray(errors) \
+          if errors is not None else None
+    
+    # --------- #
+    # PLOTTER   #
+    # --------- #
+    def show(self, ax=None, err_onzero=False, bandprop={},
+                 savefile=None, show=True, **kwargs):
+        """ """
+        from astrobject.utils.mpladdon import specplot, figout
+        from matplotlib.pyplot import figure
+        self._plot = {}
+        if ax is None:
+            fig = mpl.figure(figsize=[8,5])
+            ax  = fig.add_axes([0.12,0.12,0.8,0.8])
+        else:
+            fig = ax.figure
+
+        
+        pl = ax.specplot(self.wave if self.wave is not None else np.arange(len(self.flux)),
+                             self.flux, var=self.errors**2 if self.has_errors() else None,
+                        err_onzero=err_onzero, bandprop=bandprop,
+                        **kwargs)
+        self._plot['ax']     = ax
+        self._plot['figure'] = fig
+        self._plot['plot']   = pl
+        self._plot['band']   = bandprop
+        self._plot['prop']   = kwargs
+        
+        fig.figout(savefile=savefile, show=show)
+        
+        return self._plot
+    
+    # =================== #
+    #   Properties        #
+    # =================== #
+    @property
+    def flux(self):
+        """ Observed flux """
+        return self._properties['flux']
+    
+    @property
+    def errors(self):
+        """ Error on the observed flux """
+        return self._properties['errors']
+
+    def has_flux(self):
+        """ Has the flux value been set? """
+        return self.flux is not None
+    
+    def has_errors(self):
+        """ Have the errors been set? """
+        return self.errors is not None
+    
+    @property
+    def wave(self):
+        """ wavelength solution """
+        return self._properties['wave']
+
+    
+class Spectrum( BaseSpectrum ):
     """
     """
-    PROPERTIES         = ["y","var","header","name","filename","npix","step","start"]
+    PROPERTIES         = ["header","name","filename","npix","step","start"]
     SIDE_PROPERTIES    = []
     DERIVED_PROPERTIES = ["fits","lbda","raw_lbda"]
 
@@ -197,13 +295,12 @@ class Spectrum( TargetHandler ):
         ------
         Voids
         """
-        newy = shape_ajustment(self.lbda,self.y,x_model,k=k)
-        newv = np.abs(shape_ajustment(self.lbda,self.v,x_model,k=k)) \
-           if self.has_var() else None
+        newy = shape_ajustment(self.lbda,self.flux,x_model,k=k)
+        newe = np.abs(shape_ajustment(self.lbda,self.errors,x_model,k=k)) \
+           if self.has_errors() else None
            
         self.set_lbda(x_model,check=False)
-        self.y = newy
-        self.v = newv
+        self.set_flux(newy, newe)
         
         
     def shift(self,velocity_km_s,
@@ -287,12 +384,12 @@ class Spectrum( TargetHandler ):
         """
         # ---------------
         # - Input test
-        if self.y is None:
+        if self.has_flux():
             raise AttributeError("no flux loaded in the object.")
-        if self.has_var() is False:
+        if self.has_errors() is False:
             raise AttributeError("no variance in the object, so nothing to do.")
         newspec = self.copy()
-        newspec.y  = self.y + np.random.normal(loc=self.y, scale=np.sqrt(self.v))
+        newspec.set_flux(self.flux + np.random.normal(loc=self.flux, scale=self.errors))
         return newspec
     
     # ------------------- #
@@ -331,7 +428,7 @@ class Spectrum( TargetHandler ):
         # - Input Test 
         if type(filename) != str:
             raise TypeError("'filename' must be a string")
-        if self.y is not None and force_it is False:
+        if self.has_flux() and force_it is False:
             raise AttributeError("The object already is defined."+\
                     " Set force_it to True if you really known what you are doing")
                     
@@ -446,7 +543,7 @@ class Spectrum( TargetHandler ):
         if variance is not None and len(lbda) != len(variance):
             raise ValueError("If 'variance' is given 'variance' and 'lbda' "+\
                              "must have the same dimension")
-        if self.y is not None and force_it is False:
+        if self.has_flux() and force_it is False:
             raise AttributeError("The object already is defined."+\
                     " Set force_it to True if you really known what you are doing")
 
@@ -480,13 +577,10 @@ class Spectrum( TargetHandler ):
         # ************************ #
         # -- Header 
         self._properties['header'] = pf.Header() if header is None else header
-        # -- Data
-        self._properties['y']      = np.asarray(flux).copy()
         # -- Wavelength
         self.set_lbda(lbda)
-        # -- Variance
-        self._properties['var']    = np.asarray(variance).copy() \
-          if variance is not None else None
+        # -- Data
+        self.set_flux(flux, np.sqrt(variance) if variance is not None else None)
         # -- Name
         self.name = self.header["OBJECT"] if name is None and "OBJECT" in self.header.keys() \
           else str(name) if name is not None else "unknown"
@@ -507,8 +601,8 @@ class Spectrum( TargetHandler ):
         saveerror:  [bool]         Set this to True if you wish to record the error
                                    and not the variance in you first hdu-table.
                                    if False, the table will be called VARIANCE and
-                                   have self.v; if True, the table will be called
-                                   ERROR and have sqrt(self.v)
+                                   have self.errors**2; if True, the table will be called
+                                   ERROR and have self.errors
                                    
         overwrite: [bool]          If the file already exist, saving it in the same
                                    file will overwrite it. Set True to allow that.
@@ -523,41 +617,6 @@ class Spectrum( TargetHandler ):
         hdulist.writeto(savefile,clobber=overwrite)
         
         
-
-    def show(self,savefile=None,ax=None,show=True,
-             add_thumbnails=False,**kwargs):
-        """
-        """
-        from .utils.mpladdon import specplot, figout
-        from matplotlib.pyplot import figure
-        if self.y is None:
-            raise AttributeError("no data to show")
-
-        # --------------
-        # - Set the Figure
-        self._plot = {}
-        if ax is None:
-            fig = figure(figsize=[8,5])
-            ax = fig.add_axes([0.1,0.1,0.8,0.8])
-        elif "plot" not in dir(ax):
-            raise TypeError("The given 'ax' most likely is not a matplotlib axes. ")
-        else:
-            fig = ax.figure
-            
-        # --------------
-        # - Do the plot    
-        pl,fill = ax.specplot(self.lbda,self.y,var=self.v,**kwargs)
-        # --------------
-        # - output
-        self._plot['ax']     = ax
-        self._plot['figure'] = fig
-        self._plot['plot']   = pl
-        self._plot['band']   = fill
-        self._plot['prop']   = kwargs
-        
-        fig.figout(savefile=savefile,show=show,add_thumbnails=add_thumbnails)
-        
-        return self._plot
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
@@ -601,8 +660,8 @@ class Spectrum( TargetHandler ):
         ------
         Void
         """
-        if self.y is not None and check and len(x) != len(self.y):
-            raise ValueError("'x' must have the length of self.y (%d)"%len(self.y))
+        if self.has_flux() and check and len(x) != len(self.flux):
+            raise ValueError("'x' must have the length of self.flux (%d)"%len(self.flux))
 
         npix, step, start = lbda2headerparameters(np.asarray(x))
         # -- use the real function.
@@ -648,8 +707,8 @@ class Spectrum( TargetHandler ):
             raise AttributeError("'lbda' is already defined."+\
                   " Set force_it to True if you really known what you are doing")
             
-        if self.y is not None and check and npix != len(self.y):
-            raise ValueError("'npix' must have the length of self.y (%d)"%len(self.y))
+        if self.has_flux() and check and npix != len(self.flux):
+            raise ValueError("'npix' must have the length of self.flux (%d)"%len(self.flux))
 
         # ----------------
         # - Input Tests
@@ -658,36 +717,29 @@ class Spectrum( TargetHandler ):
         self.header.update(self._build_properties['header_start'], start,"")
         self._load_lbda_()
 
-        
+    @property
+    def wave(self):
+        """ pointer towards self.lbda """
+        return self.lbda
+    
+    def set_wave(self,*args, **kwargs):
+        raise NotImplementedError("use set_lbda")
+    
     # --------------------
     # - flux and variance        
     @property
     def y(self):
-        return self._properties['y']
-
-    @y.setter
-    def y(self,value):
-        if self.lbda is not None and len(value) != self.npix:
-            raise ValueError("'y' must have the same length as 'lbda'")
-        
-        self._properties['y'] = np.asarray(value)
+        print "DECREPATED, use self.flux"
+        return self.flux
         
     @property
     def v(self):
-        return self._properties['var']
-    
-    @v.setter
-    def v(self,value):
-        if value is None:
-            self._properties['var'] = None
-            return
-        if self.lbda is not None and len(value) != self.npix:
-            raise ValueError("'v' must have the same length as 'lbda'")
-        self._properties['var'] = np.asarray(value)
+        print "DECREPATED, use self.errors**2"
+        return self.errors**2 if self.has_errors() else None
         
     def has_var(self):
-        return True if self.v is not None \
-          else False
+        print "DECREPATED, use self.has_errors()"
+        return self.has_errors()
           
     # --------------------
     # - Header
@@ -696,16 +748,6 @@ class Spectrum( TargetHandler ):
         if self._properties["header"] is None:
             self._properties["header"] = pf.Header()
         return self._properties['header']
-
-    @property
-    def name(self):
-        return self._properties['name']
-    
-    @name.setter
-    def name(self,newname):
-        if type(newname) is not str:
-            raise TypeError("the given 'name' must be a string")
-        self._properties['name'] = newname
         
     # --------------------
     # - Inner properties
@@ -737,7 +779,7 @@ class Spectrum( TargetHandler ):
     def _get_hdu_array_(self,use_error):
         """
         This method create the current object's hdu containing
-        the primary-hdu (self.y) and the error/variance if it exists.
+        the primary-hdu (self.flux) and the error/variance if it exists.
         Do pyfits.HDUList(return_of_this) to have an hdulist.
         
         Parameter
@@ -750,13 +792,13 @@ class Spectrum( TargetHandler ):
         ------
         pyfits hdu 2darray (primary, [extension])
         """
-        self._hdu = [pf.PrimaryHDU(self.y,self.header)]
+        self._hdu = [pf.PrimaryHDU(self.flux,self.header)]
         # - If there is error, saveit
         if self.has_var():
             if use_error:
-                extention = pf.ImageHDU(np.sqrt(self.v), name='ERROR')
+                extention = pf.ImageHDU(self.errors, name='ERROR')
             else:
-                extention = pf.ImageHDU(self.v, name='VARIANCE')
+                extention = pf.ImageHDU(self.errors**2, name='VARIANCE')
             self._hdu.append(extention)
             
         # -- Return the current object's hdu
@@ -787,9 +829,3 @@ class Spectrum( TargetHandler ):
             self._derived_properties['lbda'] = \
               self._derived_properties['rawlbda']
 
-
-
-
-class LbdaSpectrum( Spectrum ):
-    """ Child of spectrum allowing non stable lbda  """
-    

@@ -15,6 +15,7 @@ from astropy.table import Table
 
 # - Internal (astrobject)
 from . import astrometry
+from propobject   import BaseObject
 from .baseobject  import TargetHandler, WCSHandler, Samplers, CatalogueHandler
 from .utils.shape import HAS_SHAPELY
 from .utils.tools import kwargs_update, flux_to_mag
@@ -209,7 +210,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     def __init__(self,filename=None,
                  astrotarget=None,data_index=0,
                  dataslice0=None,dataslice1=None,
-                 empty=False,**kwargs):
+                 empty=False, **kwargs):
         """
         Initalize the image by giving its filelocation (*filename*). This
         will load it using the load() method.
@@ -260,7 +261,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ------------------- #
     # - I/O Methods     - #
     # ------------------- #
-    def load(self,filename,index=None,
+    def load(self,filename,index=None,mask=None,
              force_it=False, background=None,
              dataslice0=None,dataslice1=None):
         """
@@ -273,6 +274,11 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         ----------
         filename: [string.fits]
             The file containing the fits data
+
+            
+        mask: [boolean array] -optional-
+            Data that will be set to NaN.
+            
 
         dataslice0, dataslice1: [2D-array, 2D-array] -optional-
             load only the data within the given boundaries.
@@ -295,7 +301,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         Void
         """
         # -- Check if you will not overwrite anything
-        if self.rawdata is not None and force_it is False:
+        if self._properties["rawdata"] is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
@@ -330,7 +336,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # -------------------------- #
         #  Everythin looks good !    #
         # -------------------------- #
-        self.create(data,None,wcs_,
+        self.create(data,None,wcs_,mask=mask,
                     background=background,
                     header=fits[index].header,
                     filename=filename,fits=fits,
@@ -356,7 +362,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         Void
         """
         # -- Check if you will not overwrite anything
-        if self.rawdata is not None and force_it is False:
+        if self._properties["rawdata"] is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
         # ********************* #
@@ -467,6 +473,14 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             self.sepobjects.set_catalogue(catalogue,force_it=True,reset=False)
             self.sepobjects.match_catalogue(deltadist=match_angsep)
 
+
+    def set_datamask(self, mask, update=True):
+        """ Attach a mask to the data. """
+        if mask is not None and np.shape(mask) != self.shape:
+            raise TypeError("the shape of the given mask does not match the data shape")
+        
+        self._side_properties["datamask"] = mask
+        
         
     def set_background(self,background,
                        doublepass=True,
@@ -840,7 +854,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # - Circle
         if aptype == "circle":
             return sep.sum_circle( eval("self.%s"%on), x, y, r_pixels,subpix=subpix,
-                            var=var,gain=gain,**kwargs)
+                            var=var,gain=gain, mask=self.datamask,**kwargs)
 
         # - Annulus
         if aptype == "circann":
@@ -851,7 +865,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             rin,rout = [annular_args[k] for k in ["rin","rout"]]
             sepout= sep.sum_circann(eval("self.%s"%on),x,y,rin,rout,
                                   r_pixels,subpix=subpix,
-                                  var=var,gain=gain,**kwargs)
+                                  var=var,gain=gain,mask=self.datamask,**kwargs)
         # - Ellipse
         elif aptype == "ellipse":
             if np.asarray([k is None for k in ellipse_args.values()]).any():
@@ -860,7 +874,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
             sepout= sep.sum_ellipse(eval("self.%s"%on),x,y,a,b,theta,
                                     r_pixels,subpix=subpix,
-                                    var=var,gain=gain,**kwargs)
+                                    var=var,gain=gain,mask=self.datamask,**kwargs)
         # - Elliptical Annulus
         elif aptype == "ellipan":
             if np.asarray([k is None for k in ellipse_args.values()]).any():
@@ -872,7 +886,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
             sepout= sep.sum_ellipan(eval("self.%s"%on),x,y,a,b,theta,rin,rout,
                                     r_pixels,subpix=subpix,
-                                    var=var,gain=gain,**kwargs)
+                                    var=var,gain=gain,mask=self.datamask,**kwargs)
 
         if syserr is not None:
             fl_,err_,flag_ = sepout
@@ -1047,7 +1061,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
     def _get_sep_extract_threshold_(self):
         """this will be used as a default threshold for sep_extract"""
-        print "_get_sep_extract_threshold_ called"
+        #print "_get_sep_extract_threshold_ called"
         
         if not hasattr(self,"_sepbackground"):
                 _ = self.get_sep_background(update_background=False)
@@ -1070,6 +1084,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
              ax=None,show=True,zoomon=None,zoom=200,zunits="pixels",
              show_sepobjects=False,propsep={},
              show_catalogue=False,proptarget={},
+             localcircle=[None,"arcsec"],
              add_colorbar=False,
              **kwargs):
         """
@@ -1201,7 +1216,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         # - add target
         pl_tgt = None if self.has_target() is False \
-          else self.display_target(ax,wcs_coords=False,
+          else self.display_target(ax,wcs_coords=False,localcircle=localcircle,
                                    **proptarget)
 
         if show_sepobjects and self.has_sepobjects():
@@ -1367,29 +1382,40 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ---------------------- #
     # - Plot-Displays      - #
     # ---------------------- #
-    def display_target(self,ax,wcs_coords=True,draw=True,**kwargs):
+    def display_target(self,ax,wcs_coords=True,draw=True,
+                       localcircle=[None,"arcsec"], circleprop={},
+                       **kwargs):
         """If a target is loaded, use this to display the target on the
         given ax"""
         if self.has_target() is False:
             print "No 'target' to display"
             return
+
+        if localcircle is None:
+            localcircle = [None,"arcsec"]
         # --------------------
         # - Fancy
         default_markerprop = {
             "marker":"s",
             "mfc":"w",
-            "mec":"k","mew":2,
+            "mec":"k",
+            "mew":2 if localcircle[0] is None else 0,
+            "ms":8 if localcircle[0] is None else 0,
             "zorder":12,
             "scalex":False,"scaley":False
             }
         prop = kwargs_update(default_markerprop,**kwargs)
-    
-        if wcs_coords:
-            pl = ax.plot(self.target.ra,self.target.dec,**prop)
-        else:
-            radec_pixel = self.coords_to_pixel(*self.target.radec)
-            pl = ax.plot(radec_pixel[0],radec_pixel[1],**prop)
 
+        x,y = [self.target.ra,self.target.dec] if wcs_coords else\
+          self.coords_to_pixel(*self.target.radec)
+        pl = ax.plot(x, y, **prop)
+
+        if localcircle is not None and localcircle[0] is not None:
+            from matplotlib.patches import Circle
+            r = self.units_to_pixels(localcircle[1]) * localcircle[0]
+            prop = kwargs_update(dict(lw=2, edgecolor="k", facecolor="None"), **circleprop)
+            ax.add_patch(Circle([x,y], r, **prop))
+            
         if draw:
             ax.figure.canvas.draw()        
         return pl
@@ -1495,14 +1521,6 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     def background(self):
         return self._properties["background"]
     
-    @background.setter
-    def background(self,value):
-        if self.background is not None and np.shape(value) != self.shape:
-            raise ValueError("'background' cannot change shape using this setter. ")
-        
-        self._properties['background'] = np.asarray(value)
-        self._update_data_()
-
     @property
     def backgroundmask(self):
         return self._derived_properties["backgroundmask"]
@@ -1614,16 +1632,12 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                    background=None, update=True):
         """ Change the instance fondamental: the rawdata """
         
-        self._properties["rawdata"]       = self._read_rawdata_(rawdata)
-        self._side_properties["datamask"] = mask
-        if self.has_datamask():
-            self._properties["rawdata"][self.datamask] = np.NaN
+        self._properties["rawdata"]   = self._read_rawdata_(rawdata)
+        self._properties["var"]       = variance
+        
+        if mask is not None:
+            self.set_datamask(mask)
 
-        # VARIANCE
-        self._properties["var"]          = variance
-        if self.has_datamask() and self.has_var():
-            self._properties["var"][self.datamask] = np.NaN
-            
         # BACKGROUND
         self.set_background(background, force_it=True, update=False)
         # --> update
@@ -1672,8 +1686,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if add_mask is not None:
             if np.shape(add_mask) != self.shape:
                 raise ValueError(" the input add_mask does not have the requested shape")
-            
             mask = mask + add_mask if mask is not None else add_mask
+            
         # ---------------
         # - masking sign tested
         self._derived_properties["backgroundmask"] = mask
@@ -1712,6 +1726,91 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                 
         self._derived_properties["data"] = self.rawdata - self.background
 
+
+class ImageBackground( BaseObject ):
+    """ """
+    PROPERTIES         = ["shape","imagedata"]
+    DERIVED_PROPERTIES = ["bkgd_image","bkgd_err"]
+
+    def __init__(self, shape):
+        """ """
+        self.__build__()
+        self.set_shape(shape)
+
+    # =================== #
+    #  Main Methods       #
+    # =================== #
+    def set_shape(self, shape):
+        """ """
+        self._properties["shape"] = shape
+
+    def set_imagedata(self, imagedata, masking=None):
+        """ Provide the image that is used to derive the background """
+        self._properties["imagedata"] = imagedata
+        if masking is not None:
+            self.imagedata[masking] = np.NaN
+
+            
+    def set_background(self, background):
+        """ """
+        
+
+
+    def derive_sep_background(self, dataimage, masking,
+                               bh=[64,200], bw=[64,200], fh=3,fw=3, ntrial=1000,
+                               set_it=True):
+        """ """
+        from sep import Background
+        self.set_imagedata(dataimage, masking)
+        self._derived_properties["prop_sepbackground"] = dict(mask=masking,bh=bh, bw=bw,
+                                                              fh=fh,fw=fw)
+        
+        if not np.any([(hasattr(p_,"__iter__") and len(p_)==2) for p_ in [bh, bw, fh,fw]]):
+            # - Single Case Measurement
+            b = Background(self.imagedata, masking,bw=bw,bh=bh, fh=fh,fw=fw)
+        else:
+            # - MultiTrial Case
+            def array_it(k):
+                return np.ones(ntrial)*k if not hasattr(k, "__iter__") or len(k)==1 \
+                  else np.random.randint(k[0], high=k[1], size=ntrial)
+            bh, bw = array_it(bh),array_it(bw)
+            fh, fw = array_it(fh),array_it(fw)
+            b = [Background(self.imagedata, masking, bw=bw_, bh=bh_, fh=fh_, fw=fw_)
+                     for bw_, bh_,fw_, fh_ in zip(bw, bh,fw, fh)]
+        return b
+            
+        
+        
+        
+    # =================== #
+    #  Properties         #
+    # =================== #
+    @property
+    def shape(self):
+        """ """
+        return self._properties["shape"]
+
+    @property
+    def imagedata(self):
+        """ """
+        return self._properties["imagedata"]
+        
+    @property
+    def back(self):
+        """ The Background Image. Derived by set() """
+        return self._derived_properties["bkgd_image"]
+    
+    @property
+    def back_err(self):
+        """ Expected error of on background Image """
+        return self._derived_properties["bkgd_err"]
+
+    @property
+    def prop_sepbackground(self):
+        """ Information about the SEP backgrounf input.
+        None if the current background is not an SEP background """
+        return self._derived_properties["prop_sepbackground"]
+ 
 #######################################
 #                                     #
 # Base Object Classes: PhotoPoint     #
@@ -1980,7 +2079,7 @@ class BasePhotoPoint( TargetHandler ):
     #  Plotter     #
     # ------------ #
     def display(self, ax, toshow="flux",
-                    function_of_time=False,
+                    function_of_time=False, show_name=True,
                     **kwargs):
         """This method enable to display the current point
         in the given matplotlib axes"""
@@ -1999,12 +2098,17 @@ class BasePhotoPoint( TargetHandler ):
         # -----------
         # - Fancy
         default_prop = dict(marker="o",ecolor="0.7",
-                        zorder=3)
+                            zorder=3)
         prop = kwargs_update(default_prop,**kwargs)
         # -----------
         # - Input
         x_ = self.lbda if not function_of_time else self.mjd
         pl = ax.errorbar(x_,y,yerr=dy,**prop)
+        if not function_of_time and show_name:
+            if x_==x_ and y==y:
+                ax.text(x_,y, self.bandname,
+                        va="bottom", ha="left", color="0.5",
+                            rotation=45)
         self._plot = {}
         self._plot["ax"] = ax
         self._plot["plot"] = pl

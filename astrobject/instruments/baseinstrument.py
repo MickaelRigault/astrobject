@@ -42,7 +42,7 @@ class Instrument( Image ):
         if "__iter__" not in dir(flux):
             return get_photopoint(lbda=self.lbda, flux=flux, var=var,
                             source="image",mjd=self.mjd,
-                            zp=self.mab0,bandname=self.bandpass.name,
+                            zp=self.mab0,bandname=self.bandname,
                             instrument_name=self.instrument_name)
         # -----------------------
         # - Several Photopoints\

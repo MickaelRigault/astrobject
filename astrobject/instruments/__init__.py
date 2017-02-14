@@ -7,6 +7,7 @@ import sdss
 import galex
 import snifs
 import hst
+import panstarrs
 import stella
 import ptf
 import ztf
@@ -17,4 +18,4 @@ import catalogues
 __all__ = ["instrument","baseinstrument",
            "catalogues",
            "sdss","galex","snifs",
-           "hst","stella","ptf"]
+           "hst","stella","ptf","panstarrs"]
