@@ -1779,9 +1779,6 @@ class ImageBackground( BaseObject ):
                      for bw_, bh_,fw_, fh_ in zip(bw, bh,fw, fh)]
         return b
             
-        
-        
-        
     # =================== #
     #  Properties         #
     # =================== #

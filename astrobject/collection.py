@@ -516,7 +516,7 @@ class ImageCollection( Collection, CatalogueHandler ):
         images = self.get_target_images(target=target, onflight=onflight, reload=False)
         
         photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius=radius,runits=runits,
-                                            **kwargs) for image_ in images], ids=self.coll.list_id)
+                                            **kwargs) for image_ in images], ids=self.list_id)
         photopoints.set_target(self.target)
         # ------------------------------
         # - Shall we delete the files ?
