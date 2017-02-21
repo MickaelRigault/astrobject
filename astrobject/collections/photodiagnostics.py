@@ -135,7 +135,28 @@ def taylor_mass_relation(mag_i, gi_color, distmpc):
 #   G-I PRIOR        #
 #                    #
 ######################
-def g_i_prior(x, image_norm=False):
+def gi_prior_snfhost(x):
+    """ """
+    return g_i_prior(x, which="snhost", image_norm=False)
+
+def gi_prior_lange(x):
+    """ """
+    return g_i_prior(x, which="lange14", image_norm=False)
+
+def gi_prior_flat(x, inrange=[-0.5,2]):
+    """ """
+    flagin = (x>inrange[0]) & (x<inrange[1])
+    p_ = np.zeros(len(x))
+    p_[flagin] = 1
+    return p_
+
+def gi_prior_normal(x, loc=0.7, scale=0.5):
+    """ """
+    return stats.norm.pdf(x, loc=loc, scale=scale)
+
+
+
+def g_i_prior(x, which="snhost", image_norm=False):
     """ prior pdf distribution following The g-i distribution
     given by Rebecca Lange et al 2014 (GAMA).
 
@@ -146,14 +167,19 @@ def g_i_prior(x, image_norm=False):
     array
     """
     p = PriorGmI()
+    p.set_prop_gaussians(**p.get_typical_prior(which))
     coef = 1. if not image_norm else p._Lange_plotamp
     return p.pdf(x) * coef
+
+
 
 LANGE_ETAL_IMAGE_LOC = '/Users/mrigault/Desktop/these/code_source/Data/Literature_Images/Lange14_g_i_distrib_019_124.png'
 class PriorGmI( Samplers ):
     """ Samplers object as Prior.
     From Lange et al 2014"""
 
+    PROPERTIES = ["mub", "mur", "sigmab", "sigmar", "b_coef"]
+    
     # =============== #
     #  Main Methods   #
     # =============== #
@@ -193,20 +219,51 @@ class PriorGmI( Samplers ):
             ax.legend(loc="upper right", fontsize="large")
         fig.figout(savefile=savefile)
         
-    def draw_samplers(self, nsamplers=None):
-        """ draw sampler and set then to self.samplers based on the binormal
-        distributions. """
-        if nsamplers is not None:
-            self.nsamplers = nsamplers
-            
-        s =  np.concatenate([stats.norm.rvs(size=self.nsamplers * self.blue_to_red_ratio,**self.prop_blue),
-                            stats.norm.rvs(size=self.nsamplers ,**self.prop_red)])
-        np.random.shuffle(s)
-        self.set_samplers(s[:self.nsamplers])
+    #def draw_samplers(self, nsamplers=None):
+    #    """ draw sampler and set then to self.samplers based on the binormal
+    #    distributions. """
+    #    if nsamplers is not None:
+    #        self.nsamplers = nsamplers
+    #        
+    #    s =  np.concatenate([stats.norm.rvs(size=self.nsamplers * self.blue_to_red_ratio,**self.prop_blue),
+    #                        stats.norm.rvs(size=self.nsamplers ,**self.prop_red)])
+    #    np.random.shuffle(s)
+    #    self.set_samplers(s[:self.nsamplers])
 
-    # ================= #
-    #   Properties      #
-    # ================= #
+    def set_prop_gaussians(self, mub, mur,
+                               sigmab, sigmar,
+                               b_coef):
+        """ Change the properties of the two gaussians parameters.
+        Parameters
+        ----------
+        mub, mur: [float, flat]
+            Central values of the blue and red gaussians
+
+        sigmab, sigmar: [float, float]
+            Dispersion of the ble and red gaussians
+
+        b_coef: [0<float<1] 
+            Amplitude of the blue gaussian with relative to the
+            red one.
+
+        Returns
+        -------
+        Void
+        """
+        self._properties["mub"], self._properties["sigmab"] = mub, sigmab
+        self._properties["mur"], self._properties["sigmar"] = mur, sigmar
+        self._properties["b_coef"] = b_coef
+
+
+    def get_typical_prior(self, which="snhost"):
+        """ Select pre made structure:
+        - snhost
+        - lange14
+        """
+        if which == "snhost":
+            return dict(mur=1.25, mub=0.85, sigmar=0.1, sigmab=0.3, b_coef=0.9)
+        if which == "lange14":
+            return dict(mur=0.85, mub=0.49, sigmar=0.15, sigmab=0.11, b_coef=0.7)
     # ================= #
     #   Properties      #
     # ================= #
@@ -219,27 +276,43 @@ class PriorGmI( Samplers ):
     @property
     def prop_blue(self):
         """ """
-        return dict(loc=0.85, scale=0.3) # dict(loc=0.49, scale=0.11)
+        # Lange Default: dict(loc=0.49, scale=0.11)
+        if self._properties["mub"] is None:
+            self._properties["mub"] = 0.85
+        if self._properties["sigmab"] is None:
+            self._properties["sigmab"] = 0.3
+            
+        return dict(loc   = self._properties["mub"],
+                    scale = self._properties["sigmab"]) 
     
     @property
     def prop_red(self):
         """ """
-        return dict(loc=1.25, scale=0.1) # dict(loc=0.85, scale=0.15)
+        # Lange Default: dict(loc=0.85, scale=0.15)
+        if self._properties["mur"] is None:
+            self._properties["mur"] = 1.25
+        if self._properties["sigmar"] is None:
+            self._properties["sigmar"] = 0.1
+            
+        return dict(loc   = self._properties["mur"],
+                    scale = self._properties["sigmar"]) 
 
     @property
     def coef_blue(self):
-        return 0.9 # works well for local
+        if self._properties["b_coef"] is None:
+            self._properties["b_coef"] = 0.9 # works well for local
+        return self._properties["b_coef"]
         #return 1-1./(self.blue_to_red_ratio + 1)
 
-    
+    """
     @property
     def blue_to_red_ratio(self):
-        """ """
         return 2.5
+    
     @property
     def _Lange_plotamp(self):
         return 50 * (self.blue_to_red_ratio + 1)
-    
+    """
     
     
 
@@ -260,7 +333,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
     """
     """
     PROPERTIES = []
-    SIDE_PROPERTIES = ["relation_magdisp"]
+    SIDE_PROPERTIES = ["relation_magdisp","gi_prior"]
     DERIVED_PROPERTIES = ["gi_samplers", "gi_priored_sample", "samplers_noprior"]
     
     def __init__(self, ppoint_g=None, ppoint_i=None,
@@ -333,8 +406,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
     # ----------- #
     #   PLOTTER   #
     # ----------- #
-
-    def show_details(self, savefile=None, show=True, 
+    def show_details(self, savefile=None, show=True, kind="Local",
                          **kwargs):
         """ Display and advanced figure showing the details on
         how the mass estimate is drawn
@@ -372,7 +444,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         axcolor.hist(self.gi_samplers.samplers, label=r"$\mathrm{Likelihood}$",**prop)
         
         # - prior
-        axcolor_prior.plot(x, g_i_prior(x)/g_i_prior(x).max(),
+        axcolor_prior.plot(x, self.gi_prior(x)/self.gi_prior(x).max(),
                            "k--", alpha=0.7, lw=2, scalex=False, zorder=3,
                            label=r"$\mathrm{Prior}$")
         # - Posterior
@@ -403,6 +475,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         ax.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize="xx-large")
         axcolor.set_xlabel(r"$g-i\ \mathrm{color\ [mag]}$", fontsize="xx-large")
         axmass.set_xlabel(r"$\log(\mathrm{M_*/M_{\odot}})$", fontsize="xx-large")
+        axmass.set_ylim(0, axmass.get_ylim()[-1])
 
 
         axcolor.set_xlim(-0.5,2)
@@ -412,7 +485,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         axcolor.set_ylim(0,axcolor.get_ylim()[1]*1.2)
 
         _ = [ax_.set_yticks([]) for ax_ in fig.axes]
-        fig.suptitle(r"$\mathrm{Derivation\ of\ the\ Local\ Stellar\ Mass:\ %s}$"%self.target.name,
+        fig.suptitle(r"$\mathrm{Derivation\ of\ the\ %s\ Stellar\ Mass:\ %s}$"%(kind,self.target.name),
                     fontsize="xx-large")
         
         fig.figout(savefile=savefile, show=show)
@@ -499,9 +572,16 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         self.gi_samplers.set_samplers(g_ - i_)
         # -- and draw the priored sampling (could be done automatically be here it is explicit)
         self._derived_properties["gi_priored_sample"] = \
-          self.gi_samplers.resample(self.nsamplers, prior=g_i_prior,
+          self.gi_samplers.resample(self.nsamplers, prior=self.gi_prior,
                                     xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=1e3)
-        
+
+    def change_gi_prior(self, prior, redraw=True):
+        """ Set a new prior function. 
+        The first argument of this function must be the g-i color"""
+        self._side_properties["gi_prior"] = prior
+        if redraw:
+            self.draw_samplers()
+            
     # =================== #
     # = Properties      = #
     # =================== #
@@ -558,12 +638,17 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
                 self._set_color_samplers_()
             
             self._derived_properties["gi_priored_sample"] = \
-              self.gi_samplers.resample(self.nsamplers,prior=g_i_prior,
+              self.gi_samplers.resample(self.nsamplers,prior=self.gi_prior,
                                         xrange=self.gi_samplers._default_sampling_xrange)
               
         return self._derived_properties["gi_priored_sample"]
 
-    
+    @property
+    def gi_prior(self):
+        """ Prior Function """
+        if self._side_properties["gi_prior"] is None:
+            self._side_properties["gi_prior"] = gi_prior_snfhost
+        return self._side_properties["gi_prior"]
     # --------------
     # - Taylor Stuff
     @property

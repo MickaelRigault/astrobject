@@ -713,8 +713,14 @@ def figout(fig,savefile=None,show=True,add_thumbnails=False,
         savefile = None
 
     if savefile is not None:
-        fig.savefig(savefile+'.png',dpi=dpi)
-        fig.savefig(savefile+'.pdf')
+        if not savefile.endswith(".pdf"):
+            extention = ".png" if not savefile.endswith(".png") else ""
+            fig.savefig(savefile+extention,dpi=dpi)
+            
+        if not savefile.endswith(".png"):
+            extention = ".pdf" if not savefile.endswith(".pdf") else ""
+            fig.savefig(savefile+extention)
+            
         if add_thumbnails:
             fig.savefig(savefile+"_thumb"+'.png',dpi=dpi/10.)
             

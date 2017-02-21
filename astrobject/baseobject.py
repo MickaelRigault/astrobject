@@ -271,10 +271,13 @@ class Samplers( BaseObject ):
         # -------------
         # - Samplers
         med,highmed,lowmed = self.get_estimate()
-        xrange = self.samplers.min()-lowmed,self.samplers.max()+highmed
-        if logscale:
-            xrange = np.log10(np.asarray(xrange))
-        x = np.linspace(xrange[0],xrange[1],1e4)
+        if not logscale:
+            xrange = self.samplers.min()-lowmed,self.samplers.max()+highmed
+        else:
+            xrange = np.log10(med)-np.abs((np.log10(med)-np.log10(med-lowmed)))*7,\
+              np.log10(med)+np.abs((np.log10(med)-np.log10(med+highmed)))*7
+            
+        x = np.linspace(xrange[0],xrange[1],1e3)
         
         if not self.has_samplers():
             warnings.warn("Samplers created for the plot method")

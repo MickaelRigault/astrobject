@@ -188,7 +188,7 @@ class ImageCollection( Collection, CatalogueHandler ):
     SIDE_PROPERTIES    = ["hostcollection"]
     DERIVED_PROPERTIES = []
     
-    def __init__(self,images=None,empty=False,catalogue=None, **kwargs):
+    def __init__(self, images=None, empty=False, catalogue=None, **kwargs):
         """
         """
         self.__build__()
@@ -487,28 +487,25 @@ class ImageCollection( Collection, CatalogueHandler ):
         Parameters:
         -----------
 
-        radius_kpc: [float]           The aperture photometry radius in kpc.
-                                      (kpc will be converted in pixels for every images)
-                                      
-                                      
-        - options -
+        radius, runits: [float, string]           
+            The aperture photometry radius and its associated unit.
 
-        target: [None/ AstroTarget]   If no target is given and a target has been set
-                                      (set_target) the current target will be used.
-                                      If you give here a target, it will use it *without*
-                                      changing the current target.
-                                      -> Error
-                                      This method raise a ValueError is no target accessible.
-                                      (see self.get_target_ids)
+        target: [None/ AstroTarget] -optional-
+            If no target is given and a target has been set
+            (set_target) the current target will be used.
+            If you give here a target, it will use it *without*
+            changing the current target.
+            -> Error
+            This method raise a ValueError is no target accessible.
+            (see self.get_target_ids)
 
-        onflight: [bool]              Use this to avoid to load the images in the current instance
-                                      If True, this will instead load a copy of the current instance
-                                      using 'get_target_collection' which will then be delaited.
-                                      -> Use this to save cach-memory once the method is finished.
+        onflight: [bool] -optional-
+            Use this to avoid to load the images in the current instance
+            If True, this will instead load a copy of the current instance
+            using 'get_target_collection' which will then be delaited.
+            -> Use this to save cach-memory once the method is finished.
         
-        -- other options --
-        
-        kwargs goes to get_target_photopoints (-> get_aperture), including notably:
+        ** kwargs goes to get_target_photopoints (-> get_aperture), including notably:
                aptype, subpix, ellipse_args, annular_args
 
            
@@ -519,7 +516,7 @@ class ImageCollection( Collection, CatalogueHandler ):
         images = self.get_target_images(target=target, onflight=onflight, reload=False)
         
         photopoints = PhotoPointCollection(photopoints=[image_.get_target_photopoint(radius=radius,runits=runits,
-                                            **kwargs) for image_ in images])
+                                            **kwargs) for image_ in images], ids=self.list_id)
         photopoints.set_target(self.target)
         # ------------------------------
         # - Shall we delete the files ?
@@ -652,7 +649,9 @@ class ImageCollection( Collection, CatalogueHandler ):
     # ========================== #
     def show_stamps(self, savefile=None, show=True,
                     bands=None, maxcol=3, zoom=50, zunit="arcsec",
-                    add_refellipse=True, scaleup=3, ellprop={}):
+                    localcircle=[None, "kpc"],
+                    add_refellipse=True, scaleup=3,
+                    ellprop={}, **kwargs):
         """ """
         from matplotlib.patches import Ellipse
         from .utils.mpladdon    import figout
@@ -674,8 +673,10 @@ class ImageCollection( Collection, CatalogueHandler ):
         for i,b_ in enumerate(bands):
             ax = fig.add_subplot(nrow, maxcol, i+1)
             im = self.get_image(b_)
-            im.show(ax=ax, zoomon="target", zoom=zoom*im.units_to_pixels("arcsec"),
-                        show=False)
+            im.show(ax=ax, zoomon="target", zoom=zoom*im.units_to_pixels(zunit),
+                    show=False, localcircle=localcircle, proptarget={"circleprop":ellprop},
+                    **kwargs)
+            
             if add_refellipse:
                 x,y,a,b,theta = self.host.get_ref_ellipse_in(b_)
                 # 2* since Ellipse in Matplotlib want diameter
@@ -684,14 +685,16 @@ class ImageCollection( Collection, CatalogueHandler ):
                                 **prop)
                 ell.set_clip_box(ax.bbox)
                 ax.add_patch(ell)
-                # - Cleaning
-                ax.text(0.95,0.95, b_, va="top", ha="right", transform=ax.transAxes,
-                        bbox=dict(facecolor=mpl.cm.binary(0.1,0.8), edgecolor="k"))
-                ax.set_xticks([])
-                ax.set_yticks([])
+            
                 # - Highlight reference
                 if b_ == self.host.refid:
                     [s_.set_linewidth(2) for s_ in ax.spines.values()]
+                    
+            # - Cleaning
+            ax.text(0.95,0.95, b_, va="top", ha="right", transform=ax.transAxes,
+                            bbox=dict(facecolor=mpl.cm.binary(0.1,0.8), edgecolor="k"))
+            ax.set_xticks([])
+            ax.set_yticks([])
         
         fig.figout(savefile=savefile, show=show)
         
@@ -1642,6 +1645,9 @@ class PhotoPointCollection( Collection ):
         if ax is None:
             fig = mpl.figure(figsize=[8,8])
             ax  = fig.add_axes([0.1,0.1,0.8,0.8])
+            ax.set_xlabel(r"Wavelength [$\AA$]" if not kwargs["function_of_time"] else "Time [MJD]",
+                              fontsize="large")
+            ax.set_ylabel(r"Flux [per $\lambda$]", fontsize="large")
         elif "imshow" not in dir(ax):
             raise TypeError("The given 'ax' most likely is not a matplotlib axes. "+\
                              "No imshow available")
@@ -1652,11 +1658,13 @@ class PhotoPointCollection( Collection ):
         if type(cmap) is str:
             cmap = eval("mpl.cm.%s"%cmap)
         colors = kwargs.pop("color",[cmap((i-np.min(self.lbdas))/(np.max(self.lbdas)-np.min(self.lbdas))) for i in self.lbdas])
-        prop = kwargs_update({"ms":10},**kwargs)
+        prop   = kwargs_update({"ms":10},**kwargs)
         # -------------
         # - Da Plot
         pl = [self.photopoints[id_].display(ax,toshow=toshow,color=c_,**prop)["plot"]
               for id_,c_ in zip(self.list_id,colors)]
+
+        
         # -------------
         # - Out
         self._plot['ax'] = ax
