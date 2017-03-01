@@ -2,11 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-
-
-
     
-from .baseinstrument import Catalogue, coordinates,units
+from .baseinstrument import Catalogue, coordinates, units
 # -- here load all the object that could be parsed
 from ..utils.tools import kwargs_update
 from ..utils.decorators import _autogen_docstring_inheritance, make_method
