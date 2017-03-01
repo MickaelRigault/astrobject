@@ -1,4 +1,2 @@
 propobject>=0.1.0
 astropy>=1.1.1
-astroquery>=0.3.0
-sep>=0.5.2
