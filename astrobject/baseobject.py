@@ -10,7 +10,7 @@ import numpy   as np
 from scipy import stats
 
 # - Astropy
-from astropy import units
+from astropy    import units
 
 # - PropObject
 from propobject import BaseObject
@@ -832,10 +832,9 @@ class WCSHandler( BaseObject ):
                     " Set force_it to True if you really known what you are doing")
 
         from .astrometry import _MotherWCS_,get_wcs
-        if _MotherWCS_ not in wcs.__class__.__mro__:
+        if wcs is not None and _MotherWCS_ not in wcs.__class__.__mro__:
             raise TypeError("The given wcs solution is not a astrobject WCS instance")
-        
-        self._side_properties["wcs"] = get_wcs(wcs)
+        self._side_properties["wcs"] = get_wcs(wcs) if wcs is not None else None
         
     # ================ #
     #    Properties    #

@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from sncosmo import get_bandpass
-
-from .baseinstrument import Catalogue, coordinates,units
+    
+from .baseinstrument import Catalogue, coordinates, units
 # -- here load all the object that could be parsed
 from ..utils.tools import kwargs_update
 from ..utils.decorators import _autogen_docstring_inheritance, make_method
@@ -222,6 +221,7 @@ class SDSSCatalogue( Catalogue ):
         #
         super(SDSSCatalogue,self).set_mag_keys(key_mag,key_magerr)
         if key_mag is not None:
+            from sncosmo import get_bandpass
             bandpass = get_bandpass("sdss%s"%key_mag[0])
             self.lbda = bandpass.wave_eff
     

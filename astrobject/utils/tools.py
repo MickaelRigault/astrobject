@@ -79,8 +79,7 @@ def fitsrec_to_dict(data):
 # - Conversion Tools        - #
 # --------------------------- #
 def flux_to_mag(flux,dflux,wavelength):
-    """
-    """
+    """ Converts fluxes (erg/s/cm2/A) into AB magnitudes """
     F_Lxlambda2  = flux * wavelength**2
     if dflux is None:
         return -2.5*np.log10(F_Lxlambda2) - 2.406, None

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from astropy.io import fits as pf
-from .baseinstrument import Instrument,get_bandpass
+from .baseinstrument import Instrument
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update
 __all__ = ["stella","STELLA_INFO"]
@@ -87,10 +87,6 @@ class STELLA( Instrument ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
-    @property
-    def bandpass(self):
-        # -- TO BE CHANGED
-        return get_bandpass("sdss%s"%self.bandname[0])
     # --------------
     # - Image Data
     @property
@@ -102,7 +98,7 @@ class STELLA( Instrument ):
     def bandname(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
-        return self.header["FILTER"]
+        return "sdss%s"%(self.header["FILTER"][0])
     
     @property
     def mab0(self):

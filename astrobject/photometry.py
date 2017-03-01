@@ -14,7 +14,8 @@ from astropy.io    import fits as pf
 from astropy.table import Table
 
 # - Internal (astrobject)
-from . import astrometry
+from .            import astrometry
+
 from propobject   import BaseObject
 from .baseobject  import TargetHandler, WCSHandler, Samplers, CatalogueHandler
 from .utils.shape import HAS_SHAPELY
@@ -450,7 +451,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     def set_wcs(self,wcs,force_it=False):
         """ Attach a wcs solution to the current object """
         super(Image, self).set_wcs(wcs, force_it=force_it)
-        self.wcs.set_offset(*self._dataslicing)
+        if self.has_wcs():
+            self.wcs.set_offset(*self._dataslicing)
         
     def set_catalogue(self,catalogue, force_it=False,
                       match_angsep=3*units.arcsec):

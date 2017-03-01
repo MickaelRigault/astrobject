@@ -3,13 +3,14 @@
 
 import warnings
 import numpy as np
-from sncosmo import get_bandpass
+
 
 # - astropy
 from astropy import coordinates,units
 from astropy.table.table import Table,TableColumns, Column
 from astropy.io import fits as pf
 from astropy.io import ascii
+
 # - local
 from .. import astrometry
 from ..photometry import Image, get_photopoint
@@ -134,6 +135,7 @@ class Instrument( Image ):
     @property
     def bandpass(self):
         """ bandpass object (from sncosmo) based on the bandname """
+        from sncosmo import get_bandpass
         return get_bandpass(self.bandname)
     
     @property
