@@ -16,11 +16,13 @@ sudo pip install astrobject
 
 The required packages will be installed automatically if you install astrobject using pip
 - astropy (pip install astropy)
-- astroquery (pip install astroquery)
-- sep (pip install sep)
+
+
 
 _Optional_
 - sncosmo (pip install sncosmo) _for bandpasses and lightcurve fitting_
+- sep (pip install sep)
 - shapely (pip install shapely) _for spatial test and vizualisation; Might be required when using Catalogues_
-- astLib (pip install astlib) _for PTF-like SCAM astrometry_
+- astroquery (pip install astroquery)
+- (astLib (pip install astlib) _for PTF-like SCAM astrometry_)
 
