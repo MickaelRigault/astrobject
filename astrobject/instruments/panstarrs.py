@@ -39,9 +39,9 @@ DATAINDEX = 0
 # - Instrument Info  - #
 # -------------------- #
     
-def panstarrs(warps_image, weight_image=None, **kwargs):
+def panstarrs(warps_image, weight_image=None, exptime_image=None, **kwargs):
     """ """
-    return PanSTARRS(warps_image,weightfilename=weight_image,
+    return PanSTARRS(warps_image,weightfilename=weight_image, exptimefilename=exptime_image,
                         **kwargs)
 
 def is_panstarrs_file(filename):
@@ -70,11 +70,12 @@ def which_obs_mjd(filename):
 
 class PanSTARRS( Instrument ):
     """ """
-    PROPERTIES = ["weightmap"]
+    PROPERTIES = ["weightmap","exptimemap"]
     instrument_name = "PanSTARRS"
     
     def __init__(self,filename=None, weightfilename=None,
-                maskfilename=None, background=None, astrotarget=None,
+                maskfilename=None, exptimefilename=None,
+                background=None, astrotarget=None,
                 data_index=0, dataslice0=None, dataslice1=None,
                  empty=False, **kwargs):
         """
@@ -112,9 +113,12 @@ class PanSTARRS( Instrument ):
 
         if weightfilename is not None:
             self.set_weightimage(weightfilename)
-
+            
+        if exptimefilename is not None:
+            self.set_exptimeimage(exptimefilename)
+            
         if maskfilename is not None:
-            self.set_maskdata(maskmap)
+            self.set_datamask(maskfilename)
             
         # - Set the target if any
         if astrotarget is not None:
@@ -139,9 +143,20 @@ class PanSTARRS( Instrument ):
         """
         self._properties["weightmap"] = PanSTARRS(weightmap, astrotarget=self.target, background=0)
 
-    def set_maskdata(self, maskmap):
-        mask = PanSTARRS(maskmap,  background=0)
-        super(PanSTARRS,self).set_maskdata(mask.rawdata)
+    def set_exptimeimage(self, exptimemap):
+        """ Attach the Exposure Time Maps of the Warps images. 
+        (Times images are necessary to get the accurate 'counts per second'
+        https://confluence.stsci.edu/display/PANSTARRS/PS1+Weight+image)
+        """
+        self._properties["exptimemap"] = PanSTARRS(exptimemap, astrotarget=self.target, background=0)._sourcedata
+        
+    def set_datamask(self, maskmap):
+        """ The filename of the data containing the mask or the mask itself"""
+        if type(maskmap) == str:
+            mask = PanSTARRS(maskmap,  background=0)
+            super(PanSTARRS,self).set_datamask(mask._sourcedata)
+        else:
+            super(PanSTARRS,self).set_datamask(maskmap)
         
     # ---------------------
     # - PS structure with wt
@@ -156,9 +171,34 @@ class PanSTARRS( Instrument ):
         return self.weightimage is not None
 
     @property
-    def rawdata(self):
+    def exptimeimage(self):
+        """ The weight map. (see set_weightimage())"""
+        return self._properties["exptimemap"]
+    
+    def has_exptimeimage(self):
+        """ Has the weight image been set? True means yes """
+        return self.exptimeimage is not None
+
+    @property
+    def exposuretime(self):
+        """ Effective exposure time. If you loaded a exptime image, this is its data. """
+        if not self.has_exptimeimage():
+            return super(PanSTARRS, self).exposuretime
+        
+        return self.exptimeimage
+
+    @property
+    def _sourcedata(self):
         """ The data in the PanStarrs images are not per second. """
-        return super(PanSTARRS,self).rawdata / self.exposuretime
+        return super(PanSTARRS,self).rawdata
+    
+    @property
+    def rawdata(self):
+        """ The data in the PanStarrs images are not per second but this is. """
+        # see https://confluence.stsci.edu/display/PANSTARRS/PS1+Image+Cutout+Service#PS1ImageCutoutService-Scriptedimagedownloadsandimagecutoutextractions
+        return self._sourcedata / self.exposuretime
+        #v_per_sec = self._bzero + self._bscale * self._sourcedata / self.exposuretime
+        #return self._boffset + self._bsoften * (10**(0.4*v) - 10**(-0.4*v))
     
     @property
     def var(self):
@@ -170,7 +210,30 @@ class PanSTARRS( Instrument ):
             return None
         # Since rawdata have to be devided by exptime -> variance byt exptime**2
         return self.weightimage.rawdata  / self.exposuretime 
-    
+
+    # ------------------
+    # Unusual PanSTARRS Stuffs
+    @property
+    def _bzero(self):
+        """ """
+        self.header["BZERO"]
+        
+    @property
+    def _bscale(self):
+        """ """
+        self.header["BSCALE"]
+        
+    @property
+    def _bsoften(self):
+        """ """
+        self.header["BSOFTEN"]
+        
+    @property
+    def _boffset(self):
+        """ """
+        self.header["BOFFSET"]
+
+        
     # ---------------------
     # - Generic Properties
     @property

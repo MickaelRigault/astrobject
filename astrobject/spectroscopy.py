@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 """This module gather the spectral-objects and there associated tools"""
 
-import numpy  as np
 import warnings
-from astropy.io import fits as pf
+import numpy  as np
 import matplotlib.pyplot as mpl
+
+from astropy.io import fits as pf
+
 from .baseobject import TargetHandler
 from .utils.tools import shape_ajustment
 

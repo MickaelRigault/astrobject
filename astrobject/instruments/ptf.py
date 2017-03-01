@@ -3,7 +3,7 @@
 import numpy as np
 from astropy.io import fits as pf
 from astropy import units
-from .baseinstrument import Instrument,get_bandpass
+from .baseinstrument import Instrument
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update
 
@@ -85,11 +85,6 @@ class PTF( Instrument ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
-    @property
-    def bandpass(self):
-        print "WARNING SDSS equivalent band used"
-        return get_bandpass("sdss%s"%self.bandname[0])
-    
     # --------------
     # - Image Data
     @property
@@ -101,7 +96,7 @@ class PTF( Instrument ):
     def bandname(self):
         if self.header is None:
             raise AttributeError("no header loaded ")
-        return self.header["FILTER"]
+        return "sdss%s"%(self.header["FILTER"][0])
 
     # --------------
     # - ZERO POINTS

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from astropy.io import fits as pf
-from .baseinstrument import Instrument,get_bandpass
+from .baseinstrument import Instrument
 from ..utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["sdss","SDSS_INFO"]
