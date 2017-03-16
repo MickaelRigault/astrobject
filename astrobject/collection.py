@@ -656,14 +656,15 @@ class ImageCollection( Collection, CatalogueHandler ):
         from matplotlib.patches import Ellipse
         from .utils.mpladdon    import figout
         
-        if not self.has_host():
-            raise AttributeError("Host not defined.")
-        
         if bands is None:
             bands = self.list_id
             
         if len(bands) < maxcol:
             maxcol == len(bands)
+
+        if add_refellipse and not self.host.has_refid():
+            warnings.warn("No Reference ID defined. No Reference ellipse available")
+            add_refellipse = False
             
         nrow = ( len(bands)-1 ) // maxcol + 1
         fig = mpl.figure(figsize=[10,3*nrow])
@@ -686,9 +687,9 @@ class ImageCollection( Collection, CatalogueHandler ):
                 ell.set_clip_box(ax.bbox)
                 ax.add_patch(ell)
             
-                # - Highlight reference
-                if b_ == self.host.refid:
-                    [s_.set_linewidth(2) for s_ in ax.spines.values()]
+            # - Highlight reference
+            if self.has_host() and b_ == self.host.refid:
+                [s_.set_linewidth(2) for s_ in ax.spines.values()]
                     
             # - Cleaning
             ax.text(0.95,0.95, b_, va="top", ha="right", transform=ax.transAxes,
@@ -832,7 +833,7 @@ class ImageCollection( Collection, CatalogueHandler ):
     # ------------------ #
     def has_host(self):
         """ Tests if a host has been set"""
-        return self.host is not None
+        return self._side_properties["hostcollection"] is not None
     
     @property
     def host(self):

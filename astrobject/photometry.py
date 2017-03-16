@@ -329,7 +329,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             dataslice0 = [0,-1]
         if dataslice1 is None:
             dataslice1 = [0,-1]
-    
+            
         data = fits[index].data[dataslice0[0]:dataslice0[1],
                                 dataslice1[0]:dataslice1[1]]
         self._build_properties["dataslice0"] = dataslice0
