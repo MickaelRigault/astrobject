@@ -16,6 +16,7 @@ sudo pip install astrobject
 
 The required packages will be installed automatically if you install astrobject using pip
 - astropy (pip install astropy)
+- propobject (pip install propobject)
 
 
 
