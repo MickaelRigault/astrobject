@@ -1186,7 +1186,7 @@ class SepObject( PhotoMap ):
         return [psf_a,np.std(a_clipped)/m],[psf_b,np.std(t_clipped)/m],\
         [psf_t,np.std(t_clipped)/m]
         
-    def get_detected_ellipses(self,scaleup=2.5, mask=None, contours=False):
+    def get_detected_ellipses(self, scaleup=2.5, mask=None, contours=False):
         """
         Get the matplotlib Patches (Ellipse) defining the detected object. You can
         select the returned ellipses using the apply_catmask, stars_only,
@@ -1204,9 +1204,15 @@ class SepObject( PhotoMap ):
         
         # -------------
         # - Properties
-        ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
-                        t*units.radian.in_units("degree"))
-                for x,y,a,b,t in self.get_ellipse_values(mask=mask).T]
+        if not hasattr(mask, "__iter__") or len(mask)==1:
+            x,y,a,b,t = self.get_ellipse_values(mask=mask)
+            ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
+                        t*units.radian.in_units("degree"))]
+        else:
+            ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
+                            t*units.radian.in_units("degree"))
+                    for x,y,a,b,t in self.get_ellipse_values(mask=mask).T]
+                
         if not contours:
             return ells
         from ...utils.shape import patch_to_polygon

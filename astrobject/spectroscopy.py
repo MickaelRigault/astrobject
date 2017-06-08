@@ -714,9 +714,9 @@ class Spectrum( BaseSpectrum ):
 
         # ----------------
         # - Input Tests
-        self.header.update(self._build_properties['header_npix'],  npix, "")
-        self.header.update(self._build_properties['header_step'],  step, "")
-        self.header.update(self._build_properties['header_start'], start,"")
+        self.header.set(self._build_properties['header_npix'],  npix, "")
+        self.header.set(self._build_properties['header_step'],  step, "")
+        self.header.set(self._build_properties['header_start'], start,"")
         self._load_lbda_()
 
     @property

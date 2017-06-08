@@ -615,7 +615,7 @@ class ImageCollection( Collection, CatalogueHandler ):
 
 
         return self.host.get_photopoints(scaleup=scaleup, verbose=verbose,
-                                         force_refid_ellipse=force_refid_ellipse,
+                                         force_ref_ellipse=force_ref_ellipse,
                                           **kwargs)
     
     # ========================== #

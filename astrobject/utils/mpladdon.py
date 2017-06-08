@@ -704,7 +704,7 @@ def vspan(ax,minvalue,maxvalue,ymin=None,ymax=None,
 # ========================== #
 @make_method(mpl.Figure)
 def figout(fig,savefile=None,show=True,add_thumbnails=False,
-           dpi=200):
+           dpi=200, close=True):
     """This methods parse the show/savefile to know if the figure
     shall the shown or saved."""
     
@@ -724,9 +724,12 @@ def figout(fig,savefile=None,show=True,add_thumbnails=False,
         if add_thumbnails:
             fig.savefig(savefile+"_thumb"+'.png',dpi=dpi/10.)
             
+        if close: mpl.close(fig)
+            
     elif show:
         fig.canvas.draw()
         fig.show()
+        
         
 
 @make_method(mpl.Figure)

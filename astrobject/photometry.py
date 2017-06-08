@@ -313,9 +313,10 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         #  fits file and wcs         #
         # -------------------------- #
         #try:
-        fits = pf.open(filename,memmap=True)
-       # except:
-       #     raise TypeError("'filename' cannot be open by pyfits.")
+        
+        fits = pf.open(filename, memmap=True)
+        if fits._file.strict_memmap:
+            fits = pf.open(filename, memmap=False)
 
         try:
             wcs_ = astrometry.wcs(filename,extension=index)
@@ -325,13 +326,17 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ---------- #
         # - Data   - #
         # ---------- #
+        #if dataslice0 is None and dataslice1 is None:
+        #    _slicing = False
+        
         if dataslice0 is None:
             dataslice0 = [0,-1]
         if dataslice1 is None:
             dataslice1 = [0,-1]
-            
+
         data = fits[index].data[dataslice0[0]:dataslice0[1],
                                 dataslice1[0]:dataslice1[1]]
+            
         self._build_properties["dataslice0"] = dataslice0
         self._build_properties["dataslice1"] = dataslice1            
         # -------------------------- #
@@ -1326,7 +1331,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         return self._plot
 
 
-    def show_background(self,savefile=None,show=True,
+    def show_background(self,savefile=None,show=True, logscale=True,
                         **kwargs):
         """
         """
@@ -1337,7 +1342,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         # ----------- #
         # - Where     #
-        fig  = mpl.figure(figsize=[12,6])
+        fig  = mpl.figure(figsize=[10,5])
         axB  = fig.add_axes([0.1, 0.1,0.4,0.8])
         axM  = fig.add_axes([0.52,0.1,0.4,0.8])
         
@@ -1354,8 +1359,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         axM.set_xlabel("x",fontsize = "x-large")
         axB.set_ylabel("y",fontsize = "x-large")
         # -- titles
-        axB.set_title(r"$\mathrm{background}$",fontsize = "xx-large")
-        axM.set_title(r"$\mathrm{masked\ rawdata\ (log)\ used\ to\ create\ the\ background}$",fontsize = "xx-large")
+        axB.set_title(r"$\mathrm{background}$",fontsize = "large")
+        axM.set_title(r"$\mathrm{masked\ rawdata\ %s used\ to\ create\ the\ background}$"%("(log)\ " if logscale else ""),fontsize = "large")
         
         if "logscale" in kwargs.keys():
             print "No logscale option available for show_background."
@@ -1364,7 +1369,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # - Do It     #
         _plotb  = self.show("background",ax=axB,logscale=False,
                         show=False,savefile=None,**prop)
-        _plotbm = self.show(backgroudsource,ax=axM,logscale=True,
+        _plotbm = self.show(backgroudsource,ax=axM,logscale=logscale,
                         show=False,savefile=None,**prop)
         
         # ----------- #
@@ -1373,6 +1378,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ----------- #
         # - Recordit
         # -- Save the data -- #
+        axM.set_yticklabels([])
         self._plot["figure"] = fig
         self._plot["axes"]   = [axB,axM]
         self._plot["imshows"] = [_plotb["imshow"],_plotbm["imshow"]]
@@ -1380,7 +1386,15 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         fig.figout(savefile=savefile,show=show)
         
         return self._plot
+
+    def show_backgroundresidual(self, **kwargs):
+        """ """
+        backgroudsource = self.data.copy()
+        if self.backgroundmask is not None:
+            backgroudsource[self.backgroundmask] = np.NaN
+        return self.show(backgroudsource, **kwargs)
     
+        
     # ---------------------- #
     # - Plot-Displays      - #
     # ---------------------- #

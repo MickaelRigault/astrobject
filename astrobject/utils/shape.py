@@ -120,10 +120,9 @@ def draw_polygon(ax,polygon_,**kwargs):
     # - Patching
     if type(polygon_) is polygon.Polygon:
         patch = polygon_to_patch(polygon_,**prop)
-        ax.add_patch(patch)
+        return ax.add_patch(patch)
     elif type(polygon_) is multipolygon.MultiPolygon:
-        for p_ in polygon_:
-            draw_polygon(ax,p_,**prop)
+        return [draw_polygon(ax,p_,**prop) for p_ in polygon_]
     else:
         raise TypeError("Only Polygon implemented")
 
