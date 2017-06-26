@@ -531,7 +531,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         # If so len(indexmask) would be greater. Hence we run a slower, but accurate technique
         if len(indexmask)>len(catindex[bool_]):
             warnings.warn("At least one catalogue entry has several index matched. First used  ")
-            return np.asarray([self.catmatch["idx"][np.argwhere(self.catmatch["idx_catalogue"]==i)[np.argmin(self.catmatch["angsep_arcsec"][self.catmatch["idx"]==i])]][0]
+            return np.asarray([self.catmatch["idx"][np.argwhere(self.catmatch["idx_catalogue"]==i)[np.argmin(self.catmatch["angsep_arcsec"][self.catmatch["idx_catalogue"]==i])]][0]
                 for i in catindex[bool_]])
                     
         return np.concatenate(self.catmatch["idx"][indexmask])

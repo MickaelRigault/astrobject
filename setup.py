@@ -13,7 +13,7 @@ MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/astrobject/'
 LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/astrobject/tarball/0.5'
-VERSION = '0.5.2'
+VERSION = '0.5.3'
 
 try:
     from setuptools import setup, find_packages
@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     if _has_setuptools:
         packages = find_packages()
-        print packages
+        print(packages)
     else:
         # This should be updated if new submodules are added
         packages = [
