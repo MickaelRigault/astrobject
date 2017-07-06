@@ -722,6 +722,65 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                                            runits=runits, max_galdist=max_galdist)
         
         return np.concatenate(self.get_idx_aperture(idx, scaleup=scaleup, **kwargs))
+
+
+    def get_noise_aperture(self, radius, runits="arcsec", ncall=1000,
+                            sourcemask=None,
+                            rangex=None, rangey=None, scaleup=4, **kwargs):
+        """ Measure the aperture photometry on the "noise" part of the image.
+        The "noise" is defined as area remaining after  masking-out of 
+        the SEP detected object with a scaling up of "scaleup".
+
+        Parameters
+        ----------
+        radius: [float]            
+            Size of the circle radius.
+            (This is used only if aptype is circle)
+                                   
+        runits: [str/astropy.units] -optional-
+            The unit of the radius (used to convert radius in pixels)
+
+        ncall: [int] -optional-
+            Number of random aperture taken.
+            
+        sourcemask: [2D bool array or None] -optional-
+            Boolean Mask that will mask out the sources. 
+            Area not removed by this mask will be used to measure the
+            "noise" apertures.
+            If None, the derive_sepmask() method will be used. 
+                     See scaleup option
+            
+        rangex, rangey: [array or None], [array or None]
+            If you want to exclude the outer part of the image, 
+            given the range of x and x pixel to be considered
+
+        scaleup: [float] -optional-
+            Scaling up of the SEP ellipses that should be masked out.
+            - Used only if sourcemask is not provided -
+
+
+        **kwargs goes to get_aperture()
+
+        Returns
+        -------
+        List of [Flux, Error, flag] // (List of get_aperture returns)
+        """
+        if sourcemask is None:
+            sourcemask = self.derive_sepmask( r=scaleup )
+        # - Range parsing 
+        if rangex is None: rangex=[0, self.shape[1]]
+        if rangey is None: rangey=[0, self.shape[0]]
+        if rangex[0] is None: rangex[0] = 0
+        if rangey[0] is None: rangey[0] = 0
+        if rangex[1] is None: rangex[1] = self.shape[1]
+        if rangey[1] is None: rangey[1] = self.shape[0]
+
+        overtry= 5
+        x = np.random.uniform(rangex[0],rangex[1],size=(ncall*overtry))
+        y = np.random.uniform(rangey[0],rangey[1],size=(ncall*overtry))
+        i_in = np.random.choice([i for i in range(ncall*overtry) if not sourcemask[y[i],x[i]]],
+                         size=ncall)
+        return im.get_aperture(x[i_in], y[i_in], radius, runits, **kwargs)
     
     def get_idx_aperture(self, idx, scaleup=2.5, **kwargs):
         """ give the index [list of] of an sep's object(s)
@@ -858,6 +917,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ----------------------
         # - GAIN MEANS Conversion factor between data array units and poisson counts,
         # gain = ADU per Electron, data = ADU/s
+        
         # - Circle
         if aptype == "circle":
             return sep.sum_circle( eval("self.%s"%on), x, y, r_pixels,subpix=subpix,
@@ -2185,8 +2245,8 @@ class BasePhotoPoint( TargetHandler ):
     def bandname(self):
         return self._properties["bandname"]
     
-    @bandname.setter
-    def bandname(self,value):
+    def set_bandname(self,value):
+        """ Change the name of the bandname."""
         if value is not None:
             if type(value) != str and type(value) != np.string_:
                 raise TypeError("The bandname must be a string", type(value))

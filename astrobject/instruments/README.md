@@ -144,3 +144,106 @@ The inheritance channel is as follow:
 Image (from photometry.py) -> Instrument (from instruments/baseinstruments.py) -> NEWINST
 
 
+# Example WISE:
+```
+__all__  = ["wise", "WISE_INFO"]
+
+WISE_INFO = {"bands":["w1","w2","w3","w4"],
+"w1":{}}
+
+# -------------------- #
+# - Instrument Info  - #
+# -------------------- #
+
+import numpy as np
+from astropy.io import fits as pf
+from .baseinstrument import Instrument
+from ..utils.tools import kwargs_update
+
+
+DATAINDEX = 0
+
+
+def wise(*args,**kwargs):
+    return WISE(*args,**kwargs)
+
+def is_wise_file(filename):
+    """This test if the input file is a WISE one"""
+    return pf.getheader(filename).get("ORIGIN") == "SDSS"
+
+def which_band_is_file(filename):
+    """This resuts the band of the given file if it is a
+    sdss one"""
+    if not is_wise_file(filename):
+        return None
+    return pf.getheader(filename).get("FILTER")
+
+def which_obs_mjd(filename):
+    """ read the sdss-filename and return the
+    modified julian date """
+    if not is_wise_file(filename):
+        return None
+    return get_mjd(pf.getheader(filename))
+
+#
+#   def _get_default_background_(self,*args,**kwargs):
+            return np.zeros(np.shape(self.rawdata))
+
+#  data, rawdata, background
+#  data = rawdata - background
+
+
+class WISE( Instrument ):
+    """ """
+    instrument_name = "WISE"	
+    @property
+    def var(self):
+        """ - Not mandatory this is the variance image - """
+	    return YOUCOULDFINDAWAYDATAINDEX
+	# You could add any other thing this way.
+	# E.G. "sky"   :
+	# At the beginning of the class add PROPERTIES = ["sky"]
+    # @property
+	# def sky(self):
+	#   """ This is the sky 2D image"""
+	#   return self._properties['sky']
+    # def set_sky(self, 2Diamge):
+	#       """ """
+	#       self._properties['sky'] = 2Diamge
+
+
+    # -- Derived values
+	@property
+	def exposuretime(self):
+	     return FINDAWAY
+
+	@property
+    def mab0(self):
+          return FINDAWAY
+
+    @property
+    def bandname(self):
+	     if self._properties['bandname'] is None:
+                  self._properties['bandname'] = FINDAWAY
+	     return self._properties['bandname']
+
+    @property
+    def mjd(self):
+        """This is the Modify Julien Date at the start of the Exposure"""
+        return self.fits[0].header["EXPSTART"]
+
+
+    @property
+    def _gain(self):
+        return 1.
+
+    @property
+    def _dataunits_to_electron(self):
+        """The gain converts ADU->electron. The Data shouls be in ADU/s"""
+        return self._gain * self.exposuretime
+    
+    @property
+    def mjd(self):
+        raise NotImplementedError("'mjd' (Modified Julian Date) must be implemented")
+	
+```

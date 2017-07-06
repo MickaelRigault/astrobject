@@ -63,7 +63,9 @@ class GALEX( Instrument ):
     """
     Class Build to use GALEX 
     """
-    PROPERTIES = ["sky"]
+    PROPERTIES         = ["sky"]
+    SIDE_PROPERTIES    = []
+    DERIVED_PROPERTIES = []
     
     instrument_name = "GALEX"
 

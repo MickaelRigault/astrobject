@@ -41,8 +41,7 @@ def hst(*args,**kwargs):
 
 def is_hst_file(filename):
     """This test if the given file is an HST one"""
-    return True if pf.getheader(filename).get("TELESCOP") == "HST" \
-      else False
+    return pf.getheader(filename).get("TELESCOP") == "HST" 
 
 def which_band_is_file(filename):
     """
