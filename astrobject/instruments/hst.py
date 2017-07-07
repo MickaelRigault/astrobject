@@ -168,9 +168,12 @@ class HST( Instrument ):
     
     @property
     def bandname(self):
-        if self.header is None:
-            raise AttributeError("no header loaded ")
-        return self.fits[0].header["FILTER"]
+        """ Bandname of the instrument. Change it using set_bandname() """
+        if self._properties['bandname'] is None:
+            if self.header is None:
+                raise AttributeError("no header loaded ")
+            self._properties['bandname'] = self.fits[0].header["FILTER"]
+        return self._properties['bandname']
 
     # --------------------
     # - Band Information

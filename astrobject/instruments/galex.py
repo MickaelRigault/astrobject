@@ -254,9 +254,11 @@ class GALEX( Instrument ):
     # ================== #        
     @property
     def bandname(self):
-        """ band of the image. GALEX bands are assimilated to SDSS' ones"""
-        return "fuv" if "-fd-" in self.filename else "nuv" if "-nd-" in self.filename \
-            else "unknown"
+        """ band of the instrument. Change it using set_bandname() """
+        if self._properties['bandname'] is None:
+            self._properties['bandname'] "fuv" if "-fd-" in self.filename else "nuv" if "-nd-" in self.filename \
+              else "unknown"
+        return self._properties['bandname']
 
     @property
     def mjd(self):

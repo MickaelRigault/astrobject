@@ -243,7 +243,9 @@ class PanSTARRS( Instrument ):
     @property
     def bandname(self):
         """ band of the image. """
-        return "ps1.%s"%self.header.get("HIERARCH FPA.FILTER",None).split(".")[0]
+        if self._properties['bandname'] is None:
+            self._properties['bandname'] = "ps1.%s"%self.header.get("HIERARCH FPA.FILTER",None).split(".")[0]
+        return self._properties['bandname']
 
     @property
     def mjd(self):

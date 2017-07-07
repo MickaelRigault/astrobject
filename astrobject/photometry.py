@@ -2243,6 +2243,7 @@ class BasePhotoPoint( TargetHandler ):
         
     @property
     def bandname(self):
+        """ bandname associated to the image (change it using set_bandname()) """
         return self._properties["bandname"]
     
     def set_bandname(self,value):

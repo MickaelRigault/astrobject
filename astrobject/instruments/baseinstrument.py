@@ -130,7 +130,9 @@ class Instrument( Image ):
     # - Band Information
     @property
     def bandname(self):
-        raise NotImplementedError("'band' must be implemented")
+        if self._properties['bandname'] is None:
+            raise NotImplementedError("'band' must be implemented")
+        return self._properties['bandname']
     
     @property
     def bandpass(self):

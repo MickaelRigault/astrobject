@@ -233,9 +233,11 @@ class SDSS( Instrument ):
     # - Band Information
     @property
     def bandname(self):
-        if self.header is None:
-            raise AttributeError("no header loaded ")
-        return "sdss"+self.header["FILTER"]
+        if self._properties['bandname'] is None:
+            if self.header is None:
+                raise AttributeError("no header loaded ")
+            self._properties['bandname'] = "sdss"+self.header["FILTER"]
+        return self._properties['bandname']
 
     @property
     def mjd(self):
