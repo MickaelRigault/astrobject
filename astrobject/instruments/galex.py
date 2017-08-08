@@ -256,7 +256,7 @@ class GALEX( Instrument ):
     def bandname(self):
         """ band of the instrument. Change it using set_bandname() """
         if self._properties['bandname'] is None:
-            self._properties['bandname'] "fuv" if "-fd-" in self.filename else "nuv" if "-nd-" in self.filename \
+            self._properties['bandname'] = "fuv" if "-fd-" in self.filename else "nuv" if "-nd-" in self.filename \
               else "unknown"
         return self._properties['bandname']
 
