@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import os
+import warnings
 import numpy as np
     
 from .baseinstrument import Catalogue, coordinates, units
@@ -39,9 +40,116 @@ def stellar_density( catalogue, mask=None,
     skyradec = coordinates.SkyCoord(ra=ra,dec=dec, unit="deg")
     
     return np.bincount(skyradec.search_around_sky(skyradec,angdist)[0])
+
+
+
+
+#################################
+#                               #
+# BASIC: PANSTARRS Catalogue    #
+#                               #
+#################################
+def panstarrs_query(ra_deg, dec_deg, rad_deg,
+                    mindet=1, 
+                    maxsources=10000,
+                    server=('https://archive.stsci.edu/'+
+                            'panstarrs/search.php')): 
+    """
+    Query Pan-STARRS DR1 @ MAST
+    
+    Parameters
+    -----------
+    ra_deg, dec_deg, rad_deg: [floats]
+        RA, Dec, field  radius in degrees
+        
+    mindet: [int] -optional-
+        minimum number of detection
+
+    maxsources: [int] -optional-
+        maximum number of sources
+
+    server: [string] -optional-
+        servername (url)
+
+    Returns
+    -------
+    astropy.table object
+    """
+    import requests
+    from astropy.io.votable import parse_single_table
+    
+    r = requests.get(server, 
+    params= {'RA': ra_deg, 'DEC': dec_deg, 
+             'SR': rad_deg, 'max_records': maxsources, 
+             'outputformat': 'VOTable', 
+             'ndetections': ('>%d' % mindet)}) 
+ 
+    # write query data into local file
+    filename = "tmp_panstarrs.xml"
+    outf = open(filename, 'w') 
+    outf.write(r.text) 
+    outf.close()
+    # parse local file into astropy.table object 
+    data = parse_single_table(filename)
+    
+    # cleaning the local file
+    try:
+        os.remove(filename)
+    except:
+        warnings.warn("an error might have occur. No tmp .xml file to remove for panstarrs.")
+    return data.to_table(use_names_over_ids=True) 
+
+
+def fetch_panstarrs_catalogue(center, radius, column_filters={}, **kwargs):
+    """ Fetch the Pan-STARRS DR1 catalogue from MAST
+    (see panstarrs_query)
+    
+    Parameters
+    -----------
+    center: [string] 'ra dec'
+        position of the center of the catalogue to query.
+    
+    radius: [string] 'value unit'
+        radius of the region to query. For instance '1d' means a
+        1 degree raduis.
+        *only degree supported.*
+        
+    // Not supported yet 
+    column_filters:   [dict] -optional-
+        Selection criterium for the queried catalogue. 
+    //
+
+    **kwargs goes to panstarrs_query:
+    mindet: [int] -optional-
+        minimum number of detection
+
+    maxsources: [int] -optional-
+        maximum number of sources
+
+    server: [string] -optional-
+        servername (url)
+
+    Returns
+    -------
+    astropy.table object"""
+    if not radius.endswith("d"):
+        raise ValueError("radius %s should be given in radius, hence finihsing by 'd'"%radius)
+    else:
+        radius = float(radius.replace("d",""))
+
+    _ = kwargs.pop("extracolumns",None)
+    ra, dec = np.asarray(center.split(), dtype="float")
+    table = panstarrs_query(ra,dec, radius, **kwargs)
+
+    cat = PanSTARRSCatalogue(None)
+    cat.create(table ,None, key_ra="raMean",key_dec="decMean")
+    return cat
+
+class PanSTARRSCatalogue( Catalogue ):
+    source_name = "panstarrs"
     
 
-
+    
 #################################
 #                               #
 # All Sky GAIA: Catalogue       #

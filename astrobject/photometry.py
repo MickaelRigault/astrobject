@@ -2120,7 +2120,7 @@ class BasePhotoPoint( TargetHandler ):
         self._side_properties["zpsys"] = zpsys
         self.mjd = mjd
         self.zp = zp
-        self.bandname = bandname
+        self.set_bandname(bandname)
         self._update_()
 
     
