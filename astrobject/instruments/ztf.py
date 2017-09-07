@@ -18,6 +18,7 @@ class ZTF( Instrument ):
     ZTF observations"""
     
     instrument_name = "ZTF"
+    INFO            = ZTF_INFO
     
     def __build__(self,data_index=0):
         """

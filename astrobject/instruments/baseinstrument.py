@@ -17,13 +17,19 @@ from ..photometry import Image, get_photopoint
 from ..baseobject import BaseObject, WCSHandler
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update, mag_to_flux, load_pkl, dump_pkl
-from ..utils import shape
+from ..utils       import shape
 
 __all__ = ["Instrument"]
 
 class Instrument( Image ):
     """
     """
+    PROPERTIES         = ["bandname"]
+    DERIVED_PROPERTIES = ["bandpass"]
+    
+    instrument_name = "TO_BE_DEFINED"
+    INFO            = {} # set one
+    
     def __build__(self,data_index=0):
         """This is a slightly advanced Image object"""
         super(Instrument,self).__build__(data_index=data_index)
@@ -126,6 +132,7 @@ class Instrument( Image ):
     # =========================== #
     # = Properties and Settings = #
     # =========================== #
+    
     # ------------------
     # - Band Information
     @property
@@ -134,11 +141,51 @@ class Instrument( Image ):
             raise NotImplementedError("'band' must be implemented")
         return self._properties['bandname']
     
+    def set_bandname(self, value, reset_bandpass=True):
+        """ Change the name of the bandname.
+        
+        """
+        if value is not None:
+            if type(value) != str and type(value) != np.string_:
+                raise TypeError("The bandname must be a string", type(value))
+        
+        self._properties["bandname"] = value
+        if reset_bandpass:
+            self._derived_properties["bandpass"] = None
+        
     @property
     def bandpass(self):
-        """ bandpass object (from sncosmo) based on the bandname """
-        from sncosmo import get_bandpass
-        return get_bandpass(self.bandname)
+        """ Object containing the basic information associated to the bandname """
+        # - No bandname ?
+        if self._derived_properties["bandpass"] is not None:
+            return self._derived_properties["bandpass"]
+        
+        if self.bandname is None:
+            raise AttributeError("No bandname given")
+        
+        # - Should this use sncosmo
+        try:
+            from sncosmo import get_bandpass
+            has_sncosmo = True
+        except ImportError:
+            warnings.warn("sncosmo is not installed. Could not access the bandpass")
+            has_sncosmo = False
+            
+        if has_sncosmo:
+            try:
+                self._derived_properties["bandpass"] = get_bandpass(self.bandname)
+                use_default_bandpass = False
+            except:
+                use_default_bandpass = True
+        else:
+            use_default_bandpass = True
+            
+        if use_default_bandpass:
+            wave_eff = self.INFO[self.bandname]["lbda"] \
+              if self.bandname in self.INFO else np.NaN
+            self._derived_properties["bandpass"] = _DefaultBandpass_(self.bandname, wave_eff)
+            
+        return self._derived_properties["bandpass"]
     
     @property
     def lbda(self):
@@ -1290,3 +1337,25 @@ class Catalogue( WCSHandler ):
                           np.asarray(self.fovcontours.exterior.xy).T]).T
         # switch ra and dec ;  checked
         return shape.get_contour_polygon(x,y)
+
+    
+############################################
+#                                          #
+# Backup Plan if no SNCOSMO                #
+#                                          #
+############################################
+    
+class _DefaultBandpass_( BaseObject ):
+    """ """
+    PROPERTIES = ["bandname", "wave_eff"]
+    def __init__(self, bandname, wave_eff):
+        """ """
+        self._properties["bandname"] = bandname
+        self._properties["wave_eff"] = wave_eff
+
+    @property
+    def name(self):
+        return self._properties["bandname"]
+    @property
+    def wave_eff(self):
+        return self._properties["wave_eff"]

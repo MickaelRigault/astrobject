@@ -338,3 +338,12 @@ if _HAS_ASTLIB_:
         def pix_indeg(self):
             return  self.getPixelSizeDeg() * units.degree
         
+################################
+#                              #
+#   Astrometry.net Tools       #
+#                              #
+################################
+def derive_astrometry(data):
+    """ """
+    
+    

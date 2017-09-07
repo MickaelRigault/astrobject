@@ -177,7 +177,8 @@ class SDSS( Instrument ):
     
     """
     instrument_name = "SDSS"
-
+    INFO            = SDSS_INFO
+    
     PROPERTIES         = []
     SIDE_PROPERTIES    = []
     DERIVED_PROPERTIES = ["sky"]

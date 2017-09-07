@@ -68,7 +68,8 @@ class GALEX( Instrument ):
     DERIVED_PROPERTIES = []
     
     instrument_name = "GALEX"
-
+    INFO            = GALEX_INFO
+    
     def set_sky(self, filename=None, skydata=None,
                 set_background=True):
         """ Provide the Sky file image or directly the skydata (a Galex Object)

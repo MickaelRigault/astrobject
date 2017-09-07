@@ -71,7 +71,9 @@ def which_obs_mjd(filename):
 class PanSTARRS( Instrument ):
     """ """
     PROPERTIES = ["weightmap","exptimemap"]
+    
     instrument_name = "PanSTARRS"
+    INFO            = PANSTARRS_INFO
     
     def __init__(self,filename=None, weightfilename=None,
                 maskfilename=None, exptimefilename=None,

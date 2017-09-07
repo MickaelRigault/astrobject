@@ -2199,18 +2199,6 @@ class BasePhotoPoint( TargetHandler ):
     #   Properties         #
     # ==================== #
     @property
-    def lbda(self):
-        if self._properties['lbda'] is None and self.bandname is not None:
-            try:
-                lbda = self.bandpass.wave_eff
-                warnings.warn("No wavelength provided. Effective wavelength from bandpass used.")
-                self._properties['lbda'] = self.bandpass.wave_eff
-            except:
-                warnings.warn("No wavelength provided and unknown (by sncosmo) `bandname`")
-            
-        return self._properties['lbda']
-
-    @property
     def mjd(self):
         return self._properties["mjd"]
     
@@ -2254,18 +2242,6 @@ class BasePhotoPoint( TargetHandler ):
         
         self._properties["bandname"] = value
 
-    @property
-    def bandpass(self):
-        """
-        """
-        if self.bandname is None:
-            raise AttributeError("No bandname given")
-        try:
-            from sncosmo import get_bandpass
-        except ImportError:
-            raise ImportError("sncosmo is not installed. Could not access the bandpass")
-        return get_bandpass(self.bandname)
-        
     # ------------
     # - Side
     @property
@@ -2626,3 +2602,4 @@ class CountsPhotoPoint( BasePhotoPoint ):
         return self.cps_to_flux(self.cps_err)**2
 
     
+

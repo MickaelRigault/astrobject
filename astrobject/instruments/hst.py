@@ -103,7 +103,8 @@ class HST( Instrument ):
     """This is the umage object custom for HST data"""
     
     instrument_name = "HST"
-
+    INFO            = HST_INFO
+    
     PROPERTIES         = ["used_amplifier"]
     SIDE_PROPERTIES    = []
     DERIVED_PROPERTIES = []
