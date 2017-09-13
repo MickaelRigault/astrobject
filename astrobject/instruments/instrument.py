@@ -12,9 +12,10 @@ import ptf
 import snifs
 import galex
 import panstarrs
+import wise
 __all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
 
-KNOWN_INSTRUMENTS = ["sdss","galex","hst","panstarrs","snifs","ptf","stella"]
+KNOWN_INSTRUMENTS = ["sdss","galex","hst","panstarrs","snifs","ptf","stella","wise"]
 
 
 def fetch_catalogue(source, radec, radius, extracolumns=[], column_filters={"rmag":"5..25"},**kwargs):

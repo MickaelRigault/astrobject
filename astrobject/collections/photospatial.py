@@ -981,10 +981,10 @@ class SepObject( PhotoMap ):
                                            else [idx],
                                           contours=False)
         for ell in ells:
+            ax.add_artist(ell)
             ell.set_clip_box(ax.bbox)
             ell.set_facecolor(fc)
             ell.set_edgecolor(ec)
-            ax.add_patch(ell)
         if draw:
             ax.figure.canvas.draw()
 
@@ -998,7 +998,7 @@ class SepObject( PhotoMap ):
             print "WARNING [Sepobjects] No data to display"
             return
         
-        from matplotlib.patches import Ellipse,Polygon
+        from matplotlib.patches import Ellipse, Polygon
         import matplotlib.pyplot    as mpl
         from ..utils.mpladdon   import figout
         self._plot = {}
@@ -1204,14 +1204,15 @@ class SepObject( PhotoMap ):
         
         # -------------
         # - Properties
-        if not hasattr(mask, "__iter__") or len(mask)==1:
+        if mask is not None and not hasattr(mask, "__iter__"):
             x,y,a,b,t = self.get_ellipse_values(mask=mask)
             ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
                         t*units.radian.in_units("degree"))]
         else:
+            x_,y_,a_,b_,t_ = self.get_ellipse_values(mask=None)
             ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
                             t*units.radian.in_units("degree"))
-                    for x,y,a,b,t in self.get_ellipse_values(mask=mask).T]
+                    for x,y,a,b,t in zip(x_,y_,a_,b_,t_)]
                 
         if not contours:
             return ells
