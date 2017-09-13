@@ -55,12 +55,13 @@ class WISE( Instrument ):
     """
     Class Build to use WISE
     """
-    PROPERTIES         = ["sky"]
+    PROPERTIES         = []
     SIDE_PROPERTIES    = []
     DERIVED_PROPERTIES = []
     
     instrument_name = "WISE"
-
+    INFO            = WISE_INFO
+>>>>>>> upstream/master
     # ================== #
     #   Properties       #
     # ================== #        

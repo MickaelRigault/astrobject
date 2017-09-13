@@ -328,14 +328,19 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ---------- #
         #if dataslice0 is None and dataslice1 is None:
         #    _slicing = False
-        
-        if dataslice0 is None:
-            dataslice0 = [0,-1]
-        if dataslice1 is None:
-            dataslice1 = [0,-1]
 
-        data = fits[index].data[dataslice0[0]:dataslice0[1],
-                                dataslice1[0]:dataslice1[1]]
+        if dataslice0 is not None or dataslice1 is not None:
+            if dataslice0 is None:
+                dataslice0 = [0,-1]
+            if dataslice1 is None:
+                dataslice1 = [0,-1]
+                
+            data = fits[index].data[dataslice0[0]:dataslice0[1],
+                                    dataslice1[0]:dataslice1[1]]
+        else:
+            data = fits[index].data
+            dataslice0 = [0,np.shape(data)[0]]
+            dataslice1 = [0,np.shape(data)[1]]
             
         self._build_properties["dataslice0"] = dataslice0
         self._build_properties["dataslice1"] = dataslice1            
