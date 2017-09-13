@@ -61,7 +61,6 @@ class WISE( Instrument ):
     
     instrument_name = "WISE"
     INFO            = WISE_INFO
->>>>>>> upstream/master
     # ================== #
     #   Properties       #
     # ================== #        
