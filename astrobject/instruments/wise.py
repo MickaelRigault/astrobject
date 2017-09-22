@@ -8,10 +8,14 @@ from ..utils.tools import kwargs_update
 
 __all__  = ["wise", "WISE_INFO"]
 
-WISE_INFO= {"wisew1":{"lbda":33680.0,"ABmag0":22.5},
-            "wisew2":{"lbda":46180.0,"ABmag0":22.5},
-            "wisew3":{"lbda":120820.0,"ABmag0":22.5},
-            "wisew4":{"lbda":221940.0,"ABmag0":22.5},
+""" 
+unWISE images have Vega ZP=22.5. Need to add AB offsets from
+http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
+"""
+WISE_INFO= {"wisew1":{"lbda":33680.0,"ABmag0":22.5+2.699},
+            "wisew2":{"lbda":46180.0,"ABmag0":22.5+3.339},
+            "wisew3":{"lbda":120820.0,"ABmag0":22.5+5.174},
+            "wisew4":{"lbda":221940.0,"ABmag0":22.5+6.620},
             "bands":["wisew1","wisew2","wisew3","wisew4"],
             "telescope":{
                  "lon": None,
@@ -84,7 +88,7 @@ class WISE( Instrument ):
     @property
     def mab0(self):
         """ The ABmag zero point of WISE data """
-        return GALEX_INFO[self.bandname]["ABmag0"]
+        return WISE_INFO[self.bandname]["ABmag0"]
     
     # - Low Level image information
     @property
