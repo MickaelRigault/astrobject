@@ -1766,7 +1766,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             
         if add_mask is not None:
             if np.shape(add_mask) != self.shape:
-                raise ValueError(" the input add_mask does not have the requested shape")
+                raise ValueError(" the input add_mask does not have the requested shape", np.shape(add_mask), self.shape)
             mask = mask + add_mask if mask is not None else add_mask
             
         # ---------------
@@ -2203,6 +2203,11 @@ class BasePhotoPoint( TargetHandler ):
     # ==================== #
     #   Properties         #
     # ==================== #
+    @property
+    def lbda(self):
+        """ wavelength associated to the photometric point"""
+        return self._properties['lbda']
+    
     @property
     def mjd(self):
         return self._properties["mjd"]
