@@ -14,17 +14,19 @@ _FWHM_WFC3 = Table(data=[[2000,3000,4000,5000,6000,7000,8000,9000,10000,11000],
                          [0.083,0.075,0.070,0.067,0.067,0.070,0.074,0.078,0.084,0.089]],
                    names=["wavelength","FWHM"])
 
+# F225W filter from David Rubin: Averaged chip 1 and chip 2
+# transmission from SYNPHOT (STSci software)
 HST_INFO = {
     "telescope":{
                  "lon":np.NaN,
                  "lat":np.NaN},
     # Windhorst et al 2010
-    "f225w":{"fwhm":0.092,
-             "mab0":24.06, # abmag @ e-/s
+    "f225w":{"lbda":2372.069991, "fwhm":0.092,
+             "ABmag0":24.06, # abmag @ e-/s
              "skybkgd":25.46 # mag per arcsec 2
              },
-    "f275w":{"fwhm":0.087,
-             "mab0":24.14,
+    "f275w":{"lbda":2708.529114, "fwhm":0.087,
+             "ABmag0":24.14,
              "skybkgd":25.64 # mag per arcsec 2
             }
         

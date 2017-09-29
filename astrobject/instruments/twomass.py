@@ -8,9 +8,11 @@ from ..utils.tools import kwargs_update
 
 __all__  = ["twomass", "TWOMASS_INFO"]
 
-TWOMASS_INFO= {"2massJ":{"lbda":12350.0},
-               "2massH":{"lbda":16620.0},
-               "2massKs":{"lbda":21590.0},
+# filter transmission from FSPS allfilters.dat
+# effective wavelength from sncosmo
+TWOMASS_INFO= {"2massJ":{"lbda":12408.375977},
+               "2massH":{"lbda":16513.664599},
+               "2massKs":{"lbda":21655.392611},
                "bands":["2massJ","2massH","2massKs"],
                "telescope":{
                    "lon": None,
@@ -115,3 +117,11 @@ class TWOMASS( Instrument ):
         """ The gain of the instrument """
         return None
     
+    # =========================== #
+    # = Internal Tools          = #
+    # =========================== #
+    # -----------------
+    # - Background hacking
+
+    def _get_default_background_(self,*args,**kwargs):
+        return np.zeros(np.shape(self.rawdata))

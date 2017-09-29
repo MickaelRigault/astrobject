@@ -7,11 +7,12 @@ from ..utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["sdss","SDSS_INFO"]
 
-SDSS_INFO = {"u":{"lbda":3551,"ABmag0":22.46},
-             "g":{"lbda":4686,"ABmag0":22.50},
-             "r":{"lbda":6166,"ABmag0":22.50},
-             "i":{"lbda":7480,"ABmag0":22.50},
-             "z":{"lbda":8932,"ABmag0":22.52},
+# filter transmission & effective wavelength from sncosmo
+SDSS_INFO = {"u":{"lbda":3594.325367,"ABmag0":22.46},
+             "g":{"lbda":4717.599777,"ABmag0":22.50},
+             "r":{"lbda":6186.799970,"ABmag0":22.50},
+             "i":{"lbda":7506.238080,"ABmag0":22.50},
+             "z":{"lbda":8918.301484,"ABmag0":22.52},
             "bands":["u","g","r","i","z"],
              "telescope":{
                  "lon": 32.780,

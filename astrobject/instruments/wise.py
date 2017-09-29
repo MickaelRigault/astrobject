@@ -11,11 +11,13 @@ __all__  = ["wise", "WISE_INFO"]
 """ 
 unWISE images have Vega ZP=22.5. Need to add AB offsets from
 http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
+Filter transmissions from FSPS allfilters.dat
+Effective wavelength from sncosmo
 """
-WISE_INFO= {"wisew1":{"lbda":33680.0,"ABmag0":22.5+2.699},
-            "wisew2":{"lbda":46180.0,"ABmag0":22.5+3.339},
-            "wisew3":{"lbda":120820.0,"ABmag0":22.5+5.174},
-            "wisew4":{"lbda":221940.0,"ABmag0":22.5+6.620},
+WISE_INFO= {"wisew1":{"lbda":33791.912981,"ABmag0":22.5+2.699},
+            "wisew2":{"lbda":46292.961143,"ABmag0":22.5+3.339},
+            "wisew3":{"lbda":123321.610431,"ABmag0":22.5+5.174},
+            "wisew4":{"lbda":222532.734640,"ABmag0":22.5+6.620},
             "bands":["wisew1","wisew2","wisew3","wisew4"],
             "telescope":{
                  "lon": None,

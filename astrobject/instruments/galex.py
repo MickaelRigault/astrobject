@@ -14,8 +14,10 @@ from ..photometry       import get_photopoint
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools      import kwargs_update
 
-GALEX_INFO= {"fuv":{"lbda":1516,"ABmag0":18.82},
-             "nuv":{"lbda":2267,"ABmag0":20.08},
+# filter transmissions from FSPS allfilters.dat
+# effective wavelength from sncosmo
+GALEX_INFO= {"fuv":{"lbda":1538.620702,"ABmag0":18.82},
+             "nuv":{"lbda":2315.663104,"ABmag0":20.08},
              "bands":["fuv","nuv"],
              "telescope":{
                  "lon": None,
