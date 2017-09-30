@@ -16,10 +16,18 @@ from ..photometry       import get_photopoint
 from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools      import kwargs_update
 
-PANSTARRS_INFO= {"bands":["ps1.g","ps1.r","ps1.i","ps1.z","ps1.z"],
+# filter transmissions from Tonry et al. (2012):
+# http://iopscience.iop.org/0004-637X/750/2/99/suppdata/apj425122t3_mrt.txt
+# effective wavelengths from sncosmo
+PANSTARRS_INFO= {"ps1.g":{"lbda":4866.457871,"ABmag0":25.0},
+                 "ps1.r":{"lbda":6214.623038,"ABmag0":25.0},
+                 "ps1.g":{"lbda":7544.570357,"ABmag0":25.0},
+                 "ps1.g":{"lbda":8679.482571,"ABmag0":25.0},
+                 "ps1.g":{"lbda":9633.284241,"ABmag0":25.0},
+                 "bands":["ps1.g","ps1.r","ps1.i","ps1.z","ps1.y"],
                  "telescope":{
-                     "lon": None,
-                     "lat": None}}
+                     "lon": -156.2571, 
+                     "lat": 20.7083}}
 """
 Info from Magnier 2016
 
