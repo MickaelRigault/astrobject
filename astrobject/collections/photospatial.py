@@ -12,7 +12,7 @@ from ..utils.tools      import kwargs_update, dump_pkl, load_pkl
 from ..utils.decorators import _autogen_docstring_inheritance
 
 
-__all__ = ["get_photomap","get_sepobject", "get_photomapcollection"]
+__all__ = ["get_photomap"]
 
 
 def get_photomap(photopoints=None,coords=None,wcs_coords=True, **kwargs):

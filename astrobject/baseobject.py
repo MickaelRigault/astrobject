@@ -9,8 +9,6 @@ import warnings
 import numpy   as np
 from scipy import stats
 
-# - Astropy
-from astropy    import units
 
 # - PropObject
 from propobject import BaseObject
@@ -18,7 +16,7 @@ from propobject import BaseObject
 # - Local Tools
 from .utils.tools import load_pkl, dump_pkl, kwargs_update
 
-__all__     = ["get_target", "BaseObject"]
+__all__     = ["get_target"]
 
 
 #######################################
@@ -699,6 +697,7 @@ class AstroTarget( BaseObject ):
     @property
     def distmeter_err(self):
         """ converts the distmpc_err in meter """
+        from astropy    import units
         return self.distmpc_err * units.Mpc.in_units("m")
     
     @property

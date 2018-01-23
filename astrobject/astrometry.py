@@ -3,6 +3,8 @@
 
 """This module manage the Astrometry issue"""
 
+# Moved to ccdphot #
+
 import numpy as np
 import warnings
 

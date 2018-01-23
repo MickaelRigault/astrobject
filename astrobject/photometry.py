@@ -5,20 +5,14 @@
 
 import warnings
 import numpy         as np
-from scipy       import stats
-from scipy.stats import sigmaclip
-
 # - Astropy
-from astropy       import units,coordinates
-from astropy.io    import fits as pf
-from astropy.table import Table
+from astropy       import units
 
-# - Internal (astrobject)
-from .            import astrometry
-
+# propobject
 from propobject   import BaseObject
+
+# - Internal 
 from .baseobject  import TargetHandler, WCSHandler, Samplers, CatalogueHandler
-from .utils.shape import HAS_SHAPELY
 from .utils.tools import kwargs_update, flux_to_mag
 
 __all__ = ["get_image","get_photopoint"]
@@ -301,6 +295,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         ------
         Void
         """
+        from astropy.io import fits as pf
         # -- Check if you will not overwrite anything
         if self._properties["rawdata"] is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
@@ -319,6 +314,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             fits = pf.open(filename, memmap=False)
 
         try:
+            from .  import astrometry
             wcs_ = astrometry.wcs(filename,extension=index)
         except:
             wcs_ = None
@@ -383,7 +379,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # - Set instance
         self._properties["filename"]      = filename
         self._derived_properties["fits"]  = fits
-        self._properties["header"]        = pf.Header() if header is None else header
+        self._properties["header"]        = header # None -> Header when called
         self._side_properties["exptime"]  = exptime
         # --------------
         # - Read data
@@ -444,11 +440,12 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
         
         if test_inclusion:
+            from .utils.shape import HAS_SHAPELY
             if not HAS_SHAPELY:
-                print "WARNING: could not test if the target is in the image since you do not have SHAPELY"
+                print("WARNING: could not test if the target is in the image since you do not have SHAPELY")
             elif self.has_wcs() is False:
-                print "WARNING: because there is no wcs solution, "+\
-                  "I can't test the inclusion of the new astrotarget"
+                print("WARNING: because there is no wcs solution, "+\
+                  "I can't test the inclusion of the new astrotarget")
             else:
                 if not self.wcs.coordsAreInImage(*newtarget.radec):
                     raise ValueError("The new 'target' is not inside the image "+\
@@ -1609,6 +1606,10 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # -- Header stuff
     @property
     def header(self):
+        if self._properties["header"] is None:
+            from astropy.io.fits import Header
+            self._properties["header"] = Header()
+            
         return self._properties["header"]
     
     @property

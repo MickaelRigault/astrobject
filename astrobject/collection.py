@@ -10,11 +10,11 @@ import matplotlib.pyplot as mpl
 
 from .baseobject import BaseObject, TargetHandler, CatalogueHandler
 from .photometry import get_photopoint, Image
-from .instruments import instrument as inst
+from .instruments import instrument as inst 
 from .utils.tools import kwargs_update, load_pkl, dump_pkl
 from .utils.shape import draw_polygon, HAS_SHAPELY
 
-__all__ = ["ImageCollection"]
+__all__ = ["get_imagecollection"]
 
 
 

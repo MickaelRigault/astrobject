@@ -4,15 +4,15 @@
 #
 
 
-__version__ = "0.5.6"
+__version__ = "0.5.7"
 
 from baseobject   import *
-from photometry   import *
+from photometry   import get_image, get_photopoint
 
 # don't invert collections and collection
-from collections import *
-from collection  import *
-from instruments import *
+#from collections import *
+#from collection  import *
+#from instruments import *
 
 
 

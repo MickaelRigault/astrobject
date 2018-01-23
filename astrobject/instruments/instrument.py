@@ -4,17 +4,20 @@
 # -- here load all the object that could be parsed
 from ..utils.decorators import _autogen_docstring_inheritance
 
+
+__all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
+
+
 import catalogues
 import sdss
 import hst
-import stella
 import ptf
 import snifs
 import galex
 import panstarrs
 import wise
 import twomass
-__all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
+
 
 KNOWN_INSTRUMENTS = ["sdss","galex","hst","panstarrs","snifs","ptf","stella","wise","twomass"]
 
