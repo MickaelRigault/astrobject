@@ -984,7 +984,7 @@ class Catalogue( WCSHandler ):
         """
         """
         try:
-            knownkeys = self.data.keys()
+            knownkeys = list(self.data.keys())
         except:
             warnings.warn("WARNING no automatic key available (data.keys() failed)")
             return

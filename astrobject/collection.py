@@ -132,7 +132,7 @@ class BaseCollection(BaseObject):
         if not self.has_sources():
             raise AttributeError("no data loaded")
         
-        return np.sort(self._handler.keys()).tolist()
+        return np.sort( list(self._handler.keys()) ).tolist()
 
     @property
     def list_id(self):
@@ -1728,7 +1728,7 @@ class PhotoPointCollection( Collection ):
         """ This is the list of all the meta keys known by at least one photopoints
         You can access these get from self.get(key)
         """
-        return np.unique(np.concatenate(self.get("meta.keys()"))).tolist()
+        return np.unique(np.concatenate(self.get("list(meta.keys())"))).tolist()
     
     # --------------
     # - Derived
@@ -1764,9 +1764,9 @@ class PhotoPointCollection( Collection ):
         """
         if self._derived_properties["getkeys"] is None:
             if self.fromtable:
-                self._derived_properties["getkeys"] = self._table.keys()
+                self._derived_properties["getkeys"] = list(self._table.keys())
             else:
-                self._derived_properties["getkeys"] = np.sort(np.unique(self.data.keys() + self.metakeys))
+                self._derived_properties["getkeys"] = np.sort(np.unique( list(self.data.keys()) + self.metakeys))
                 
         return self._derived_properties["getkeys"]
     
