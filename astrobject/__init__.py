@@ -4,7 +4,7 @@
 #
 
 
-__version__ = "0.5.9"
+__version__ = "0.5.10"
 
 from baseobject   import *
 from photometry   import get_image, get_photopoint
