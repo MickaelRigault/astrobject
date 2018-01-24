@@ -126,7 +126,7 @@ class LCFitter( BaseObject ):
                     self._derived_properties['raw_fit'].append(res)
                     self._derived_properties['idx_good'].append(k)
                 else:
-                    print "Light curve fit #%i failed"%k
+                    print("Light curve fit #%i failed"%k)
             except sncosmo.fitting.DataQualityError:
                 print "Light curve fit #%i failed because of data quality"%k
             except RuntimeError:

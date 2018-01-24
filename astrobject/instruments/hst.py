@@ -134,7 +134,7 @@ class HST( Instrument ):
             key_mag = "%smag"%"r"
             key_magerr = "e_%smag"%"r"
             if key_mag not in catalogue.data.keys():
-                print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
+                warnings.warn("WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag)
             catalogue.set_mag_keys(key_mag,key_magerr)
             
         super(HST,self).set_catalogue(catalogue,force_it=force_it,**kwargs)
@@ -211,7 +211,7 @@ class HST( Instrument ):
     def used_amplifier(self):
         """This is the amplifier used for the analysis"""
         if self._properties["used_amplifier"] is None:
-            print "Default 'C' amplifier set for the hst image"
+            warnings.warn("Default 'C' amplifier set for the hst image")
             self._properties["used_amplifier"] = "C"
             
         return self._properties["used_amplifier"]

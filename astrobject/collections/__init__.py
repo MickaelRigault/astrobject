@@ -1,6 +1,6 @@
 #
 # Collection from the Astrobject
 #
-from photospatial import *
+from .photospatial import *
 # - Not automatically imported
-#from photodiagnostics import *
+#from .photodiagnostics import *

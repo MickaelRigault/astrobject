@@ -695,7 +695,7 @@ class Catalogue( WCSHandler ):
             mask *= self.starmask if fovmask else self._starmask
         if nonstars_only:
             if stars_only:
-                print "WARNING you ask for both stars_only and nonstars_only !!!"
+                warnings.warn("WARNING you ask for both stars_only and nonstars_only !!!")
             mask *= ~self.starmask if fovmask else ~self._starmask
         # - isolation
         if isolated_only:
@@ -861,7 +861,6 @@ class Catalogue( WCSHandler ):
         ids_to_exclude = np.argwhere(self.data[key]==value)
         if len(ids_to_exclude)==0:
             warnings.warn("WARNING: No value excluded. not match")
-            print "WARNING: No value excluded. not match"
             return
         self._side_properties["excluded_list"] = self.excluded_list.tolist()+ids_to_exclude.tolist()
         
@@ -893,7 +892,7 @@ class Catalogue( WCSHandler ):
         None (if no data) / ax.plot returns
         """
         if not self.has_data():
-            print "Catalogue has no 'data' to display"
+            print("Catalogue has no 'data' to display")
             return
                   
         if wcs_coords:
@@ -987,17 +986,17 @@ class Catalogue( WCSHandler ):
         try:
             knownkeys = self.data.keys()
         except:
-            print "WARNING no automatic key available (data.keys() failed)"
+            warnings.warn("WARNING no automatic key available (data.keys() failed)")
             return
         vkey = [k for k in knownkeys if key in k.lower() if not k.startswith("e_")]
         if len(vkey) >1:
-            print "WARNING ambiguous %s key. Use set_coord_keys. "%key+", ".join(vkey)
+            warnings.warn("WARNING ambiguous %s key. Use set_coord_keys. "%key+", ".join(vkey))
             return
         if len(vkey) ==0:
             if key.lower() == "dec":
                 return self._automatic_key_match_("de",build_key="dec")
-            print "WARNING no match found for the %s key. Use set_coord_keys. "%key
-            print "       known keys: "+", ".join(knownkeys)
+            print("WARNING no match found for the %s key. Use set_coord_keys. "%key)
+            print("       known keys: "+", ".join(knownkeys))
             return
 
         if build_key is None:
@@ -1202,9 +1201,9 @@ class Catalogue( WCSHandler ):
         if self._build_properties["key_mag"] is None or \
           self._build_properties["key_magerr"] is None:
             if verbose:
-                print "No 'key_mag'/'key_magerr' set ; call 'set_mag_keys'." +\
+                print("No 'key_mag'/'key_magerr' set ; call 'set_mag_keys'." +\
                   " List of potential keys: "\
-                  +", ".join([k for k in self.data.keys() if "mag" in k or "MAG" in k])
+                  +", ".join([k for k in self.data.keys() if "mag" in k or "MAG" in k]))
             return False
         return True
     
@@ -1279,14 +1278,14 @@ class Catalogue( WCSHandler ):
     def nobjects_around(self):
         """ Number of object around an object. """
         if not self._is_around_defined():
-            print "INFORMATION: run 'define_around' to set nobject_around"
+            print("INFORMATION: run 'define_around' to set nobject_around")
         return self._derived_properties["naround"]
 
     @property
     def _nobjects_around(self):
         """ Number of object around an object. No FoV Cut"""
         if not self._is_around_defined():
-            print "INFORMATION: run 'define_around' to set nobject_around"
+            print("INFORMATION: run 'define_around' to set nobject_around")
         return self._derived_properties["naround_nofovcut"]
     
     @property

@@ -634,7 +634,7 @@ class ImageCollection( Collection, CatalogueHandler ):
             # -- Loop over the images, check what is needed
             if not self.has_catalogue() or \
               (HAS_SHAPELY and not self.catalogue.contours.contains(self.images[id_]["wcs"].contours)):
-                print "Fetching a new catalogue"
+                print("Fetching a new catalogue")
                 new_cat = self._get_id_catalogue_(id_,source=source,**kwargs)
                 
                 if not self.has_catalogue():
@@ -754,7 +754,7 @@ class ImageCollection( Collection, CatalogueHandler ):
     def _get_id_catalogue_(self,id_,source="sdss",radius_degree=None,**kwargs):
         """
         """
-        print "downloading catalogue for %s"%id_
+        print("downloading catalogue for %s"%id_)
         radec = "%s %s"%(self.images[id_]['wcs'].central_coords[0],
                          self.images[id_]['wcs'].central_coords[1])
         img_radius= self.images[id_]['wcs'].diag_size/ 1.5
@@ -782,7 +782,7 @@ class ImageCollection( Collection, CatalogueHandler ):
         try:
             self.images[ID]["wcs"] = inst.get_instrument_wcs(imagefile)
         except:
-            print "WARNING Failure to load the wcs solution"
+            warnings.warn("WARNING Failure to load the wcs solution")
             self.images[ID]["wcs"] = None
             
         return ID
@@ -822,11 +822,6 @@ class ImageCollection( Collection, CatalogueHandler ):
         """
         """
         return self._handler
-
-    @property
-    def _imageids(self):
-        print "_imageids to be changed to self.list_id"
-        return self.list_id
     
     # ------------------ #
     # - Host Tricks    - #
@@ -997,10 +992,6 @@ class HostImageCollection( ImageCollection ):
     # ---------- #
     # - GETTER - #
     # ---------- #
-    def get_host_sepid(self, image_id, catid=None, **kwargs):
-        """ DEPRECATED. use get_sepid"""
-        print " DEPRECATED. use get_sepid"
-        return self.get_sepid( image_id, catid=catid, **kwargs)
     
     def get_sepid(self, image_id, catid=None, **kwargs):
         """ get the sepobject entry of the host for the given
@@ -1051,11 +1042,6 @@ class HostImageCollection( ImageCollection ):
         x, y, a, b, theta = self.get_ref_ellipse()
         return self.refimage.sepobjects.project_ellipse_to_wcs(x, y, a, b, theta,
                                                         self.images[id_]["wcs"])
-
-    def get_host_ellipse(self, id_, **kwargs):
-        """ DEPRECATED. use get_ellipse """
-        print "DEPRECATED. use get_ellipse"
-        return self.get_ellipse(id_, **kwargs)
 
     def get_ellipse(self, id_, **kwargs):
         """ get the host ellipse contours for the given image id.
@@ -1144,7 +1130,7 @@ class HostImageCollection( ImageCollection ):
         # - Get the PhotoPoints
         # No Host identified
         if self.host_catid is None and self.has_catalogue():
-            print "not catid set."
+            print("not catid set.")
             photopoints = PhotoPointCollection(empty=True)
             
         # Host identified
@@ -1275,12 +1261,6 @@ class HostImageCollection( ImageCollection ):
     def has_refid(self):
         """ test if a reference id has been set."""
         return self.refid is not None
-
-    @property
-    def ref_host_ellipse(self):
-        """ """
-        print "DEPRECATED. use ref_ellipse"
-        return self.ref_ellipse
     
     @property
     def ref_ellipse(self):

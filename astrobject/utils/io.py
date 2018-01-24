@@ -50,20 +50,20 @@ def download_sf98_dust_map(outdir,verbose=True):
         raise ImportError("no wget installed. pip install wget")
 
     if verbose:
-        print "Dust map downloading starting. 4 files, 167 Mo in total"
+        print("Dust map downloading starting. 4 files, 167 Mo in total")
 
     try:
         os.makedirs(outdir)
-        if verbose: print "Dust files saved here: %s"%outdir
+        if verbose: print("Dust files saved here: %s"%outdir)
     except:
-        if verbose: print "%s path already exists. Dust map downloading their"%outdir
+        if verbose: print("%s path already exists. Dust map downloading their"%outdir)
             
     for f in ["SFD_dust_4096_ngp.fits","SFD_mask_4096_ngp.fits",
               "SFD_dust_4096_sgp.fits","SFD_mask_4096_sgp.fits"]:
         wget.download("http://sncosmo.github.io/data/dust/"+f,out=outdir)
 
     if verbose:
-        print "SF98 dust map downloaded."
+        print("SF98 dust map downloaded.")
 
 
 def test_dustdir(dustdir,hard_test=True):
@@ -72,7 +72,7 @@ def test_dustdir(dustdir,hard_test=True):
 
     filesin = glob(dustdir+"/*.fits")
     if len(filesin)==0:
-        print "no data in %s"%dustdir
+        print("no data in %s"%dustdir)
         return False
     if hard_test and np.asarray([dustdir+"/"+f not in filesin
                                  for f in DEFAULT_SFD_FILES]).any():

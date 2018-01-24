@@ -1156,7 +1156,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     def writeto(self):
         """
         """
-        print "to be done"
+        print("to be done")
 
 
     # ------------------- #
@@ -1438,7 +1438,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         axM.set_title(r"$\mathrm{masked\ rawdata\ %s used\ to\ create\ the\ background}$"%("(log)\ " if logscale else ""),fontsize = "large")
         
         if "logscale" in kwargs.keys():
-            print "No logscale option available for show_background."
+            print("No logscale option available for show_background.")
             _ = kwargs.pop("logscale")
         # ----------- #
         # - Do It     #
@@ -1479,7 +1479,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """If a target is loaded, use this to display the target on the
         given ax"""
         if self.has_target() is False:
-            print "No 'target' to display"
+            print("No 'target' to display")
             return
 
         if localcircle is None:
@@ -1530,7 +1530,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         image's field of view.
         This will only works if a catalogue has been set"""
         if not self.has_catalogue():
-            print "No 'catalogue' to display"
+            print("No 'catalogue' to display")
             return
 
         # --------------
@@ -2234,9 +2234,9 @@ class BasePhotoPoint( TargetHandler ):
     def mjd(self,value):
         if value is not None:
             if value < 48987:
-                print "Information mjd prior to 1993..."
+                print("Information | mjd prior to 1993...")
             elif value > 58849.0:
-                print "Information mjd posterior to 2020..."
+                print("Information | mjd posterior to 2020...")
         
         self._properties["mjd"] = value
 
@@ -2457,7 +2457,6 @@ class PhotoPoint( BasePhotoPoint ):
             base_rv = extinction.Fitzpatrick99().r_v
             if r_v != base_rv:
                 warnings.warn("Fitzpatrick99 have fixed r_v of %.1f"%base_rv)
-                print "WARNING Fitzpatrick99 have fixed r_v of %.1f"%base_rv
             ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv)
         else:
             ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv, base_rv)

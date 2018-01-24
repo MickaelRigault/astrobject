@@ -538,7 +538,7 @@ class AstroTarget( BaseObject ):
         if cosmo is None:
             from astropy.cosmology import Planck15
             cosmo = Planck15
-            print "Planck 2015 cosmology used by default"
+            print("Planck 2015 cosmology used by default")
             warnings.warn("Planck 2015 cosmology used by default")
             
         self.set_cosmo(cosmo)
@@ -775,7 +775,7 @@ class AstroTarget( BaseObject ):
                 
             
     def _check_literature_name_(self,verbose=False):
-        if verbose:print "_check_literature_name_ to be done"
+        if verbose:print("_check_literature_name_ to be done")
         if self.name is None:
             self._side_properties["literature_name"] = None
         

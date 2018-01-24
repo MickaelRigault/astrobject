@@ -83,7 +83,7 @@ class SNIFS_P( Instrument ):
         """The ABmag zero point of SDSS data"""
         if "ZP" in self.header:
             return self.header["ZP"]
-        print "WARNING default zp=24 used"
+        print("WARNING default zp=24 used")
         return 24
 
     def set_mab0(self, zp, zperr, source="unknonw"):

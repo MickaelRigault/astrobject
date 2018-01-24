@@ -437,7 +437,7 @@ class MASSCatalogue( Catalogue ):
     @property
     def mag(self):
         if not self._is_keymag_set_(verbose=False):
-            print "No 'key_mag' defined. J band used by default. -> To change: set_mag_keys() "
+            print("No 'key_mag' defined. J band used by default. -> To change: set_mag_keys() ")
             self.set_mag_keys("Jmag","e_Jmag")
             
         return super(MASSCatalogue,self).mag
@@ -446,7 +446,7 @@ class MASSCatalogue( Catalogue ):
     # - All points are Point Sources
     @property
     def _objecttype(self):
-        print "All Loaded data are %s"%self._build_properties["key_class"]
+        print("All Loaded data are %s"%self._build_properties["key_class"])
         return np.ones(self.nobjects)
 
     @property
@@ -534,7 +534,7 @@ class WISECatalogue( Catalogue ):
         """
         """
         
-        print "STAR vs. GALAXY PARSING NOT READY YET"
+        print("STAR vs. GALAXY PARSING NOT READY YET")
         
         self.__build__(data_index=2,key_mag=key_mag,
                        key_magerr=key_magerr,
@@ -556,7 +556,7 @@ class WISECatalogue( Catalogue ):
     @property
     def mag(self):
         if not self._is_keymag_set_(verbose=False):
-            print "No 'key_mag' defined. W1 band used by default. -> To change: set_mag_keys() "
+            print("No 'key_mag' defined. W1 band used by default. -> To change: set_mag_keys() ")
             self.set_mag_keys("W1mag","e_W1mag")
             
         return super(WISECatalogue,self).mag

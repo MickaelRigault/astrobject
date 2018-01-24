@@ -136,7 +136,7 @@ def shape_ajustment(X,Y,model_X,k=4,s=0,
         return Yrebin
     else:
         if verbose:
-            print 'WARNING [shape_adjustment] non-mached shape ... I am fixing that'
+            print('WARNING [shape_adjustment] non-mached shape ... I am fixing that')
         
         YrebinOK = np.empty((len(Yrebin)+1),)
         YrebinOK[1:] = Yrebin

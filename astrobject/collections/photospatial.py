@@ -307,7 +307,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             if key == "wcsid":
                 self._build_properties["wcsid"]=bool(value)
             else:
-                print "comment not saved: ", c
+                print("comment not saved: ", c)
 
     def create_from_table(self, table, idkey=None):
         """ """
@@ -674,7 +674,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
                                                        radius*self.units_to_pixels(runits, target=target)*self.wcs.pix_indeg.value,
                                                        runits="degree")
         if verbose:
-            print idxaround,idxaround_dist
+            print(idxaround,idxaround_dist)
             
         # --- No host around --- #
         if len(idxaround) == 0:
@@ -704,8 +704,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         
         i_nearest = np.argmin(dist_in_radius)
         if max_galdist is not None and dist_in_radius[i_nearest]>max_galdist:
-            print "No nearby host identified"+(" for %s"%(target.name) if target is not None else "")
-            print " Maximum allowed galaxy radius %.1f ; nearest galaxy [in its radius] %.1f"%(max_galdist, dist_in_radius[i_nearest])
+            print("No nearby host identified"+(" for %s"%(target.name) if target is not None else ""))
+            print(" Maximum allowed galaxy radius %.1f ; nearest galaxy [in its radius] %.1f"%(max_galdist, dist_in_radius[i_nearest]))
             return None
         return idx[i_nearest]
 
@@ -997,7 +997,7 @@ class SepObject( PhotoMap ):
                       **kwargs):
         """ Display ellipses of the extracted sources (see masking options) """
         if not self.has_data():
-            print "WARNING [Sepobjects] No data to display"
+            warnings.warn("WARNING [Sepobjects] No data to display")
             return
         
         from matplotlib.patches import Ellipse, Polygon

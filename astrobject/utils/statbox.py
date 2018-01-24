@@ -36,7 +36,7 @@ def pearson_coef(a,b,verbose=False):
     rho,P_val = stats.pearsonr(a,b)
     significance =  rho * np.sqrt( (len(a)-2) /(1-rho**2) )
     if verbose:
-        print "rho,pvalues,significance: ",rho,P_val,significance
+        print("rho,pvalues,significance: ",rho,P_val,significance)
         
     return rho,P_val,significance
 

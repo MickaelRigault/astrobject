@@ -45,7 +45,7 @@ def wcs(filename=None, header=None, extension=0):
             return _WCSbackup(header,mode = "pyfits")
         except:
             from pyfits import getheader
-            print "I had to use pyfits for %s. Most likely this is a PTF image"%filename
+            print("I had to use pyfits for %s. Most likely this is a PTF image"%filename)
             return _WCSbackup(getheader(filename,ext=extension),mode = "pyfits")
         
     return WCS(header)
@@ -69,8 +69,8 @@ def get_wcs(wcsinput,verbose=True):
     if "__nature__" in dir(wcsinput) and wcsinput.__nature__ == "WCS":
         return wcsinput
     if verbose:
-        print "WARNING: only astLib.astWCS / astrobject.astrometry.WCS wcs solution are implemented"
-        print " ----> No wcs solution"
+        print("WARNING: only astLib.astWCS / astrobject.astrometry.WCS wcs solution are implemented")
+        print(" ----> No wcs solution")
         
     return None
 

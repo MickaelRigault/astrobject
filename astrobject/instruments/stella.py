@@ -75,7 +75,7 @@ class STELLA( Instrument ):
             key_mag = "%smag"%self.bandname[0]
             key_magerr = "e_%smag"%self.bandname[0]
             if key_mag not in catalogue.data.keys():
-                print "WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag
+                warnings.warn("WARNING No %s in the catalogue data. Cannot assign a key_mag"%key_mag)
             catalogue.set_mag_keys(key_mag,key_magerr)
             
         super(STELLA,self).set_catalogue(catalogue,force_it=force_it,**kwargs)

@@ -13,7 +13,7 @@ MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/astrobject/'
 LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/astrobject/tarball/0.5'
-VERSION = '0.5.10'
+VERSION = '0.5.11'
 
 try:
     from setuptools import setup, find_packages
@@ -78,6 +78,7 @@ if __name__ == "__main__":
           classifiers=[
               'Intended Audience :: Science/Research',
               'Programming Language :: Python :: 2.7',
+              'Programming Language :: Python :: 3.5',
               'License :: OSI Approved :: BSD License',
               'Topic :: Scientific/Engineering :: Astronomy',
               'Operating System :: POSIX',

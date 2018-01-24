@@ -848,7 +848,7 @@ def voronoi_grid(ax,xy):
         simplex = np.asarray(simplex)
         if np.any(simplex < 0):
             i = simplex[simplex >= 0][0]  # finite end Voronoi vertex
-            print i,simplex, simplex[simplex >= 0][0]
+            print(i,simplex, simplex[simplex >= 0][0])
             t = vor.points[pointidx[1]] - vor.points[pointidx[0]]  # tangent
             t /= np.linalg.norm(t)
             n = np.array([-t[1], t[0]])  # normal

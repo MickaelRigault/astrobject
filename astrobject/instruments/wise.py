@@ -104,9 +104,9 @@ class WISE( Instrument ):
         return None
 
     def set_invvar(self, filename):
-	""" Get the inverse-variance map from separate file 
+        """ Get the inverse-variance map from separate file 
         which should have the same file name as the image file 
         except with '-img-' replace with '-invar-'. """
-	self._properties["var"] = 1.0/pf.getdata(filename)
+        self._properties["var"] = 1.0/pf.getdata(filename)
 
     

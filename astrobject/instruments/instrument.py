@@ -8,15 +8,15 @@ from ..utils.decorators import _autogen_docstring_inheritance
 __all__ = ["get_instrument","get_catalogue","fetch_catalogue"]
 
 
-import catalogues
-import sdss
-import hst
-import ptf
-import snifs
-import galex
-import panstarrs
-import wise
-import twomass
+from . import catalogues
+from . import sdss
+from . import hst
+from . import ptf
+from . import snifs
+from . import galex
+from . import panstarrs
+from . import wise
+from . import twomass
 
 
 KNOWN_INSTRUMENTS = ["sdss","galex","hst","panstarrs","snifs","ptf","stella","wise","twomass"]
