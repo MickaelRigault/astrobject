@@ -5,8 +5,6 @@
 
 import warnings
 import numpy         as np
-# - Astropy
-from astropy       import units
 
 # propobject
 from propobject   import BaseObject
@@ -461,8 +459,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if self.has_wcs():
             self.wcs.set_offset(*self._dataslicing)
         
-    def set_catalogue(self,catalogue, force_it=False,
-                      match_angsep=3*units.arcsec):
+    def set_catalogue(self, catalogue, force_it=False,
+                      match_angsep=3):
         """ attach a catalogue to the current instance.
         you can then access it through 'self.catalogue'.
 
@@ -470,6 +468,19 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
         If the current instance has an sepobjects, sepobjects gains the catalogue and
         a matching is run.
+
+        Parameters
+        ----------
+        catalogue: [Catalogue]
+            catalog you want to attach
+            
+        force_it: [bool] -option-
+            If you already loaded a catalogue, this won't do anything except if 
+            you set force_it to True.
+
+        match_angsep: [float] -optional-
+            Matching distance in arcsec
+
 
         Returns
         -------
@@ -566,7 +577,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if update:
             self._update_data_(update_background=False)
         
-    def set_fwhm(self,value,force_it=True):
+    def set_fwhm(self, value, force_it=True):
         """
         value is the value of the fwhm. If no units is provided (astropy units)
         arcsec will be assumed.
@@ -577,6 +588,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
         if value<0:
             raise ValueError("the 'fwhm' must be positive")
+        
+        from astropy       import units
         if type(value) is not units.quantity.Quantity:
             value = value*units.arcsec
             
@@ -1080,7 +1093,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         Void [or ndarray(sep.extract output) is returnobjects set to True]
         """
         from sep import extract
-        from collections import get_sepobject
+        from .collections import get_sepobject
 
         
         if thresh is not None:
@@ -1119,7 +1132,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             self.sepobjects.set_catalogue(self.catalogue, reset=False)
             if match_catalogue:
                 matchingdist = np.max([3,
-                                       1./self.units_to_pixels("arcsec").value])*units.arcsec \
+                                       1./self.units_to_pixels("arcsec").value]) \
                                        if matching_distance is None else matching_distance
                              
                 self.sepobjects.match_catalogue(deltadist = matchingdist)
@@ -1666,6 +1679,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     @property
     def pixel_size_arcsec(self):
         """Pixel size in arcsec. Based on wcs solution"""
+        from astropy       import units
         if type(self.pixel_size_deg) is not units.quantity.Quantity:
             return [ps.to("arcsec") for ps in self.pixel_size_deg]
         return self.pixel_size_deg.to("arcsec")

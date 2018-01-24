@@ -7,8 +7,6 @@ import copy
 import warnings
 
 import numpy   as np
-from scipy import stats
-
 
 # - PropObject
 from propobject import BaseObject
@@ -111,7 +109,8 @@ class Samplers( BaseObject ):
     # =================== #
     def pdf(self, x, **kwargs):
         """ Probability distribution function based on the estimated rvdist (gaussian_kde by default) """
-        return self.rvdist.pdf(x, **kwargs) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
+        from scipy.stats import rv_continuous
+        return self.rvdist.pdf(x, **kwargs) if rv_continuous in self.rvdist.__class__.__mro__ \
           else self.rvdist.evaluate(x, **kwargs)
     
     def resample(self, size, prior=None,
@@ -147,7 +146,8 @@ class Samplers( BaseObject ):
         **kwargs are any option to the prior function: this uses prior(x, **kwargs)
         """
         if prior is None:
-            return self.rvdist.rvs(size) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
+            from scipy.stats import rv_continuous
+            return self.rvdist.rvs(size) if rv_continuous in self.rvdist.__class__.__mro__ \
               else self.rvdist.rvs(size, xrange=xrange, nsample=rand_nsample)
 
         # -----------
@@ -165,7 +165,8 @@ class Samplers( BaseObject ):
     @property
     def _default_sampling_xrange(self):
         """ usefule tools for plotting """
-        dataset = self.rvdist.rvs(1000) if stats.rv_continuous in self.rvdist.__class__.__mro__ \
+        from scipy.stats import rv_continuous
+        dataset = self.rvdist.rvs(1000) if rv_continuous in self.rvdist.__class__.__mro__ \
               else self.rvdist.dataset
         scale = np.nanmax(dataset) - np.nanmin(dataset)
         return [np.nanmin(dataset) - scale*0.05, np.nanmax(dataset) + scale*0.05]
@@ -284,7 +285,8 @@ class Samplers( BaseObject ):
         if not kde:
             h = ax.hist(self.samplers if not logscale else np.log10(self.samplers), **prop)
         else:
-            kde = stats.gaussian_kde(self.samplers if not logscale else np.log10(self.samplers))
+            from scipy.stats import gaussian_kde
+            kde = gaussian_kde(self.samplers if not logscale else np.log10(self.samplers))
             
             normed = 1. if "normed" in prop.keys() and not prop["normed"] else kde.pdf(x).max()
             for name in prop.keys():
@@ -376,6 +378,7 @@ class Samplers( BaseObject ):
         This method defines which kind of rv_continuous distribution you use
         """
         from astrobject.utils.decorators import make_method
+        from scipy import stats
         kde = stats.gaussian_kde(self.samplers)
         
         @make_method(stats.kde.gaussian_kde)

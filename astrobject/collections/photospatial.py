@@ -12,7 +12,7 @@ from ..utils.tools      import kwargs_update, dump_pkl, load_pkl
 from ..utils.decorators import _autogen_docstring_inheritance
 
 
-__all__ = ["get_photomap"]
+__all__ = ["get_photomap","get_sepobject"]
 
 
 def get_photomap(photopoints=None,coords=None,wcs_coords=True, **kwargs):
@@ -470,6 +470,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         
         if deltadist is None:
             deltadist = 3*units.arcsec
+        elif type(deltadist) is not units.quantity.Quantity:
+            deltadist = deltadist*units.arcsec
             
         # -- matching are made in degree space
         skyradec = self.get_skycoords(**kwargs)
