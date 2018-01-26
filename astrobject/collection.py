@@ -11,7 +11,7 @@ import matplotlib.pyplot as mpl
 from .baseobject import BaseObject, TargetHandler, CatalogueHandler
 from .photometry import get_photopoint, Image
 from .instruments import instrument as inst 
-from .utils.tools import kwargs_update, load_pkl, dump_pkl
+from .utils.tools import kwargs_update, load_pkl, dump_pkl, is_arraylike
 from .utils.shape import draw_polygon, HAS_SHAPELY
 
 __all__ = ["get_imagecollection"]
@@ -202,7 +202,7 @@ class ImageCollection( Collection, CatalogueHandler ):
         """
         Loop over the images end add them to the instance. See add_image
         """
-        if "__iter__" not in dir(images):
+        if not is_arraylike(images):
             images = [images]
         # ---------------------------
         # - dealing with catalogues
@@ -629,7 +629,7 @@ class ImageCollection( Collection, CatalogueHandler ):
                            **kwargs):
         """
         """
-        loop_id = self.list_id if id_ is None else [id_] if "__iter__" not in dir(id_) else id_
+        loop_id = self.list_id if id_ is None else [id_] if not is_arraylike(id_) else id_
         for id_ in loop_id:
             # -- Loop over the images, check what is needed
             if not self.has_catalogue() or \
@@ -987,7 +987,7 @@ class HostImageCollection( ImageCollection ):
             raise ValueError("%s is not a known catalog ID entry"%value)
         
         self._derived_properties["host_catindex"] = self.catalogue.id_to_idx(value)
-        self._derived_properties["hostcatid"]     = value if hasattr(value, "__iter__") else [value]
+        self._derived_properties["hostcatid"]     = value if is_arraylike(value) else [value]
         
     # ---------- #
     # - GETTER - #
@@ -1066,7 +1066,7 @@ class HostImageCollection( ImageCollection ):
             return np.concatenate([[x],[y],self.ref_host_ellipse[2:]]), False
         
         # = has the data
-        return self.images[id_]["image"].sepobjects.get_ellipse_values(idx if hasattr(idx, "__iter__") else [idx]).T, True
+        return self.images[id_]["image"].sepobjects.get_ellipse_values(idx if is_arraylike(idx) else [idx]).T, True
 
     def get_petrorad(self, refid=None):
         """ Measures the Petrosian Radius as defined by SDSS 
@@ -1333,12 +1333,14 @@ class PhotoPointCollection( Collection ):
     def create(self,photopoints,ids=None):
         """
         """
-        if "__iter__" not in dir(photopoints):
+        if not is_arraylike(photopoints):
             photopoints = [photopoints]
-        if "__iter__" not in dir(ids):
+        if not is_arraylike(ids):
             ids = [ids]*len(photopoints)
             
         if len(ids) != len(photopoints):
+            print("ids: (%d)"%len(ids))
+            print("photopoints: (%d)"%len(photopoints))
             raise ValueError("photopoints and ids must have the same size")
         
         [self.add_photopoint(p_,id_) for p_,id_ in zip(photopoints,ids)]
@@ -1514,11 +1516,11 @@ class PhotoPointCollection( Collection ):
             return super(PhotoPointCollection, self).get(param, mask=mask, safeexit=safeexit)
         # not np.asarray(self._table[mask, param]) to have pure float
         if mask is not None:
-            if hasattr(param,"__iter__"):
+            if is_arraylike(param):
                 return np.asarray([self._table[mask][p] for p in param]).T
             return np.asarray(self._table[mask][param])
         else:
-            if hasattr(param,"__iter__"):
+            if is_arraylike(param):
                 return np.asarray([self._table[p] for p in param]).T
             return np.asarray(self._table[param])
 
@@ -1542,7 +1544,7 @@ class PhotoPointCollection( Collection ):
             #[self._test_id_(id_) for id_ in ids]
         id_to_loop = self.list_id if ids is None else ids
         nids = len(id_to_loop)
-        if "__iter__" not in dir(values):
+        if not is_arraylike(values):
             values = [values]*nids
         elif len(values)==1:
             values = [values[0]]*nids

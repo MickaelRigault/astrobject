@@ -24,6 +24,7 @@ except ImportError:
     
 # - local
 from .utils import shape
+from .utils.tools import is_arraylike
 
 
 def wcs(filename=None, header=None, extension=0):
@@ -212,7 +213,7 @@ class WCS(pyWCS,_MotherWCS_):
         """ Convert pixel to world coordinate """
         offset = self.image_offset[::-1] if withoffset else np.asarray([0,0])
         
-        if "__iter__" not in dir(x):
+        if not is_arraylike(x):
             xoffset = x-offset[0]+1
             yoffset = y-offset[1]+1
             return self.wcs_pix2world([[xoffset,yoffset]],
@@ -225,7 +226,7 @@ class WCS(pyWCS,_MotherWCS_):
         """
         """
         offset = self.image_offset[::-1] if withoffset else np.asarray([0,0])
-        if "__iter__" not in dir(ra):
+        if not is_arraylike(ra):
             x,y = self.wcs_world2pix([[ra,dec]],0)[0]
             return x+offset[0],y+offset[1]
             
@@ -282,7 +283,7 @@ if _HAS_ASTLIB_:
             """
             """
             offset = self.image_offset if withoffset else np.asarray([0,0])
-            if "__iter__" not in dir(ra):
+            if not is_arraylike(ra):
                 ra,dec = [ra],[dec]
             ra,dec = np.asarray(ra),np.asarray(dec)
             

@@ -4,6 +4,8 @@
 """This modules has some basics numpy based statisitical tools """
 import numpy         as np
 from scipy       import stats, special
+from .tools      import is_arraylike
+
 __all__ = ["kfold_it",
            "pearson_coef","spearman_rank_coef","ks_test","aicc"]
 
@@ -196,7 +198,7 @@ class poissoncont_gen(stats._discrete_distns.poisson_gen):
             """
             xrange = self._xrange_nonzero_(mu)
             
-            if hasattr(x,"__iter__"):
+            if is_arraylike(x):
                 x = np.asarray(x) 
                 Poisson_continuous = np.zeros(len(x))    
                 flag_measure_it    = (x>=xrange[0]) & (x<xrange[1])
@@ -230,7 +232,7 @@ class poissoncont_gen(stats._discrete_distns.poisson_gen):
         if not hasattr(self, "_cdfsample"):
             # - just get it once
             self._cdfsample = self.rvs(mu, size=1e4, nsample=1e4)
-        if hasattr(x,"__iter__"):
+        if is_arraylike(x):
             return np.asarray([float(len(self._cdfsample[self._cdfsample<x_]))/ 1e4
                         for x_ in x])
         return float(len(self._cdfsample[self._cdfsample<x]))/ 1e4

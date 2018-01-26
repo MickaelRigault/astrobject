@@ -8,7 +8,7 @@ from astropy            import coordinates, units, table
 from ..baseobject       import WCSHandler, CatalogueHandler
 from ..photometry       import get_photopoint
 from ..collection       import BaseCollection, PhotoPointCollection
-from ..utils.tools      import kwargs_update, dump_pkl, load_pkl
+from ..utils.tools      import kwargs_update, dump_pkl, load_pkl, is_arraylike
 from ..utils.decorators import _autogen_docstring_inheritance
 
 
@@ -81,7 +81,7 @@ def get_sepobject(sepoutput, ppointkwargs={},
     pmap = SepObject(photopoints=inputphotomap["ppoints"],
                      coords=inputphotomap["coords"],
                      wcs_coords=False, **kwargs)
-    
+
     ids_sorting = [pmap.coords_to_id(x,y)
                        for x,y in zip(inputphotomap["meta"][xkey].data,
                                       inputphotomap["meta"][ykey].data)]
@@ -127,7 +127,7 @@ def get_photomapcollection( photomaps, wcs_extension=None, **kwargs ):
     -------
     PhotoMapCollection
     """
-    if not hasattr(photomaps, "__iter__"):
+    if not is_arraylike(photomaps):
         raise TypeError("photomaps must be a list/array")
 
     # -- loading data
@@ -180,7 +180,6 @@ def parse_sepoutput(sepoutput,lbda=None,**kwargs):
     ppoints = [get_photopoint(lbda=lbda,flux=t_["flux"],var=None,
                           source="sepextract",**kwargs)
                           for t_ in sepoutput]
-        
     coords = np.asarray([sepoutput["x"],sepoutput["y"]]).T
     return {"ppoints":ppoints,"coords":coords,"meta":sepoutput[[t_ for t_ in sepoutput.keys() if t_ not in ["flux"]]]}
     
@@ -348,7 +347,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             raise AttributeError("No catalogue matched")
         
         # - output array  
-        values_out = np.ones([len(catindex), len(param)])*np.NaN if hasattr(param, "__iter__") else\
+        values_out = np.ones([len(catindex), len(param)])*np.NaN if is_arraylike(param) else\
           np.ones(len(catindex))*np.NaN
         # - flag has data
         flag_hasidx = self.is_catindex_detected(catindex)
@@ -370,7 +369,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     # ---------------- #
     # - SUPER THEM   - #
     # ---------------- #
-    def create(self,photopoints,coords, wcs_coords=True,
+    def create(self,photopoints, coords, wcs_coords=True,
                wcs=None,refmaps=None,catalogue=None,**kwargs):
         """ wcs_coords means that the coordinate are given in ra,dec """
         
@@ -437,7 +436,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     # -- Id <-> Coords
     def coords_to_id(self,x,y):
         """ this enables to have consistent coordinate/id mapping """
-        if not hasattr(x,"__iter__"):
+        if not is_arraylike(x):
             return "%.8f,%.8f"%(x,y)
         return ["%.8f,%.8f"%(x_,y_) for x_,y_ in zip(x,y)]
     
@@ -493,7 +492,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         The cleanindex option enable to automatically remove the unknown index values.
         If you do not. this will raise a ValueError indicating the unknown index
         """
-        if "__iter__" not in dir(index):
+        if not is_arraylike(index):
             catindex = [index]
             
         index = np.asarray(index)
@@ -518,7 +517,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         The cleanindex option enable to automatically remove the unknown index values.
         If you do not. this will raise a ValueError indicating the unknown index
         """
-        if not hasattr(catindex,"__iter__"):
+        if not is_arraylike(catindex):
             catindex = [catindex]
             
         catindex = np.asarray(catindex)
@@ -754,7 +753,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         """
         radius = radius*units.Unit(runits)
         
-        if "__iter__" not in dir(ra):
+        if not is_arraylike(ra):
             ra = [ra]
             dec = [dec]
             
@@ -979,7 +978,7 @@ class SepObject( PhotoMap ):
                          draw=True, fc="None", ec="k"):
         """ draw the requested ellipse on the axis """
         ells = self.get_detected_ellipses(scaleup=scaleup,
-                                          mask=idx if hasattr(idx, "__iter__") or idx is None\
+                                          mask=idx if is_arraylike(idx) or idx is None\
                                            else [idx],
                                           contours=False)
         for ell in ells:
@@ -1206,7 +1205,7 @@ class SepObject( PhotoMap ):
         
         # -------------
         # - Properties
-        if mask is not None and not hasattr(mask, "__iter__"):
+        if mask is not None and not is_arraylike(mask):
             x,y,a,b,t = self.get_ellipse_values(mask=mask)
             ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
                         t*units.radian.in_units("degree"))]
@@ -1230,7 +1229,7 @@ class SepObject( PhotoMap ):
     def project_ellipse(self, idx, target_wcs):
         """ grab the ellipse coordinate of the given idx entry and project them
         in the new wcs system using self.project_ellipse_to_wcs() """
-        x,y,a,b,theta = self.get_ellipse_values(idx if hasattr(idx,"__iter__") else [idx])
+        x,y,a,b,theta = self.get_ellipse_values(idx if is_arraylike(idx) else [idx])
         return self.project_ellipse_to_wcs(x,y,a,b,theta, target_wcs)
     
     def project_ellipse_to_wcs(self, x,y,a,b,theta, target_wcs):
@@ -1358,7 +1357,7 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
             
         # - Load any given photomap
         if photomaps is not None:
-            if hasattr(photomaps, "__iter__"):
+            if is_arraylike(photomaps):
                 [self.add_photomap(photomap, **kwargs) for photomap in photomaps]
             else:
                 self.add_photomap(photomaps, **kwargs)

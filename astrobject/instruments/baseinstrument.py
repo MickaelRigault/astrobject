@@ -16,7 +16,7 @@ from .. import astrometry
 from ..photometry import Image, get_photopoint
 from ..baseobject import BaseObject, WCSHandler
 from ..utils.decorators import _autogen_docstring_inheritance
-from ..utils.tools import kwargs_update, mag_to_flux, load_pkl, dump_pkl
+from ..utils.tools import kwargs_update, mag_to_flux, load_pkl, dump_pkl, is_arraylike
 from ..utils       import shape
 
 __all__ = ["Instrument"]
@@ -46,7 +46,7 @@ class Instrument( Image ):
         
         # ------------------
         # - One Photopoint
-        if "__iter__" not in dir(flux):
+        if not is_arraylike(flux):
             return get_photopoint(lbda=self.lbda, flux=flux, var=var,
                             source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandname,
@@ -72,7 +72,7 @@ class Instrument( Image ):
                                                             **kwargs))
         # ------------------
         # - One Photopoint
-        if "__iter__" not in dir(pp) or len(pp)==1 or getlist:
+        if not is_arraylike(pp) or len(pp)==1 or getlist:
             return pp
         
         # -----------------------
@@ -611,7 +611,7 @@ class Catalogue( WCSHandler ):
         """ """
         if "key_id" not in self._build_properties.keys() or self._build_properties["key_id"] is None:
             raise AttributeError("no 'key_id' set in the _build_properties for this catalogue")
-        if "__iter__" not in dir(idx):
+        if not is_arraylike(idx):
             idx = [idx]
             
         return self.get(self._build_properties["key_id"], idx, **kwargs)
@@ -632,7 +632,7 @@ class Catalogue( WCSHandler ):
         --------
         array (or list of)
         """
-        if "__iter__" in dir(key):
+        if is_arraylike(key):
             return [self.get(key_,mask=mask) for key_ in key]
         
         if key in dir(self):
@@ -787,7 +787,7 @@ class Catalogue( WCSHandler ):
             raise AttributeError("Needs a wcs solution to get pixel coordinates")
         if not wcs_coords:
             ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
-        if "__iter__" not in dir(ra):
+        if not is_arraylike(ra):
             ra = [ra]
             dec = [dec]
         skytarget = coordinates.SkyCoord(ra*units.degree,dec*units.degree)
@@ -815,7 +815,7 @@ class Catalogue( WCSHandler ):
             raise AttributeError("Needs a wcs solution to get pixel coordinates")
         if not wcs_coords:
             ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
-        if "__iter__" not in dir(ra):
+        if not is_arraylike(ra):
             ra = [ra]
             dec = [dec]
             

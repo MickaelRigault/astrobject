@@ -11,7 +11,7 @@ from propobject   import BaseObject
 
 # - Internal 
 from .baseobject  import TargetHandler, WCSHandler, Samplers, CatalogueHandler
-from .utils.tools import kwargs_update, flux_to_mag
+from .utils.tools import kwargs_update, flux_to_mag, is_arraylike
 
 __all__ = ["get_image","get_photopoint"]
 
@@ -166,10 +166,10 @@ def dictsource_2_photopoints(dictsource,**kwargs):
     instrument_name = dictsource["instrument_name"] \
       if "instrument_name" in dictsource.keys() else None
     
-    lbda = [lbda]*len(fluxes) if hasattr(lbda,'__iter__') is False else lbda
-    source = [source]*len(fluxes) if hasattr(source,'__iter__') is False else source
+    lbda = [lbda]*len(fluxes) if is_arraylike(lbda) is False else lbda
+    source = [source]*len(fluxes) if is_arraylike(source) is False else source
     instrument_name = [instrument_name]*len(fluxes)\
-       if hasattr(instrument_name,'__iter__') is False else instrument_name
+       if is_arraylike(instrument_name) is False else instrument_name
 
     # -- Let's create the list of PhotoPoints
     return [photopoint(lbda,flux,var,source=source,
@@ -565,7 +565,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             self._uses_default_background = False
             
         # Shape test
-        if not hasattr(background,"__iter__"):
+        if not is_arraylike(background):
             background = np.ones(np.shape(self.rawdata))*np.float(background)
             
         if self.rawdata is not None and np.shape(background) != self.shape:
@@ -805,7 +805,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if not self.has_sepobjects():
             raise AttributeError("sepobjects has not been set. Run sep_extract()")
 
-        if not hasattr(idx, "__iter__"):
+        if not is_arraylike(idx):
             idx = [idx]
             
         x, y, a, b, theta = self.sepobjects.get(["x","y","a","b","theta"], mask=idx).T
@@ -1861,13 +1861,13 @@ class ImageBackground( BaseObject ):
         self._derived_properties["prop_sepbackground"] = dict(mask=masking,bh=bh, bw=bw,
                                                               fh=fh,fw=fw)
         
-        if not np.any([(hasattr(p_,"__iter__") and len(p_)==2) for p_ in [bh, bw, fh,fw]]):
+        if not np.any([( is_arraylike(p_) and len(p_)==2) for p_ in [bh, bw, fh,fw]]):
             # - Single Case Measurement
             b = Background(self.imagedata, masking,bw=bw,bh=bh, fh=fh,fw=fw)
         else:
             # - MultiTrial Case
             def array_it(k):
-                return np.ones(ntrial)*k if not hasattr(k, "__iter__") or len(k)==1 \
+                return np.ones(ntrial)*k if not is_arraylike(k) or len(k)==1 \
                   else np.random.randint(k[0], high=k[1], size=ntrial)
             bh, bw = array_it(bh),array_it(bw)
             fh, fw = array_it(fh),array_it(fw)
@@ -2155,7 +2155,7 @@ class BasePhotoPoint( TargetHandler ):
         Value (or list)
         """
 
-        if hasattr(key, "__iter__"):
+        if is_arraylike(key):
             return [self.get(key_,safeexit=safeexit) for key_ in key]
         
         try:

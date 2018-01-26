@@ -5,14 +5,14 @@
 import numpy as np
 
 __all__ = ["kwargs_update","kwargs_extract",
-           "load_pkl","dump_pkl"]
+           "load_pkl","dump_pkl","is_arraylike"]
 
 
 def kwargs_update(default,**kwargs):
     """
     """
     k = default.copy()
-    for key,val in kwargs.iteritems():
+    for key,val in kwargs.items():
         k[key] = val
         
     return k
@@ -27,13 +27,17 @@ def kwargs_extract(default,**kwargs):
     """
     k = default.copy()
     l = {}
-    for key,val in kwargs.iteritems():
+    for key,val in kwargs.items():
         if key in k.keys():
             k[key] = val
         else:
             l[key] = val
 
     return k, l
+
+def is_arraylike(a):
+    """ Tests if 'a' is an array / list / tuple """
+    return isinstance(a, (list, tuple, np.ndarray) )
 
 # --------------------------- #
 # - I/O Tools               - #
@@ -47,19 +51,27 @@ def ipython_info():
 def load_pkl(filename):
     """
     """
-    import cPickle as pkl
     try:
-        pkl_file = open(filename,'rb')
+        import cPickle as pkl
     except:
-        raise IOError("The given file does not exist %s"%filename)
-    
+        import pickle
+        with open(filename, 'rb') as f:
+            u = pickle._Unpickler(f)
+            u.encoding = 'latin1'
+            return u.load()
+
+    pkl_file = open(filename,'rb')
     return pkl.load(pkl_file)
 
 
 def dump_pkl(data,filename,**kwargs):
     """
     """
-    from cPickle import dump
+    try:
+        from cPickle import dump
+    except:
+        from pickle import dump
+        
     if len(filename.split("."))>1 and filename.split(".")[-1]=="pkl":
         outfile =  open(filename,"wb")
     else:

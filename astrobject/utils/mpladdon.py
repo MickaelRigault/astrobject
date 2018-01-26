@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as mpl
 from matplotlib.transforms  import Bbox
 import warnings
-from .tools import kwargs_update
+from .tools import kwargs_update, is_arraylike
 from .decorators import make_method
 
 # remark: do no import .plot.*** at this level
@@ -412,7 +412,7 @@ def voronoi_patchs(ax, xy, c=None, vmax=None, vmin=None,
     # --------------------
     # - Color of the Cells
     if c is not None:
-        if "__iter__" not in dir(c):
+        if not is_arraylike(c):
             c = [c]*npoint
         else:
             c = np.asarray(c)
@@ -754,21 +754,21 @@ def add_threeaxes(figure,xhist=True,yhist=True,
     # ================
     # Input Parsing
     # ================ 
-    if "__iter__" not in dir(shrunk):
+    if not is_arraylike(shrunk):
         shrunk = [shrunk,shrunk]
     elif len(shrunk) == 1:
         shrunk = [shrunk[0],shrunk[0]]
     elif len(shrunk)>2:
         raise ValueError("shrunk cannot have more than 2 entries (x,y)")
 
-    if "__iter__" not in dir(space):
+    if not is_arraylike(space):
         space = [space,space]
     elif len(space) == 1:
         space = [space[0],space[0]]
     elif len(space)>2:
         raise ValueError("space cannot have more than 2 entries (x,y)")
     
-    if "__iter__" not in dir(axspace):
+    if not is_arraylike(axspace):
         axspace = [axspace,axspace]
     elif len(axspace) == 1:
         axspace = [axspace[0],axspace[0]]

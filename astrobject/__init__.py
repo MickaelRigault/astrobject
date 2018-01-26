@@ -3,7 +3,7 @@
 # This is the astrobject library
 #
 
-__version__ = "0.5.13"
+__version__ = "0.5.14"
 
 from .baseobject   import *
 from .photometry   import get_image, get_photopoint
