@@ -19,7 +19,7 @@ try:
     from astLib      import astWCS
     _HAS_ASTLIB_ = True
 except ImportError:
-    warnings.warn("ImportError - astLib can not be imported ; PTF-like images won't load.")
+    #warnings.warn("ImportError - astLib can not be imported ; PTF-like images won't load.")
     _HAS_ASTLIB_ = False
     
 # - local
