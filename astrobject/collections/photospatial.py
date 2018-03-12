@@ -369,7 +369,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
     # ---------------- #
     # - SUPER THEM   - #
     # ---------------- #
-    def create(self,photopoints, coords, wcs_coords=True,
+    def create(self, photopoints, coords, wcs_coords=True,
                wcs=None,refmaps=None,catalogue=None,**kwargs):
         """ wcs_coords means that the coordinate are given in ra,dec """
         
@@ -1205,13 +1205,8 @@ class SepObject( PhotoMap ):
         
         # -------------
         # - Properties
-        if mask is not None and not is_arraylike(mask):
-            x,y,a,b,t = self.get_ellipse_values(mask=mask)
-            ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
-                        t*units.radian.in_units("degree"))]
-        else:
-            x_,y_,a_,b_,t_ = self.get_ellipse_values(mask=None)
-            ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
+        x_,y_,a_,b_,t_ = self.get_ellipse_values(mask=mask)
+        ells = [Ellipse([x,y],a*scaleup*2,b*scaleup*2,
                             t*units.radian.in_units("degree"))
                     for x,y,a,b,t in zip(x_,y_,a_,b_,t_)]
                 

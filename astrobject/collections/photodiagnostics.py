@@ -327,7 +327,7 @@ class GmISamplers( Samplers ):
     def _default_sampling_xrange(self):
         """ """
         noprior_xrange = super(GmISamplers,self)._default_sampling_xrange
-        return [np.nanmax([noprior_xrange[0], -0.5]), np.nanmin([noprior_xrange[1], 2.])]
+        return [np.nanmax([noprior_xrange[0], -2]), np.nanmin([noprior_xrange[1], 3.])]
     
 class MassEstimate( Samplers, TargetPhotoPointCollection ):
     """
@@ -415,7 +415,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         from astrobject.utils.mpladdon import figout
 
         # -- Axes settings 
-        fig     = mpl.figure(figsize=[14,5])
+        fig     = mpl.figure(figsize=[10,3])
         axcolor = fig.add_axes([0.05,0.12,0.56,0.78])
         ax      = fig.add_axes([0.07,0.65,0.2,0.18],zorder=9)
         axcolor_prior = axcolor.twinx()

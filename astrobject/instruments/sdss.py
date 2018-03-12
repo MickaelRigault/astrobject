@@ -193,11 +193,11 @@ class SDSS( Instrument ):
         self._build_properties["bkgdbox"]['bw'] = 200
         
     @_autogen_docstring_inheritance(Instrument.set_catalogue,"Image.set_catalogue")
-    def set_catalogue(self,catalogue,**kwargs):
+    def set_catalogue(self,catalogue, **kwargs):
         #
         # - Add the bandname key_mag setting
         #
-        if catalogue.source_name =="SDSS":
+        if catalogue.source_name == "SDSS":
             key_mag = "%smag"%self.bandname[-1]
             key_magerr = "e_%smag"%self.bandname[-1]
             if key_mag not in catalogue.data.keys():
@@ -308,7 +308,7 @@ class SDSS( Instrument ):
         (self.rawdata / self._cimg + self.sky) / gain -> original photoelectron
         """
         self._derived_properties["var"] = \
-          dn_err = ((self.rawdata / self._cimg + self.sky) / self._gain  + self._darkvariance)* self._cimg**2
+          dn_err = ((self.rawdata / self._cimg + self.sky) / self._gain  + self._darkvariance) * self._cimg **2
 
     # -------------------
     # - Background hacking

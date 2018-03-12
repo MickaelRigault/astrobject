@@ -1469,7 +1469,7 @@ class PhotoPointCollection( Collection ):
 
         Parameter
         ---------
-        which: [string] complet/meta/data
+        which: [string] complet/data
             Which can of data to you want to get.
             Default 'complet' is the combination of data and meta
 
@@ -1483,8 +1483,7 @@ class PhotoPointCollection( Collection ):
         """
         if not self.fromtable:
             data = self.data_complet.copy() if which is "complet" else \
-            self.data.copy() if which is "data" else \
-            self.meta.copy() if self.meta  is not None else None
+            self.data.copy() 
         else:
             data = self._table.copy()
             
@@ -1725,12 +1724,6 @@ class PhotoPointCollection( Collection ):
         """The modified Julian Dates of every photopoints (self.mdjs<==>self.get('mjd'))"""
         return self.get("mjd")
 
-    @property
-    def metakeys(self):
-        """ This is the list of all the meta keys known by at least one photopoints
-        You can access these get from self.get(key)
-        """
-        return np.unique(np.concatenate(self.get("list(meta.keys())"))).tolist()
     
     # --------------
     # - Derived
@@ -1743,22 +1736,15 @@ class PhotoPointCollection( Collection ):
                         self.get("zp"),self.get("zpsys")]
             mainnames= ["id","flux","var","lbda","mjd","bandname","zp","zpsys"]
             # - Meta
-            #metaname = self.metakeys
-            #metadata = [self.get(metak) for metak in metaname]
             return table.Table(data=maindata,
                                names=mainnames)
         return self._table
     
     @property
     def meta(self):
-        """  builds an astropy table containing the meta information about the sources of the collection """
-        if len(self.metakeys) == 0:
-            return None
-        metanames = self.metakeys
-        metadata = [self.get(metak) for metak in metanames]
-        return table.Table(data=[self.list_id]+metadata,
-                            names=["id"]+metanames)
-    
+        """  builds an astropy table containing the meta information about the 
+        sources of the collection """
+        raise NotImplementedError("self.meta does not exist in PhotoPointCollections anymore")
     @property
     def getkeys(self):
         """ List of keys known in data and meta you can call by get().
@@ -1768,7 +1754,7 @@ class PhotoPointCollection( Collection ):
             if self.fromtable:
                 self._derived_properties["getkeys"] = list(self._table.keys())
             else:
-                self._derived_properties["getkeys"] = np.sort(np.unique( list(self.data.keys()) + self.metakeys))
+                self._derived_properties["getkeys"] = np.sort(np.unique( list(self.data.keys())))
                 
         return self._derived_properties["getkeys"]
     
@@ -1779,8 +1765,7 @@ class PhotoPointCollection( Collection ):
         if self.fromtable:
             data = self._table
         else:
-            data = table.join(self.data,self.meta,join_type='left',keys='id') if self.meta is not None\
-                else self.data
+            data = self.data
         return {"data": np.asarray(data),
                 "target": self.target.data if self.has_target() else None,
                 "build": self._build_properties}

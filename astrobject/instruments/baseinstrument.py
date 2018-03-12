@@ -123,7 +123,7 @@ class Instrument( Image ):
     # =========================== #
     def count_to_flux(self,counts):
         """ converts counts into flux """
-        return counts* 10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2)
+        return counts * 10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2)
 
     # =========================== #
     # = Internal Catalogue      = #

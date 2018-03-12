@@ -239,7 +239,7 @@ class GAIACatalogue( Catalogue ):
 # BASIC SDSS: Catalogue         #
 #                               #
 #################################
-def fetch_sdss_catalogue(center, radius, extracolumns=[],column_filters={"rmag":"5..25"},**kwargs):
+def fetch_sdss_catalogue(radec, radius, r_unit="arcminute", extracolumns=[], column_filters={"rmag":"5..25"},**kwargs):
     """ query online sdss-catalogue in Vizier (V/139, DR9) using astroquery.
     This function requieres an internet connection.
     
@@ -247,7 +247,7 @@ def fetch_sdss_catalogue(center, radius, extracolumns=[],column_filters={"rmag":
     ----------
     center: [string] 'ra dec'
         position of the center of the catalogue to query.
-
+    
     radius: [string] 'value unit'
         radius of the region to query. For instance '1d' means a
         1 degree raduis
@@ -260,44 +260,40 @@ def fetch_sdss_catalogue(center, radius, extracolumns=[],column_filters={"rmag":
         Selection criterium for the queried catalogue.
 
     **kwargs goes to astroquery.vizier.Vizier
-    
+
     Returns
     -------
     SDSSCatalogue (child of Catalogue)
     """
-    from .sdss import SDSS_INFO
     try:
         from astroquery import vizier
     except:
         raise ImportError("install astroquery. (pip install astroquery)")
-    
+ 
     # -----------
     # - DL info
-    columns = ["cl","objID",#"SDSS9",
-               "RAJ2000","e_RAJ2000","DEJ2000","e_DEJ2000",
-               #"ObsDate","Q"#"mode",
-               ]
-    for band in SDSS_INFO["bands"]:
-        columns.append("%smag"%band)
-        columns.append("e_%smag"%band)
-    
-    columns = columns+extracolumns
-    column_quality = {"mode":"1","Q":"2.3"}
-    # - WARNING if discovered that some of the bandmag were missing if too many colums requested
-    c = vizier.Vizier(catalog="V/139", columns=columns,
-                      column_filters=kwargs_update(column_quality,**column_filters),
-                      **kwargs)
-    c.ROW_LIMIT = "unlimited"
+    columns = ["class","objID",#"SDSS9",
+                "RA_ICRS","e_RA_ICRS","DE_ICRS","e_ED_ICRS",
+                #"ObsDate","Q"#"mode",
+                ]
+    vizier.Vizier.ROW_LIMIT = 999999
     #try:
-    t = c.query_region(center,radius=radius).values()[0]
-    #except :
-    #    raise IOError("Error while querying the given coords. You might not have an internet connection")
+    ra,dec = radec
+    coord = coordinates.SkyCoord(ra=ra,dec=dec, unit=(units.degree,units.degree))
+    angle = coordinates.Angle(radius,r_unit)
+    try:
+        v = vizier.Vizier(column_filters=column_filters)
+        v.ROW_LIMIT = -1
+        t = v.query_region(coord,radius=angle,catalog="V/147").values()[0]
+    except:
+        raise IOError("Error while querying the given coords. Wrong catalog_fitler? Not connected to the internet?")
     
-    cat = SDSSCatalogue(empty=True)
-    cat.create(t.columns,None,
-               key_class="cl",value_star=6,key_id="objID",
-               key_ra="RAJ2000",key_dec="DEJ2000")
-    return cat
+    sdsscat = SDSSCatalogue(None)
+    sdsscat.create(t, None, key_class="class",value_star=6,key_id="objID",
+               key_ra="RA_ICRS",key_dec="DE_ICRS")
+    return sdsscat
+
+    
 
 # ------------------- #
 # - SDSS CATALOGUE  - #

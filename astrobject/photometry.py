@@ -460,7 +460,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             self.wcs.set_offset(*self._dataslicing)
         
     def set_catalogue(self, catalogue, force_it=False,
-                      match_angsep=3):
+                      match_angsep=3, **kwargs):
         """ attach a catalogue to the current instance.
         you can then access it through 'self.catalogue'.
 
@@ -486,7 +486,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         -------
         Void
         """
-        super(Image, self).set_catalogue(catalogue, force_it=force_it)
+        super(Image, self).set_catalogue(catalogue, force_it=force_it, **kwargs)
 
         # -- Lets save the pixel values
         if self.has_catalogue() and self.has_sepobjects():
@@ -814,7 +814,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                                  aptype="ellipse", **kwargs)
         
     def get_aperture(self, x, y, radius=None,
-                     runits="pixels",wcs_coords=False,
+                     runits="pixels", wcs_coords=False,
                      aptype="circle",subpix=5,
                      ellipse_args={"a":None,"b":None,"theta":None},
                      annular_args={"rin":None,"rout":None},
@@ -935,7 +935,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         # - Circle
         if aptype == "circle":
-            return sep.sum_circle( eval("self.%s"%on), x, y, r_pixels,subpix=subpix,
+            return sep.sum_circle( eval("self.%s"%on), x, y, r_pixels, subpix=subpix,
                             var=var,gain=gain, mask=self.datamask,**kwargs)
 
         # - Annulus
@@ -955,7 +955,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             
             a,b,theta = [ellipse_args[k] for k in ["a","b","theta"]]
             sepout= sep.sum_ellipse(eval("self.%s"%on),x,y,a,b,theta,
-                                    r_pixels,subpix=subpix,
+                                    r_pixels, subpix=subpix,
                                     var=var,gain=gain,mask=self.datamask,**kwargs)
         # - Elliptical Annulus
         elif aptype == "ellipan":
@@ -1263,7 +1263,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         self._plot = {}
         
         if ax is None:
-            fig = mpl.figure(figsize=[8,8])
+            fig = mpl.figure(figsize=[6,5])
             ax  = fig.add_axes([0.1,0.1,0.8,0.8])
             ax.set_xlabel("x",fontsize = "x-large")
             ax.set_ylabel("y",fontsize = "x-large")

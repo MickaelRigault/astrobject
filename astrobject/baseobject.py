@@ -159,6 +159,7 @@ class Samplers( BaseObject ):
         # - The random sampler seed
         x = np.linspace(xrange[0],xrange[1],rand_nsample)
         # the new pdf
+        
         pdf = self.pdf(x) * prior(x, **kwargs)
         return np.random.choice(x, p= pdf / pdf.sum(), size=size)
 
@@ -983,7 +984,7 @@ class CatalogueHandler( BaseObject ):
                 raise TypeError("the input 'catalogue' must be an astrobject Catalogue")
             
             if hasattr(self,"wcs") and self.has_wcs():
-                catalogue.set_wcs(self.wcs,force_it=True)
+                catalogue.set_wcs(self.wcs, force_it=True)
                 if catalogue.nobjects_in_fov < 1:
                     warnings.warn("WARNING No object in the field of view,"+"\n"+\
                                 "  -> catalogue not loaded")
