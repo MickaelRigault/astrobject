@@ -276,13 +276,13 @@ def fetch_sdss_catalogue(radec, radius, r_unit="arcminute", extracolumns=[], col
                 "RA_ICRS","e_RA_ICRS","DE_ICRS","e_ED_ICRS",
                 #"ObsDate","Q"#"mode",
                 ]
-    vizier.Vizier.ROW_LIMIT = 999999
     #try:
     ra,dec = radec
     coord = coordinates.SkyCoord(ra=ra,dec=dec, unit=(units.degree,units.degree))
     angle = coordinates.Angle(radius,r_unit)
+    default_quality = {"mode":"1"}
     try:
-        v = vizier.Vizier(column_filters=column_filters)
+        v = vizier.Vizier(column_filters=kwargs_update(default_quality,**column_filters))
         v.ROW_LIMIT = -1
         t = v.query_region(coord,radius=angle,catalog="V/147").values()[0]
     except:

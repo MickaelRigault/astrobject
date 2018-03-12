@@ -58,10 +58,6 @@ def fetch_catalogue(source, radec, radius, extracolumns=[], column_filters={"rma
     -------
     Catalogue
     """
-    if type(radec) is not str:
-        if len(radec) != 2: raise TypeError("radec must be a string ('ra dec') or a 2D array ([ra,dec])")
-        radec = "%f %f"(radec[0],radec[1])
-
     # Test if catalog exist
     if not hasattr(catalogues, "fetch_%s_catalogue"%source.lower()):
         raise ValueError("Unknown catalog %s"%source.lower())

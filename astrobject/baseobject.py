@@ -908,7 +908,7 @@ class CatalogueHandler( BaseObject ):
     # ================= #
     def download_catalogue(self,source="sdss",
                            set_it=True,force_it=False,
-                           radec=None, radius=None,
+                           radec=None, radius=None, r_unit="degree",
                            **kwargs):
         """
         Downloads a catalogue of the given 'source'. This methods requires an
@@ -924,15 +924,14 @@ class CatalogueHandler( BaseObject ):
         Void (or the Catalogue if set_it is False)
         """
         from .instruments.instrument import fetch_catalogue
-        
         # - RaDec
         if radec is None:
             if hasattr(self,"wcs") and self.has_wcs():
-                radec = "%s %s"%(self.wcs._central_coords_nooffset[0],
-                                 self.wcs._central_coords_nooffset[1])
+                radec = self.wcs.central_coords
             else:
                 raise ValueError("Without wcs solution you need to provide 'radec'")
 
+        
         # - Radius
         if radius is None:
             if hasattr(self,"wcs") and self.has_wcs():
@@ -940,14 +939,14 @@ class CatalogueHandler( BaseObject ):
             else:
                 raise ValueError("Without wcs solution you need to provide 'radius'")
             
-        if type(radius) == str:
-            if not radius.endswith("d"):
-                radius = "%sd"%radius
-        else:
-            radius = "%sd"%radius
-            
+        elif type(radius) == str:
+            radius = float(radius)
+        
+        print(radec)
+        print(radius)
+        print(r_unit)
         # - Catalogue object found.
-        query = kwargs_update(dict(source=source,radec=radec,radius=radius),
+        query = kwargs_update(dict(source=source,radec=radec,radius=radius, r_unit=r_unit),
                                **kwargs)
         cat = fetch_catalogue(**query)
         
