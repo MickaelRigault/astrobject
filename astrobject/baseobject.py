@@ -942,9 +942,6 @@ class CatalogueHandler( BaseObject ):
         elif type(radius) == str:
             radius = float(radius)
         
-        print(radec)
-        print(radius)
-        print(r_unit)
         # - Catalogue object found.
         query = kwargs_update(dict(source=source,radec=radec,radius=radius, r_unit=r_unit),
                                **kwargs)
