@@ -239,7 +239,8 @@ class GAIACatalogue( Catalogue ):
 # BASIC SDSS: Catalogue         #
 #                               #
 #################################
-def fetch_sdss_catalogue(radec, radius, r_unit="arcminute", extracolumns=[], column_filters={"rmag":"5..25"},**kwargs):
+def fetch_sdss_catalogue(radec, radius, r_unit="arcminute", extracolumns=[],
+                             column_filters={"rmag":"5..25"},**kwargs):
     """ query online sdss-catalogue in Vizier (V/139, DR9) using astroquery.
     This function requieres an internet connection.
     

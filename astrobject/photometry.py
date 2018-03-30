@@ -313,7 +313,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
         try:
             from .  import astrometry
-            wcs_ = astrometry.wcs(filename,extension=index)
+            wcs_ = astrometry.wcs(filename, extension=index)
         except:
             wcs_ = None
             
@@ -678,7 +678,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """
         if self.target is None:
             raise AttributeError("No 'target' loaded")
-        xpix,ypix = self.coords_to_pixel(self.target.ra,self.target.dec)
+        xpix, ypix = self.coords_to_pixel(self.target.ra,self.target.dec)
         return self.get_aperture(xpix,ypix,
                                  radius=radius,runits=runits,
                                  aptype=aptype,
@@ -739,6 +739,63 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         return np.concatenate(self.get_idx_aperture(idx, scaleup=scaleup, **kwargs))
 
 
+    def get_target_local_noise(self, around=100, a_units=None, xpix=None, ypix=None,
+                                   radius=1, runits="arcsec", ncall=1000,
+                                   sourcemask=None, verbose=False, **kwargs):
+        """ Uses get_noise_aperture() in a rangex, rangey around the target.
+        
+        Parameters
+        ----------
+
+        around: [int] -optional-
+            rangex and rangey will be defined as [target_x_position-/+around, target_y_position-/+around]
+            [limited to the data.shape]
+
+        a_units: [string/None] -optional-
+            unit of the around value. If None, the same unit as `runits` will be used.
+
+
+        xpix, ypix: [float, float]
+            x and y position of the target. If not provided, this will use the self.target coordinate
+            to estimate it.
+
+        radius: [float]            
+            Size of the circle radius.
+            (This is used only if aptype is circle)
+                                   
+        runits: [str/astropy.units] -optional-
+            The unit of the radius (used to convert radius in pixels)
+
+        ncall: [int] -optional-
+            Number of random aperture taken.
+
+        sourcemask: [2D bool array or None] -optional-
+            Boolean Mask that will mask out the sources. 
+            Area not removed by this mask will be used to measure the
+            "noise" apertures.
+            If None, the derive_sepmask() method will be used. 
+                     See scaleup option
+
+        **kwargs goes to get_noise_aperture()
+
+        Returns
+        -------
+        List of [Flux, Error, flag] // (List of get_aperture returns)
+        """
+        if a_units is None:
+            a_units = runits
+        xpix, ypix    = self.coords_to_pixel(self.target.ra,self.target.dec)
+        around_pixels = around*self.units_to_pixels(a_units)
+        r_pixels      = radius*self.units_to_pixels(runits)
+        rangex = [np.max([0+r_pixels, xpix-around_pixels]),np.min([self.shape[1]-r_pixels, xpix+around_pixels])]
+        rangey = [np.max([0+r_pixels, ypix-around_pixels]),np.min([self.shape[0]-r_pixels, ypix+around_pixels])]
+        if verbose:
+            print("target location: ",xpix, ypix)
+            print("rangex: ",rangex)
+            print("rangey: ",rangey)
+        return self.get_noise_aperture(r_pixels, runits="arcsec", rangex=rangex, rangey=rangey,
+                                           sourcemask=sourcemask)
+        
     def get_noise_aperture(self, radius, runits="arcsec", ncall=1000,
                             sourcemask=None,
                             rangex=None, rangey=None, scaleup=4, **kwargs):
@@ -780,22 +837,61 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         -------
         List of [Flux, Error, flag] // (List of get_aperture returns)
         """
+        x_noise, y_noise = self._get_noise_aperture_prop_(ncall=ncall,edge=10,
+                                                         sourcemask=sourcemask,
+                                                        rangex=rangex, rangey=rangey, scaleup=scaleup)
+        
+        return self.get_aperture(x_noise, y_noise, radius, runits, **kwargs)
+
+    def _get_noise_aperture_prop_(self, ncall=1000,
+                                      sourcemask=None, edge=10,
+                                      rangex=None, rangey=None, scaleup=4):
+        """ Measure the aperture photometry on the "noise" part of the image.
+        The "noise" is defined as area remaining after  masking-out of 
+        the SEP detected object with a scaling up of "scaleup".
+
+        Parameters
+        ----------
+
+        ncall: [int] -optional-
+            Number of random aperture taken.
+            
+        sourcemask: [2D bool array or None] -optional-
+            Boolean Mask that will mask out the sources. 
+            Area not removed by this mask will be used to measure the
+            "noise" apertures.
+            If None, the derive_sepmask() method will be used. 
+                     See scaleup option
+            
+        rangex, rangey: [array or None], [array or None]
+            If you want to exclude the outer part of the image, 
+            given the range of x and x pixel to be considered
+
+        scaleup: [float] -optional-
+            Scaling up of the SEP ellipses that should be masked out.
+            - Used only if sourcemask is not provided -
+
+        Returns
+        -------
+        List of [Flux, Error, flag] // (List of get_aperture returns)
+        """
         if sourcemask is None:
             sourcemask = self.derive_sepmask( r=scaleup )
         # - Range parsing 
         if rangex is None: rangex=[0, self.shape[1]]
         if rangey is None: rangey=[0, self.shape[0]]
-        if rangex[0] is None: rangex[0] = 0
-        if rangey[0] is None: rangey[0] = 0
-        if rangex[1] is None: rangex[1] = self.shape[1]
-        if rangey[1] is None: rangey[1] = self.shape[0]
+        if rangex[0] is None: rangex[0] = 0+edge
+        if rangey[0] is None: rangey[0] = 0+edge
+        if rangex[1] is None: rangex[1] = self.shape[1]-edge
+        if rangey[1] is None: rangey[1] = self.shape[0]-edge
 
         overtry= 5
         x = np.random.uniform(rangex[0],rangex[1],size=(ncall*overtry))
         y = np.random.uniform(rangey[0],rangey[1],size=(ncall*overtry))
-        i_in = np.random.choice([i for i in range(ncall*overtry) if not sourcemask[y[i],x[i]]],
+        i_in = np.random.choice([i for i in range(ncall*overtry) if not sourcemask[int(y[i]),int(x[i])]],
                          size=ncall)
-        return im.get_aperture(x[i_in], y[i_in], radius, runits, **kwargs)
+        
+        return x[i_in], y[i_in]
     
     def get_idx_aperture(self, idx, scaleup=2.5, **kwargs):
         """ give the index [list of] of an sep's object(s)
@@ -819,6 +915,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                      ellipse_args={"a":None,"b":None,"theta":None},
                      annular_args={"rin":None,"rout":None},
                      on="data", syserr = 0,
+                     local_correction=False, around=100, a_units="pixels",sourcemask=None,
                      **kwargs):
         """
         This method uses K. Barary's Sextractor python module SEP
@@ -842,7 +939,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         aperture photometry *aptype* is choosen)
                                    
         - options - 
-        
+
         on: [string] -optional-
             On which variable should the aperture be made? 
             By default `self.data`. If you are not sure, do not change this.
@@ -878,7 +975,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         annular_args: [dict]       
             The annular parameter that must be filled if
             atype is circan of ellipan.
-
+            
         
         - other options ; not exhautive ; goes to sep.sum_*aptype* - 
 
@@ -935,11 +1032,11 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         # - Circle
         if aptype == "circle":
-            return sep.sum_circle( eval("self.%s"%on), x, y, r_pixels, subpix=subpix,
+            sepout = sep.sum_circle( eval("self.%s"%on), x, y, r_pixels, subpix=subpix,
                             var=var,gain=gain, mask=self.datamask,**kwargs)
 
         # - Annulus
-        if aptype == "circann":
+        elif aptype == "circann":
             
             if np.asarray([k is None for k in annular_args.values()]).any():
                 raise ValueError("You must set the annular arguments 'annular_arg'")
@@ -970,14 +1067,28 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                                     r_pixels,subpix=subpix,
                                     var=var,gain=gain,mask=self.datamask,**kwargs)
 
+        fl_,err_,flag_ = sepout
         if syserr is not None:
-            fl_,err_,flag_ = sepout
             err_ += syserr
-            return fl_,err_,flag_
-        
+
+        if local_correction:
+            print("LOCAL CORRECTION")
+            b_count, b_err, f_ = self.get_target_local_noise(xpix=x, ypix=y,
+                                                            radius=radius, runits=runits,
+                                                            a_units=a_units, around=around,
+                                                            sourcemask=sourcemask,
+                                                            # Aperture kwargs
+                                                            aptype=aptype,subpix=subpix,
+                                                            ellipse_args=ellipse_args,
+                                                            annular_args=annular_args,
+                                                            on=on, syserr = syserr,
+                                                            local_correction=False)
+            fl_ -= np.mean(b_count)
+            err_ /= np.std(b_count/b_err)
+            
         # ===================================
         # = Return of the aperture extraction
-        return sepout
+        return fl_,err_,flag_
 
     
     # ------------------- #

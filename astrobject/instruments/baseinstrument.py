@@ -52,7 +52,7 @@ class Instrument( Image ):
                             zp=self.mab0,bandname=self.bandname,
                             instrument_name=self.instrument_name)
         # -----------------------
-        # - Several Photopoints\
+        # - Several Photopoints
         return [get_photopoint(lbda=self.lbda,flux=flux_,var=var_,
                             source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandpass.name,
@@ -86,8 +86,8 @@ class Instrument( Image ):
     
     @_autogen_docstring_inheritance(Image.get_target_aperture,
                                     "Image.get_target_aperture")
-    def get_target_photopoint(self,radius=None,runits="pixels",
-                              aptype="circle",**kwargs):
+    def get_target_photopoint(self,radius=None, runits="pixels",
+                              aptype="circle", **kwargs):
         #
         # Returns a PhotoPoint
         #
@@ -99,7 +99,6 @@ class Instrument( Image ):
                                    aptype="circle",**kwargs)
         pp.set_target(self.target)
         return pp
-
     
     @_autogen_docstring_inheritance(Image.get_host_aperture,
                                     "Image.get_host_aperture")
