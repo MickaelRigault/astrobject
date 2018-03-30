@@ -1072,7 +1072,6 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             err_ += syserr
 
         if local_correction:
-            print("LOCAL CORRECTION")
             b_count, b_err, f_ = self.get_target_local_noise(xpix=x, ypix=y,
                                                             radius=radius, runits=runits,
                                                             a_units=a_units, around=around,
