@@ -13,7 +13,7 @@ MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/astrobject/'
 LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/astrobject/tarball/0.6'
-VERSION = '0.6.1'
+VERSION = '0.6.2'
 
 try:
     from setuptools import setup, find_packages
@@ -35,14 +35,6 @@ def check_dependencies():
         import astropy
     except ImportError:
         install_requires.append('astropy')
-    try:
-        import astroquery
-    except ImportError:
-        install_requires.append('astroquery')
-    try:
-        import sep
-    except ImportError:
-        install_requires.append('sep')
 
     return install_requires
 

@@ -407,7 +407,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
     #   PLOTTER   #
     # ----------- #
     def show_details(self, savefile=None, show=True, kind="Local",
-                         **kwargs):
+                        figsize=[10,5], **kwargs):
         """ Display and advanced figure showing the details on
         how the mass estimate is drawn
         """
@@ -415,7 +415,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         from astrobject.utils.mpladdon import figout
 
         # -- Axes settings 
-        fig     = mpl.figure(figsize=[10,3])
+        fig     = mpl.figure(figsize=figsize)
         axcolor = fig.add_axes([0.05,0.12,0.56,0.78])
         ax      = fig.add_axes([0.07,0.65,0.2,0.18],zorder=9)
         axcolor_prior = axcolor.twinx()

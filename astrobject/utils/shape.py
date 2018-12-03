@@ -82,8 +82,7 @@ def polygon_to_vertices(polygon_):
     
     # ----------------
     # - Convertion
-    return np.concatenate([np.asarray(polygon_.exterior)]
-                          + [np.asarray(r) for r in polygon_.interiors])
+    return np.concatenate([np.asarray(polygon_.exterior)] + [np.asarray(r) for r in polygon_.interiors])
 
 def polygon_to_patch(polygon_,**kwargs):
     """

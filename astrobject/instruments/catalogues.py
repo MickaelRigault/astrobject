@@ -155,7 +155,8 @@ class PanSTARRSCatalogue( Catalogue ):
 # All Sky GAIA: Catalogue       #
 #                               #
 #################################
-def fetch_gaia_catalogue(center, radius, extracolumns=[], column_filters={}, **kwargs):
+def fetch_gaia_catalogue(radec, radius, r_unit="arcminute", extracolumns=[],
+                             column_filters={}, **kwargs):
     """ "query the gaia catalogue thought Vizier (I/337, DR1) using astroquery.
     This function requieres an internet connection.
 
@@ -182,25 +183,22 @@ def fetch_gaia_catalogue(center, radius, extracolumns=[], column_filters={}, **k
     SDSSCatalogue (child of Catalogue)
     
     """
-    try:
-        from astroquery import vizier
-    except:
-        raise ImportError("install astroquery. (pip install astroquery)")
 
-    #   Basic Info
-    # --------------
+      # -----------
+    # - DL info
     columns = ["RA_ICRS","DE_ICRS","e_RA_ICRS","e_DE_ICRS","Source","Dup",
                "o_<Gmag>","<FG>","e_<FG>","<Gmag>","Var"]
-        
-    columns = columns+extracolumns
-    column_quality = {} # Nothing there yet
-    
-    c = vizier.Vizier(catalog="I/337/gaia", columns=columns,
-                      column_filters=kwargs_update(column_quality,**column_filters),
-                      **kwargs)
-    c.ROW_LIMIT = "unlimited"
-    
-    t = c.query_region(center,radius=radius).values()[0]
+    #try:
+    ra,dec = center
+    coord = coordinates.SkyCoord(ra=ra,dec=dec, unit=(units.degree,units.degree))
+    angle = coordinates.Angle(radius,r_unit)
+    default_quality = {"mode":"1"}
+    try:
+        v = vizier.Vizier(column_filters=kwargs_update(default_quality,**column_filters))
+        v.ROW_LIMIT = -1
+        t = v.query_region(coord,radius=angle,catalog="I/345/gaia2").values()[0]
+    except:
+        raise IOError("Error while querying the given coords. Wrong catalog_fitler? Not connected to the internet?")
     
     cat = GAIACatalogue(empty=True)
     cat.create(t.columns ,None,

@@ -24,7 +24,7 @@ __all__     = ["get_target"]
 #######################################
 
 def get_target(name=None,zcmb=None, ra=None, dec=None, mjd=None,
-               type_=None,mwebmv=None,zcmb_err=None, 
+               type_=None, mwebmv=None,zcmb_err=None, 
                **kwargs):
     """ Create an AstroTarget
 
@@ -67,9 +67,7 @@ def get_target(name=None,zcmb=None, ra=None, dec=None, mjd=None,
     """
     if name is None and "object" in kwargs.keys():
         name = kwargs.pop("object")
-        
-    forced_mwebmv = kwargs.pop("forced_mwebmv",kwargs.pop("MWebmv",
-                                             kwargs.pop("MWebv",None)))
+    forced_mwebmv = mwebmv if mwebmv is not None else kwargs.pop("forced_mwebmv",kwargs.pop("MWebmv", kwargs.pop("MWebv",None)))
     
     dec = kwargs.pop("Dec",dec)
     ra = kwargs.pop("Ra",ra)

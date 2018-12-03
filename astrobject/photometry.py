@@ -1082,8 +1082,9 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                                                             annular_args=annular_args,
                                                             on=on, syserr = syserr,
                                                             local_correction=False)
-            fl_ -= np.mean(b_count)
+            fl_  -= np.median(b_count)
             err_ /= np.std(b_count/b_err)
+            #err_ += np.std(b_count)/np.sqrt(len(b_count))
             
         # ===================================
         # = Return of the aperture extraction
@@ -2575,7 +2576,7 @@ class PhotoPoint( BasePhotoPoint ):
         flux_corr = extinction.apply(ext_mag, [1])
         
         # - Correct the current flux
-        self.set_flux(self.flux/flux_corr[0], self.var/flux_corr[0]**2, force_it=True)
+        self.set_flux(self.flux/flux_corr[0], self.var/flux_corr[0]**2)
                 
     # =========================== #
     # = Properties and Settings = #
