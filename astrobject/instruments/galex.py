@@ -72,8 +72,9 @@ class GALEX( Instrument ):
     instrument_name = "GALEX"
     INFO            = GALEX_INFO
     
-    def set_sky(self, filename=None, skydata=None,
-                set_background=True):
+    def set_sky(self, filename=None,
+                    skydata=None,
+                    set_background=True):
         """ Provide the Sky file image or directly the skydata (a Galex Object)
         (in galex filename format they have the skybg label).
         This will set the sky that you can access using self.sky.
