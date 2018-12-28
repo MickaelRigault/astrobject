@@ -224,6 +224,19 @@ class WCS(pyWCS, _MotherWCS_):
         """
         """
         return shape.point_in_contours(ra,dec,self.contours)
+
+    @property
+    def rotation_indeg(self, skew_limit=0.1):
+        """ rotation of the north with respect of the column axis
+        1 value is returned is skewness lower then 0.1 deg (i.e. xrot~yrot)
+        else xrot, and yrot are returned
+        """
+        sign = np.sign(np.linalg.det(self.wcs.cd))
+        xrot = np.arctan2(sign * self.wcs.cd[0,1], sign * self.wcs.cd[0,0]) * 180 / np.pi
+        yrot = np.arctan2(-self.wcs.cd[1,0], self.wcs.cd[1,1]) * 180 / np.pi
+        if np.abs(xrot-yrot)>skew_limit:
+            return xrot,yrot
+        return yrot
     
     @property
     def edge_size(self):

@@ -523,7 +523,7 @@ class AstroTarget( BaseObject ):
     # =========================== #
     def define(self,name,zcmb,ra,dec,mjd=None,
                cosmo=None,type_=None,sfd98_dir=None,
-               forced_mwebmv=None,zcmb_err=None):
+               forced_mwebmv=None,zcmb_err=None, verbose=False):
         """
         This function enables you to define the fundamental object parameter
         upon which the entire object will be defined.
@@ -537,8 +537,9 @@ class AstroTarget( BaseObject ):
         if cosmo is None:
             from astropy.cosmology import Planck15
             cosmo = Planck15
-            print("Planck 2015 cosmology used by default")
-            warnings.warn("Planck 2015 cosmology used by default")
+            if verbose:
+                print("Planck 2015 cosmology used by default")
+                warnings.warn("Planck 2015 cosmology used by default")
             
         self.set_cosmo(cosmo)
         self._update_()
