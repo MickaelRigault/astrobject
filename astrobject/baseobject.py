@@ -934,7 +934,7 @@ class CatalogueHandler( BaseObject ):
         # - Radius
         if radius is None:
             if hasattr(self,"wcs") and self.has_wcs():
-                radius = self.wcs.diag_size/1.8 # not 2 to have some room around
+                radius = np.max(self.wcs.edge_size)/2 * np.sqrt(2) * 1.05 # not 2 to have some room around
             else:
                 raise ValueError("Without wcs solution you need to provide 'radius'")
             

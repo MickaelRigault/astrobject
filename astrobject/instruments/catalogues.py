@@ -162,12 +162,15 @@ def fetch_gaia_catalogue(radec, radius, r_unit="arcminute", extracolumns=[],
 
     Parameters
     ----------
-    center: [string] 'ra dec'
-        position of the center of the catalogue to query.
+    radec: [float, float] 
+        center of the catalogue to query [in degree]
 
-    radius: [string] 'value unit'
-        radius of the region to query. For instance '1d' means a
-        1 degree raduis
+    radius: [float] 
+        radius of the region to query [unit, see r_unit]
+
+    r_unit: [string or astropy.units] -optional-
+        unit of the seach radius (radius). This unit should be understandable by astropy.units.
+        Search angle is then defined as `angle = astropy.coordinates.Angle(radius, r_unit)`
 
     extracolumns: [list-of-string] -optional-
         Add extra column from the V/139 catalogue that will be added to
@@ -183,15 +186,20 @@ def fetch_gaia_catalogue(radec, radius, r_unit="arcminute", extracolumns=[],
     SDSSCatalogue (child of Catalogue)
     
     """
+    try:
+        from astroquery import vizier
+    except:
+        raise ImportError("install astroquery. (pip install astroquery)")
 
-      # -----------
+
+    # -----------
     # - DL info
     columns = ["RA_ICRS","DE_ICRS","e_RA_ICRS","e_DE_ICRS","Source","Dup",
                "o_<Gmag>","<FG>","e_<FG>","<Gmag>","Var"]
-    #try:
-    ra,dec = center
-    coord = coordinates.SkyCoord(ra=ra,dec=dec, unit=(units.degree,units.degree))
-    angle = coordinates.Angle(radius,r_unit)
+        
+    ra,dec  = radec
+    coord   = coordinates.SkyCoord(ra=ra,dec=dec, unit=(units.degree,units.degree))
+    angle   = coordinates.Angle(radius,r_unit)
     default_quality = {"mode":"1"}
     try:
         v = vizier.Vizier(column_filters=kwargs_update(default_quality,**column_filters))

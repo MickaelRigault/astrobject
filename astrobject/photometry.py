@@ -1392,7 +1392,9 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         default_prop = {
             "interpolation":"nearest",
             "origin":"lower",
-            "cmap":mpl.cm.binary
+            "cmap":mpl.cm.viridis,
+            "vmax":"99",
+            "vmin":"1",
             }
             
         prop = kwargs_update(default_prop,**kwargs)
@@ -1416,7 +1418,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             self.sepobjects.display(ax, **propsep)
             
         if show_catalogue and self.has_catalogue():
-            self.display_catalogue(ax,wcs_coords=False)
+            self.display_catalogue(ax, wcs_coords=False)
         # ----------- #
         #  ColorBar
         if add_colorbar:
@@ -1636,7 +1638,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         self.sepobjects.display(ax,draw=draw,
                                 **kwargs)
 
-    def display_catalogue(self,ax=None,wcs_coords=True,draw=True,**kwargs):
+    def display_catalogue(self,ax=None,wcs_coords=False, draw=True,scalex=False,scaley=False, **kwargs):
         """This methods enable to show all the known sources in the
         image's field of view.
         This will only works if a catalogue has been set"""
@@ -1653,7 +1655,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # --------------------------------
         # - Draw the matched-points
         return self.catalogue.display(ax,wcs_coords=wcs_coords,draw=draw,
-                                      scalex=False,scaley=False,
+                                      scalex=scalex, scaley=scaley,
                                       **kwargs)
 
     # =========================== #

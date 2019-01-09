@@ -870,9 +870,9 @@ class Catalogue( WCSHandler ):
     # --------------------- #
     # PLOT METHODS          #
     # --------------------- #
-    def display(self,ax,wcs_coords=True,draw=True,
-                apply_machedmask=True,draw_contours=True,
-                show_nonmatched=True,propout={},
+    def display(self, ax, wcs_coords=True, draw=True,
+                apply_machedmask=True, draw_contours=True,
+                show_nonmatched=True, propout={},colorin="C0", colorout="C3",
                 **kwargs):
         """
         This methods enable to show all the known sources in the
@@ -913,11 +913,9 @@ class Catalogue( WCSHandler ):
         x_starout,y_starout = x[~mask & starmask],y[~mask & starmask]
         x_nostarout,y_nostarout = x[~mask & ~starmask], y[~mask & ~starmask]
         # -- Properties
-        colorin = "b"
-        colorout = "r"
         default_prop = dict(
-            ls="None",marker="o",mfc="b",alpha=0.7,ms=6,mew=0,
-            label="%s-catalgue"%self.source_name,
+            ls="None", marker="o", mfc=colorin, ms=6, mew=0,
+            label="%s-catalgue"%self.source_name, 
             )
         prop = kwargs_update(default_prop,**kwargs)
 
@@ -925,11 +923,11 @@ class Catalogue( WCSHandler ):
         axout = []
         for x_,y_,show_,propextra in [[x_starin,  y_starin,True,{}],
                                       [x_nostarin,y_nostarin,True,
-                                        dict(mfc="None",mec=colorin,mew=2,alpha=0.6)],
+                                        dict(mfc="None", mec=colorin, mew=1)],
                                       [x_starout, y_starout, show_nonmatched,
-                                        dict(mfc=colorout,ms=4,alpha=0.5)],
+                                        dict(mfc=colorout, ms=4, alpha=0.6)],
                                       [x_nostarout,y_nostarout,show_nonmatched,
-                                        dict(mfc="None",mec=colorout,mew=1,ms=4,alpha=0.5)],
+                                        dict(mfc="None",mec=colorout, mew=1, ms=4, alpha=0.6)],
                                 ]:
             prop_ = kwargs_update(prop,**propextra)
             if len(x_)>0 and show_:

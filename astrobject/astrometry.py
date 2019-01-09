@@ -261,14 +261,14 @@ class WCS(pyWCS, _MotherWCS_):
     def edge_size(self):
         """return the p1,p2 and p2,p3 size (The order is counter-clockwise starting
         with the bottom left corner. p1,p2,p3,p4)"""
-        p1,p2,p3,p4 = self.calc_footprint()
-        return angular_separation(*np.concatenate([p1,p2])),angular_separation(*np.concatenate([p2,p3]))
+        lower_left, lower_right, upper_right, upper_left = self.calc_footprint()
+        return angular_separation(*np.concatenate([lower_left,lower_right])),angular_separation(*np.concatenate([lower_left,upper_left]))
     
     @property
     def diag_size(self):
         """return the largest diagonal size"""
-        p1,p2,p3,p4 = self.calc_footprint()
-        return np.max([angular_separation(*np.concatenate([p1,p3])),angular_separation(*np.concatenate([p2,p4]))])
+        lower_left, lower_right, upper_right, upper_left = self.calc_footprint()
+        return np.max([angular_separation(*np.concatenate([lower_left,upper_right])),angular_separation(*np.concatenate([lower_right,upper_left]))])
 
     @property
     def pix_indeg(self):
