@@ -832,10 +832,7 @@ class WCSHandler( BaseObject ):
         if self.has_wcs() and not force_it:
             raise AttributeError("A wcs solution is already loaded."\
                     " Set force_it to True if you really known what you are doing")
-
-        from .astrometry import _MotherWCS_,get_wcs
-        if wcs is not None and _MotherWCS_ not in wcs.__class__.__mro__:
-            raise TypeError("The given wcs solution is not a astrobject WCS instance")
+        from .astrometry import get_wcs
         self._side_properties["wcs"] = get_wcs(wcs) if wcs is not None else None
         
     # ================ #

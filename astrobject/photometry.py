@@ -311,11 +311,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if fits._file.strict_memmap:
             fits = pf.open(filename, memmap=False)
 
-        try:
-            from .  import astrometry
-            wcs_ = astrometry.wcs(filename, extension=index)
-        except:
-            wcs_ = None
+        wcsinput = pf.getheader(filename, extension=index)
+        
             
         # ---------- #
         # - Data   - #
@@ -341,14 +338,14 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # -------------------------- #
         #  Everythin looks good !    #
         # -------------------------- #
-        self.create(data,None,wcs_,mask=mask,
+        self.create(data, None, wcsinput, mask=mask,
                     background=background,
                     header=fits[index].header,
                     filename=filename,fits=fits,
                     force_it=True)
         
             
-    def create(self,rawdata,variance,wcs,mask=None,
+    def create(self, rawdata, variance=None, wcs=None, mask=None,
                background=None,header=None,exptime=None,
                filename=None,fits=None,force_it=False):
         """
@@ -412,7 +409,41 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                 self.catalogue.set_fovmask(wcs=self.wcs)
         
         if reload_sep: self.sep_extract()
+
+
+    def get_subimage(self, xmin, xmax, ymin, ymax):
+        """ Provide x and y contours (as in show, i.e. x = abscise).
+        A new Image object will be created. rawdata, background, header, wcs solution and catalog (if any) 
+        will be passed. 
+        The header and the wcs solution will be updated to account for the new image shape. 
         
+        Returns
+        -------
+        Image
+        """
+        rawdata    = self.rawdata[ymin:ymax,xmin:xmax]
+        background = self.background[ymin:ymax,xmin:xmax]
+        variance   = self.var[ymin:ymax,xmin:xmax] if self.has_var() else None
+        
+        header = self.header.copy()
+        header["NAXIS1"],header["NAXIS2"] = np.shape(rawdata)
+        if "CRPIX1" in self.header:
+            header["CRPIX1"] = self.header["CRPIX1"] - xmin
+            header["CRPIX2"] = self.header["CRPIX2"] - ymin
+
+        subming = Image()
+        subming.create(rawdata, variance=variance, wcs=header, header=header, background=background)
+        if self.has_sepobjects():
+            print("Currently, sep_objects is not passed.")
+            
+        if self.has_catalogue():
+            new_cat = self.catalogue.copy()
+            new_cat.reset()
+            
+            subming.set_catalogue(new_cat)
+            
+        return subming
+    
     # ------------------- #
     # - Set Methods     - #
     # ------------------- #

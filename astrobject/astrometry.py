@@ -10,78 +10,57 @@ import warnings
 
 # - astropy
 from astropy     import units
-from astropy.wcs import WCS as pyWCS
+from astropy.wcs import WCS as astropyWCS
 from astropy.io  import fits
 from astropy.coordinates.angle_utilities import angular_separation
-
-# - AstLib, might not be needed
-try:
-    from astLib      import astWCS
-    _HAS_ASTLIB_ = True
-except ImportError:
-    #warnings.warn("ImportError - astLib can not be imported ; PTF-like images won't load.")
-    _HAS_ASTLIB_ = False
     
 # - local
 from .utils import shape
 from .utils.tools import is_arraylike
 
+def get_wcs(wcsinput, verbose=True, **kwargs):
+    """
+    """
+    if type(wcsinput)==str:
+        return WCS.load_from_fitsfile(wcsinput, **kwargs)
+    elif fits.Header in wcsinput.__class__.__mro__:
+        return WCS.load_from_header(wcsinput, **kwargs)
+    elif WCS in wcsinput.__class__.__mro__:
+        return wcsinput
 
+    raise TypeError("Unrecognized WCS input format (given type: %s) fitsfile / fits.header or WCS implemented"%type(wcsinput))
+
+# = Older
 def wcs(filename=None, header=None, extension=0):
     """ loads the WCS solution for the given data. """
-    
-    if filename is not None:
-        header = fits.getheader(filename,ext=extension)
-    if header is None:
-        raise ValueError("'filename' or 'header' must be given")
-
-    return WCS(header)
-
-# =========================== #
-# =
-# =========================== #
-def get_wcs(wcsinput,verbose=True):
-    """
-    """
-    if wcsinput is None:
-        return None
-    
-    # ----------------------
-    # - astLib.astWCS Format
-    if wcsinput.__module__ == "astLib.astWCS":
-        return astlibwcs_to_wcs(wcsinput)
-    
-    # --------------
-    # - Good format
-    if "__nature__" in dir(wcsinput) and wcsinput.__nature__ == "WCS":
-        return wcsinput
-    if verbose:
-        print("WARNING: only astLib.astWCS / astrobject.astrometry.WCS wcs solution are implemented")
-        print(" ----> No wcs solution")
-        
-    return None
-
-def astlibwcs_to_wcs(astlibwcs):
-    """
-    """
-    if "headerSource" not in dir(otherformat):
-        raise TypeError("The given 'astlibwcs' is not an astLib.WCS")
-    
-    return wcs(otherformat.headerSource)
+    print("DECREPATED, used get_wcs")
+    return get_wcs(filename) if filename is not None else get_wcs(header, extension=extension)
 
 ##########################################
 #                                        #
 # Advance WCS Astrobject                 #
 #                                        #
 ##########################################
-class _MotherWCS_( object ):
-    """ This shoud be merged with WCS once the aslLib dependency is cleaned """
+class WCS( astropyWCS ):
+    """ More user friendly methods than the default astropy onces (inherit astropy.wcs.WCS) """
     __nature__ = "WCS"
 
     # ---------------- #
+    #  Statics method  #
+    # ---------------- #
+    @staticmethod
+    def load_from_header(header):
+        """ Load the wcs solution from a given header. This is similar to WCS(header)"""
+        return WCS(header=header)
+    
+    @staticmethod
+    def load_from_fitsfile(fitsfile, extension=0):
+        """ Load the header from the given file and return a WCS object"""
+        return WCS.load_from_header( fits.getheader(fitsfile,ext=extension) )
+    
+    # ---------------- #
     # - Converstion  - #
     # ---------------- #    
-        
     def units_to_pixels(self,units_, target=None):
         """units should be a parsable string or a astropy units"""
         
@@ -187,14 +166,7 @@ class _MotherWCS_( object ):
     
     def has_contours(self):
         return self.contours is not None
-
     
-class WCS(pyWCS, _MotherWCS_):
-    """
-    """
-    # -------------------- #
-    # - Mimic astLib     - #
-    # -------------------- #
     def pix2world(self,x,y, withoffset=True):
         """ Convert pixel to world coordinate """
         offset = self.image_offset[::-1] if withoffset else np.asarray([0,0])
