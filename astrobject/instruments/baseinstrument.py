@@ -872,7 +872,7 @@ class Catalogue( WCSHandler ):
     # --------------------- #
     def display(self, ax, wcs_coords=True, draw=True,
                 apply_machedmask=True, draw_contours=True,
-                show_nonmatched=True, propout={},colorin="C0", colorout="C3",
+                show_nonmatched=True, propout={}, colorin="C1", colorout="C3",
                 **kwargs):
         """
         This methods enable to show all the known sources in the
