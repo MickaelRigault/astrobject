@@ -922,7 +922,7 @@ class CatalogueHandler( BaseObject ):
         ------
         Void (or the Catalogue if set_it is False)
         """
-        from .instruments.instrument import fetch_catalogue
+        from .catalogue import fetch_catalogue
         # - RaDec
         if radec is None:
             if hasattr(self,"wcs") and self.has_wcs():
@@ -968,7 +968,7 @@ class CatalogueHandler( BaseObject ):
         -------
         Void
         """
-        from .instruments.baseinstrument import Catalogue
+        from .catalogue.basecatalogue import Catalogue
 
         if not fast_setup:
             if self.has_catalogue() and force_it is False:
