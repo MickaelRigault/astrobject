@@ -446,8 +446,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     
     # ------------------- #
     # - Set Methods     - #
-    # ------------------- #
-    def set_target(self,newtarget, test_inclusion=True):
+    # ------------------- #        
+    def set_target(self, newtarget, test_inclusion=True):
         """
         Change (or create) an object associated to the given image.
 
@@ -469,18 +469,11 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             raise TypeError("'newtarget' should be (or inherite) an AstroTarget")
         
         if test_inclusion:
-            from .utils.shape import HAS_SHAPELY
-            if not HAS_SHAPELY:
-                print("WARNING: could not test if the target is in the image since you do not have SHAPELY")
-            elif self.has_wcs() is False:
-                print("WARNING: because there is no wcs solution, "+\
-                  "I can't test the inclusion of the new astrotarget")
-            else:
-                if not self.wcs.coordsAreInImage(*newtarget.radec):
-                    raise ValueError("The new 'target' is not inside the image "+\
-                                      " boundaries"+ "\n"+\
-                                     "--> object radec: %.3f,%.4f"%(newtarget.ra,
-                                                                    newtarget.dec))
+            if not self.is_target_in(newtarget):
+                raise ValueError("The new 'target' is not inside the image "+\
+                                     " boundaries"+ "\n"+\
+                                     "--> object radec: %.4f,%+.4f"%(newtarget.ra,
+                                                                     newtarget.dec))
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
 
@@ -2455,10 +2448,14 @@ class BasePhotoPoint( TargetHandler ):
 
     @property
     def magabs(self):
-        """ Sift of the magnitude given the target distance (requires target set.)"""
+        """ Shift of the magnitude given the target distance (requires target set.)
+
+        => return `self.mag - 5*( np.log10(self.target.distmpc*1.e6) - 1)`
+
+        """
         if not self.has_target():
             raise AttributeError("No target defined, I can't get the distance")
-        return self.mag - 5*(np.log10(self.target.distmpc*1.e6) - 1)
+        return self.mag - 5*( np.log10(self.target.distmpc*1.e6) - 1)
 
     # ------------ #
     #  Sampler     #
@@ -2643,7 +2640,7 @@ class CountsPhotoPoint( BasePhotoPoint ):
     def draw_photosamplers(self, nsamplers=5000):
         """ Set the photosamplers object defining the number of samples available. """
         from .utils.statbox import continuous_poisson
-        contpoisson = continuous_poisson(self.totalcounts)
+        contpoisson = continuous_poisson(self.totalcounts) 
         
         self._derived_properties["photosamplers"] = \
           PhotoSamplers( self.cps_to_flux( (contpoisson.rvs(size=nsamplers) - self.bkgdcounts) / self.exptime) ,

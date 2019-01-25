@@ -66,7 +66,7 @@ class GALEX( Instrument ):
     Class Build to use GALEX 
     """
     PROPERTIES         = ["sky"]
-    SIDE_PROPERTIES    = []
+    SIDE_PROPERTIES    = ["fov"]
     DERIVED_PROPERTIES = []
     
     instrument_name = "GALEX"
@@ -241,7 +241,35 @@ class GALEX( Instrument ):
         var = propfit.pop("var",None)
         return [super(GALEX, self).get_aperture( x, y, on="rawdata",var=var, **propfit),
                 super(GALEX, self).get_aperture( x, y, on="sky.rawdata",var=var, **propfit)]
-    
+
+    def is_target_in(self, newtarget, buffer_safe_width=0.05):
+        """ This method enables to test if the given target is inside the image. 
+        This is based on shapely.
+        It assumes GALEX image is centered on header's ["RA_CENT","DEC_CENT"] and has a radius on 0.6 degree.
+        
+        --------
+        CAUTION: If you do not have shapely or no wcs solution this returns TRUE as it cannot test.
+        --------
+
+        Parameters
+        ----------
+        buffer_safe_width: [float] -option-
+            Width of a ring at the edge of galex image. 
+            If the target is inside the ring, it will be considered "Not In" (i.e. False is returned)
+            Effectively, this assumes GALEX radius is not 0.6 but `0.6-buffer_safe_width`
+
+        Returns
+        -------
+        bool (True means yes, the target is in)
+        """
+        from ..utils.shape import HAS_SHAPELY
+        # Test if shapely
+        if not HAS_SHAPELY:
+            print("WARNING: could not test if the target is in the image since you do not have SHAPELY")
+            return True
+        from ..utils.shape import Point
+        return Point(self.header["RA_CENT"], self.header["DEC_CENT"]).buffer(0.6-buffer_safe_width).contains( Point(newtarget.radec) )
+        
     # ================== #
     #   Internal         #
     # ================== #    

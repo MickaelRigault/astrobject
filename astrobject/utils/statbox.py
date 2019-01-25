@@ -164,10 +164,13 @@ def continuous_poisson(mu, *args, **kwargs):
     -------
     array (pdf with the size of x). 
     """
-    p_ = poissoncont_gen(name="poissoncont", longname='Continuous Poisson')
-    return p_(mu)
+    if mu<30:
+        return poissoncont_gen(name="poissoncont", longname='Continuous Poisson')(mu)
+    
+    # If large enough, just use the gaussian approximation
+    return stats.norm(loc=mu, scale=np.sqrt(mu))
 
-class poissoncont_gen(stats._discrete_distns.poisson_gen):
+class poissoncont_gen( stats._discrete_distns.poisson_gen ):
     """
     Child of poisson distribution. 
     pdf, rvs and cdf have been implemented to support continuous input

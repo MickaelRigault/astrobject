@@ -834,7 +834,34 @@ class WCSHandler( BaseObject ):
                     " Set force_it to True if you really known what you are doing")
         from .astrometry import get_wcs
         self._side_properties["wcs"] = get_wcs(wcs) if wcs is not None else None
+
+    def is_target_in(self, newtarget):
+        """ This method enables to test if the given target is inside the image. 
+        This is based on WCS solution
+
+        --------
+        CAUTION: If you do not have shapely or no wcs solution this returns TRUE as it cannot test.
+        --------
+
+        Returns
+        -------
+        bool (True means yes, the target is in)
+        """
+        from .utils.shape import HAS_SHAPELY
+        # Test if shapely
+        if not HAS_SHAPELY:
+            print("WARNING: could not test if the target is in the image since you do not have SHAPELY")
+            return True
+        # Test if WCS        
+        if not self.has_wcs():
+            print("WARNING: because there is no wcs solution, "+\
+                  "I can't test the inclusion of the new astrotarget")
+            return True
         
+        return self.wcs.coordsAreInImage(*newtarget.radec)
+        
+
+
     # ================ #
     #    Properties    #
     # ================ #

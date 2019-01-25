@@ -13,7 +13,7 @@ from .decorators import make_method
 
 # -- Shapely
 try:
-    from shapely.geometry import MultiPoint,Point, polygon, multipolygon, MultiPolygon
+    from shapely.geometry import MultiPoint, Point, polygon, multipolygon, MultiPolygon
     HAS_SHAPELY = True
     
 except ImportError:
