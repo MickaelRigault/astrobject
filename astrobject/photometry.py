@@ -2049,9 +2049,10 @@ class ImageBackground( BaseObject ):
 class PhotoSamplers( Samplers ):
     """ Object used to accurately estimate the magnitude in the PhotoPoint Class """
     PROPERTIES         = ["lbda"]
+    SIDE_PROPERTIES    = ["negative_fluxmag"]
     DERIVED_PROPERTIES = ["magsamples"]
 
-    def __init__(self, fluxsamples, lbda=None, empty=False ):
+    def __init__(self, fluxsamples, lbda=None, empty=False, negative_fluxmag=None):
         """ Initialize the Samplers. Remark that all flux, fluxerr and lbda
         are requested to draw the samplers"""
         self.__build__()
@@ -2059,7 +2060,9 @@ class PhotoSamplers( Samplers ):
             return
         
         self.set_samplers(fluxsamples)
-        if lbda is not None: self.set_lbda(lbda)
+        if lbda is not None:
+            self.set_lbda(lbda, negative_fluxmag=negative_fluxmag)
+        
 
     # =================== #
     #   Main Methods      #
@@ -2077,10 +2080,12 @@ class PhotoSamplers( Samplers ):
     def derive_magsamples(self, negative_fluxmag=None):
         """ Builds self.magsamples based on samplers(fluxes) and lbda using `flux_to_mag` """
         mags = flux_to_mag(self.samplers,None,self.lbda)[0]
+        self._side_properties["negative_fluxmag"] = negative_fluxmag
+        
         if negative_fluxmag is None:
             mags = mags[mags==mags]
         else:
-            mags[mags==mags] = negative_fluxmag
+            mags[mags!=mags] = negative_fluxmag
 
         s = Samplers()
         s.set_samplers(mags)
@@ -2169,6 +2174,11 @@ class PhotoSamplers( Samplers ):
             self.derive_magsamples()
             
         return self._derived_properties["magsamples"]
+
+    @property
+    def negative_fluxmag(self):
+        """ """
+        return self._side_properties["negative_fluxmag"]
     
     @property
     def lbda(self):
@@ -2512,11 +2522,11 @@ class PhotoPoint( BasePhotoPoint ):
     #   Main Methods        #
     # ===================== #
     #  Requested by BasePhotoPoint
-    def draw_photosamplers(self, nsamplers=5000):
+    def draw_photosamplers(self, nsamplers=5000, negative_fluxmag=None):
         """ Set the photosamplers object defining the number of samples available. """
         self._derived_properties["photosamplers"] = \
           PhotoSamplers( np.random.normal(loc=self.flux, scale=np.sqrt(self.var), size=nsamplers),
-                             lbda = self.lbda)
+                             lbda = self.lbda, negative_fluxmag=negative_fluxmag)
 
 
     def create(self, flux, var,

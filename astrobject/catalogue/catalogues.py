@@ -315,7 +315,7 @@ class GAIACatalogue( Catalogue ):
     source_name = "Gaia"
     
     def __init__(self, catalogue_file=None, empty=False,
-                 key_mag="__Gmag_", key_magerr="__e_Gmag_",
+                 key_mag="RPmag", key_magerr="e_RPmag",
                  key_ra=None, key_dec=None, **kwargs):
         """
         """

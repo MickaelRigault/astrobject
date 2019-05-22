@@ -425,7 +425,7 @@ class Samplers( BaseObject ):
         if value is None:
             raise ValueError("value given for nsamplers cannot be 'None' ")
         if value<10:
-            raise ValueError("set a value greater than 10! %s"%value)
+            warnings.warn("you set `nsamplers` to a value lower than 10! (%s)"%value)
         self._properties["nsamplers"] = value
 
 ###########################

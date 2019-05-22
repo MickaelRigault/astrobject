@@ -135,6 +135,12 @@ def taylor_mass_relation(mag_i, gi_color, distmpc):
 #   G-I PRIOR        #
 #                    #
 ######################
+def draw_prior_sample(size, prior="snhost", value_range=[-1,2.5], bins=5000):
+    """ """
+    x = np.linspace(*value_range, bins)
+    pdf = g_i_prior(x, which=prior) if type(prior) == str else prior(x)
+    return np.random.choice(x, p= pdf / pdf.sum(), size=size)
+
 def gi_prior_snfhost(x):
     """ """
     return g_i_prior(x, which="snhost", image_norm=False)
@@ -153,8 +159,6 @@ def gi_prior_flat(x, inrange=[-0.5,2]):
 def gi_prior_normal(x, loc=0.7, scale=0.5):
     """ """
     return stats.norm.pdf(x, loc=loc, scale=scale)
-
-
 
 def g_i_prior(x, which="snhost", image_norm=False):
     """ prior pdf distribution following The g-i distribution
@@ -335,6 +339,8 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
     PROPERTIES = []
     SIDE_PROPERTIES = ["relation_magdisp","gi_prior"]
     DERIVED_PROPERTIES = ["gi_samplers", "gi_priored_sample", "samplers_noprior"]
+
+    NEGATIVE_FLUXMAG = 28
     
     def __init__(self, ppoint_g=None, ppoint_i=None,
                  nsamplers=10000, relation_dispersion=0.1,
@@ -407,7 +413,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
     #   PLOTTER   #
     # ----------- #
     def show_details(self, savefile=None, show=True, kind="Local",
-                        figsize=[10,5], **kwargs):
+                        figsize=[9,4], **kwargs):
         """ Display and advanced figure showing the details on
         how the mass estimate is drawn
         """
@@ -416,10 +422,10 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
 
         # -- Axes settings 
         fig     = mpl.figure(figsize=figsize)
-        axcolor = fig.add_axes([0.05,0.12,0.56,0.78])
-        ax      = fig.add_axes([0.07,0.65,0.2,0.18],zorder=9)
+        axcolor = fig.add_axes([0.05,0.15,0.56,0.73])
+        ax      = fig.add_axes([0.07,0.71,0.2,0.15],zorder=9)
         axcolor_prior = axcolor.twinx()
-        axmass  = fig.add_axes([0.65,0.12,0.3,0.78])
+        axmass  = fig.add_axes([0.65,0.15,0.3,0.73])
         # -----------
         # - Property
         prop = kwargs_update(dict(histtype="step", bins=20, normed=True, 
@@ -472,15 +478,15 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
                         
         # -- infor and fancy
         
-        ax.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize="xx-large")
-        axcolor.set_xlabel(r"$g-i\ \mathrm{color\ [mag]}$", fontsize="xx-large")
-        axmass.set_xlabel(r"$\log(\mathrm{M_*/M_{\odot}})$", fontsize="xx-large")
+        ax.set_xlabel(r"$\mathrm{AB\ magnitude}$", fontsize="large")
+        axcolor.set_xlabel(r"$g-i\ \mathrm{color\ [mag]}$", fontsize="x-large")
+        axmass.set_xlabel(r"$\log(\mathrm{M_*/M_{\odot}})$", fontsize="x-large")
         axmass.set_ylim(0, axmass.get_ylim()[-1])
 
 
         axcolor.set_xlim(-0.5,2)
 
-        axcolor_prior.legend(loc="upper right", fontsize="x-large", frameon=False)
+        axcolor_prior.legend(loc="upper right", fontsize="medium", frameon=False)
         axcolor_prior.set_ylim(0,1.0*1.2)
         axcolor.set_ylim(0,axcolor.get_ylim()[1]*1.2)
 
@@ -489,7 +495,9 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
                     fontsize="xx-large")
         
         fig.figout(savefile=savefile, show=show)
-
+        
+        return fig
+    
     # --------- #
     #  I/O      #
     # --------- #
@@ -555,11 +563,12 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
 
     def _set_color_samplers_(self):
         """ """
-        self.photopoints["i"].draw_photosamplers(nsamplers=self.nsamplers*2) # assumes less than half will be nan
-        self.photopoints["g"].draw_photosamplers(nsamplers=self.nsamplers*2)
+        self.photopoints["i"].draw_photosamplers(nsamplers=self.nsamplers*2, negative_fluxmag=self.NEGATIVE_FLUXMAG) # assumes less than half will be nan
+        self.photopoints["g"].draw_photosamplers(nsamplers=self.nsamplers*2, negative_fluxmag=self.NEGATIVE_FLUXMAG)
         
         neff = np.min([self.photopoints["g"].photosamplers.nsamplers,
-                       self.photopoints["i"].photosamplers.nsamplers,self.nsamplers])
+                       self.photopoints["i"].photosamplers.nsamplers,
+                       self.nsamplers])
         if neff != self.nsamplers:
             warnings.warn("Reduced effective number of sampler (%d -> %d)for the mass because of too many nans"%(self.nsamplers, neff))
             self.nsamplers = neff
@@ -567,9 +576,16 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         # -- g and i samplers
         g_ = self.photopoints["g"].photosamplers._magsamples.get_random_samplers(self.nsamplers)
         i_ = self.photopoints["i"].photosamplers._magsamples.get_random_samplers(self.nsamplers)
-        
+        # - Use prior values when g_ or i_ is upper limit:
+        flag_negative_flux = (g_==self.NEGATIVE_FLUXMAG) + (i_==self.NEGATIVE_FLUXMAG)
+        gi_color = g_ - i_
+        if np.any(flag_negative_flux):
+            nnegflux = len(flag_negative_flux[flag_negative_flux])
+            warnings.warn("%d/%d color samplers will be changed to the prior distribution as they have negative flux"%( nnegflux, self.nsamplers ) )
+            gi_color[flag_negative_flux] = draw_prior_sample(nnegflux, prior=self.gi_prior, value_range=[-1,2.5], bins=5000)
+            
         # -- Set the gi_sampler consequently
-        self.gi_samplers.set_samplers(g_ - i_)
+        self.gi_samplers.set_samplers(gi_color)
         # -- and draw the priored sampling (could be done automatically be here it is explicit)
         self._derived_properties["gi_priored_sample"] = \
           self.gi_samplers.resample(self.nsamplers, prior=self.gi_prior,

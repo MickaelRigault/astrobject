@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 
 
+import pandas 
 # - astropy
 from astropy import coordinates, units
 from astropy.table.table import Table, TableColumns, Column
@@ -160,7 +161,7 @@ class Catalogue( WCSHandler ):
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
     
-        self._properties["data"] = Table(data)
+        self._properties["data"] = Table(data).to_pandas()
         self._properties["header"] = header if header is not None \
           else pf.Header()
         self.set_starsid(build.pop("key_class",None),build.pop("value_star",None))
@@ -536,9 +537,9 @@ class Catalogue( WCSHandler ):
             if catmag_range[1] is None:
                 catmag_range[1] = np.nanmax(self.mag if fovmask else self._mag)
                 
-            magmask = (self.mag>=catmag_range[0]) & (self.mag<=catmag_range[1]) \
+            magmask = (self.mag>=catmag_range[0]) * (self.mag<=catmag_range[1]) \
               if fovmask \
-              else (self._mag>=catmag_range[0]) & (self._mag<=catmag_range[1])
+              else (self._mag>=catmag_range[0]) * (self._mag<=catmag_range[1])
             mask *= magmask
          
         return mask
@@ -917,7 +918,7 @@ class Catalogue( WCSHandler ):
     def _ra(self):
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["key_ra"]]
+        return self.data[self._build_properties["key_ra"]].values
     
     @property
     def dec(self):
@@ -928,7 +929,7 @@ class Catalogue( WCSHandler ):
     def _dec(self):
         if not self.has_data():
             raise AttributeError("no 'data' loaded")
-        return self.data[self._build_properties["key_dec"]]
+        return self.data[self._build_properties["key_dec"]].values
         
     @property
     def sky_radec(self):
@@ -953,7 +954,7 @@ class Catalogue( WCSHandler ):
         if not self._is_keymag_set_():
             raise AttributeError("no 'key_mag' defined. see self.set_mag_keys ")
         
-        return self.data[self._build_properties["key_mag"]]
+        return self.data[self._build_properties["key_mag"]].values
         
     @property
     def mag_err(self):
@@ -968,7 +969,7 @@ class Catalogue( WCSHandler ):
         if not self._is_keymag_set_():
             raise AttributeError("no 'key_magerr' defined. see self.set_mag_keys ")
         
-        return self.data[self._build_properties["key_magerr"]]
+        return self.data[self._build_properties["key_magerr"]].values
     
     # ----------------
     # - Fluxes
