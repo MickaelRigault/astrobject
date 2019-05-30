@@ -21,9 +21,9 @@ from ..utils.tools      import kwargs_update
 # effective wavelengths from sncosmo
 PANSTARRS_INFO= {"ps1.g":{"lbda":4866.457871,"ABmag0":25.0},
                  "ps1.r":{"lbda":6214.623038,"ABmag0":25.0},
-                 "ps1.g":{"lbda":7544.570357,"ABmag0":25.0},
-                 "ps1.g":{"lbda":8679.482571,"ABmag0":25.0},
-                 "ps1.g":{"lbda":9633.284241,"ABmag0":25.0},
+                 "ps1.i":{"lbda":7544.570357,"ABmag0":25.0},
+                 "ps1.z":{"lbda":8679.482571,"ABmag0":25.0},
+                 "ps1.y":{"lbda":9633.284241,"ABmag0":25.0},
                  "bands":["ps1.g","ps1.r","ps1.i","ps1.z","ps1.y"],
                  "telescope":{
                      "lon": -156.2571, 
@@ -226,28 +226,33 @@ class PanSTARRS( Instrument ):
     @property
     def _bzero(self):
         """ """
-        self.header["BZERO"]
+        return self.header["BZERO"]
         
     @property
     def _bscale(self):
         """ """
-        self.header["BSCALE"]
+        return self.header["BSCALE"]
         
     @property
     def _bsoften(self):
         """ """
-        self.header["BSOFTEN"]
+        return self.header["BSOFTEN"]
         
     @property
     def _boffset(self):
         """ """
-        self.header["BOFFSET"]
+        return self.header["BOFFSET"]
 
+    @property
+    def _gain(self):
+        """ """
+        return self.header["HIERARCH CELL.GAIN"]
         
     # ---------------------
     # - Generic Properties
     @property
     def mab0(self):
+        """ """
         return self.header["HIERARCH FPA.ZP"]
     
     @property
@@ -259,4 +264,5 @@ class PanSTARRS( Instrument ):
 
     @property
     def mjd(self):
+        """ """
         return self.header["MJD-OBS"]
