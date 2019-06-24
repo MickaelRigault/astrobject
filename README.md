@@ -3,12 +3,8 @@ This module gathers the basic tools one usually needs for astrophysics and cosmo
 
 [![PyPI](https://img.shields.io/pypi/v/astrobject.svg?style=flat-square)](https://pypi.python.org/pypi/astrobject)
 
-Python
-------
+## Installation
 
-**Documentation:** Not done yet
-
-**Installation**
 ```
 sudo pip install astrobject
 ```
@@ -20,7 +16,7 @@ cd astrobject
 python setup.py install
 ```
 
-**Requirements:**
+### Requirements
 
 The required packages will be installed automatically if you install astrobject using pip
 - astropy (pip install astropy)
