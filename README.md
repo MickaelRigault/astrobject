@@ -12,6 +12,14 @@ Python
 ```
 sudo pip install astrobject
 ```
+
+or using git
+```
+git clone https://github.com/MickaelRigault/astrobject.git
+cd astrobject
+python setup.py install
+```
+
 **Requirements:**
 
 The required packages will be installed automatically if you install astrobject using pip
