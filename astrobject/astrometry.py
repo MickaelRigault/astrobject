@@ -172,12 +172,12 @@ class WCS( astropyWCS ):
         offset = self.image_offset[::-1] if withoffset else np.asarray([0,0])
         
         if not is_arraylike(x):
-            xoffset = x-offset[0]+1
-            yoffset = y-offset[1]+1
+            xoffset = x-offset[0]
+            yoffset = y-offset[1]
             return self.all_pix2world([[xoffset,yoffset]],
                                         0)[0]
         
-        xyoffset = np.asarray([x,y]).T-offset+1    
+        xyoffset = np.asarray([x,y]).T-offset
         return self.all_pix2world(xyoffset.tolist(),0)
     
     def world2pix(self,ra,dec,withoffset=True):

@@ -706,7 +706,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             print("No nearby host identified"+(" for %s"%(target.name) if target is not None else ""))
             print(" Maximum allowed galaxy radius %.1f ; nearest galaxy [in its radius] %.1f"%(max_galdist, dist_in_radius[i_nearest]))
             return None
-        return idx[i_nearest]
+        
+        return int(idx[i_nearest])
 
             
     def get_nearest_idx(self, ra, dec, wcs_coords=True,
@@ -1217,6 +1218,9 @@ class SepObject( PhotoMap ):
 
     def get_ellipse_values(self, mask=None):
         """ returns the x, y, a, b, theta for the sep objects """
+        if mask is not None:
+            mask = np.atleast_1d(mask)
+            
         if mask is not None and len(mask)==1:
             return self.get(["x","y","a","b","theta"], mask=mask)[0]
         return self.get(["x","y","a","b","theta"], mask=mask).T

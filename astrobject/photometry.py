@@ -200,7 +200,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # =========================== #
     # = Constructor             = #
     # =========================== #
-    def __init__(self,filename=None,
+    def __init__(self, filename=None,
                  astrotarget=None,data_index=0,
                  dataslice0=None,dataslice1=None,
                  empty=False, **kwargs):
@@ -254,9 +254,9 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ------------------- #
     # - I/O Methods     - #
     # ------------------- #
-    def load(self,filename,index=None,mask=None,
+    def load(self,filename, index=None, mask=None,
              force_it=False, background=None,
-             dataslice0=None,dataslice1=None):
+             dataslice0=None,dataslice1=None,**kwargs):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
@@ -294,32 +294,69 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         Void
         """
         from astropy.io import fits as pf
+        index = self._build_properties["data_index"] if index is None else index
+          
+        # -------------------------- #
+        #  fits file and wcs         #
+        # -------------------------- #
+        fits = pf.open(filename, **kwargs)
+        self._properties["filename"] = filename
+        self._load_fits_(fits, mask=mask, index=index,
+                             force_it=force_it, background=background,
+                             dataslice0=dataslice0,dataslice1=dataslice1)
+
+    def _load_fits_(self, fits,
+                    mask=None, index=0,
+                    force_it=False, background=None,
+                    dataslice0=None,dataslice1=None):
+        """
+        This enables to load a fitsfile image and will create
+        the basic data and wcs solution if possible.
+        *var* (error) and *background* has to be defined
+        separately has this strongly depend on the instrument
+
+        Parameters
+        ----------
+        fits: [fits HDU]
+            fits-format data
+
+        mask: [boolean array] -optional-
+            Data that will be set to NaN.
+            
+
+        dataslice0, dataslice1: [2D-array, 2D-array] -optional-
+            load only the data within the given boundaries.
+            The 0-offset will be accessible in self._dataoffset
+            and will be passed to the wcs solution.
+            None means no limits.
+            None will be converted to [0,-1]
+        
+        index: [int]
+            The fits entry that contains the data.
+            If None, this will fetch it in the build_properties
+
+        force_it: [bool]
+            If the data already exist, this method will raise an
+            exception except if you set *force_it* to True.
+            Be Careful with this.
+            
+        Return
+        ------
+        Void
+        """
         # -- Check if you will not overwrite anything
         if self._properties["rawdata"] is not None and force_it is False:
             raise AttributeError("'data' is already defined."+\
                     " Set force_it to True if you really known what you are doing")
 
-        index = self._build_properties["data_index"] if index is None \
-          else index
-          
-        # -------------------------- #
-        #  fits file and wcs         #
-        # -------------------------- #
-        #try:
-        
-        fits = pf.open(filename, memmap=True)
-        if fits._file.strict_memmap:
-            fits = pf.open(filename, memmap=False)
-
-        wcsinput = pf.getheader(filename, extension=index)
-        
-            
         # ---------- #
         # - Data   - #
         # ---------- #
         #if dataslice0 is None and dataslice1 is None:
         #    _slicing = False
 
+        wcsinput = fits[index].header
+        
         if dataslice0 is not None or dataslice1 is not None:
             if dataslice0 is None:
                 dataslice0 = [0,-1]
@@ -341,7 +378,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         self.create(data, None, wcsinput, mask=mask,
                     background=background,
                     header=fits[index].header,
-                    filename=filename,fits=fits,
+                    fits=fits,
                     force_it=True)
         
             
@@ -372,7 +409,9 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ********************* #
         # --------------
         # - Set instance
-        self._properties["filename"]      = filename
+        if filename is not None:
+            self._properties["filename"]      = filename
+            
         self._derived_properties["fits"]  = fits
         self._properties["header"]        = header # None -> Header when called
         self._side_properties["exptime"]  = exptime
@@ -708,6 +747,57 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                                  aptype=aptype,
                                  subpix=subpix,**kwargs)
 
+    def get_host_idx(self,  scaleup=2.5,
+                          radius=30, runits="kpc",
+                          max_galdist=2., catid=None):
+        """ if a target is loaded, and sep_extract has successfully ran, 
+        this returns the idx of the nearest galaxy.
+        (This is build upon the sepobject's get_host_idx() method.
+        It first searches galaxies in a given radius and then returns
+        the index of the one minimizing the elliptical radius (not necesseraly
+        the nearest in angular distance).
+
+        Parameters:
+        ----------
+        scaleup: [float] -optional-
+            blow up of the sep radius to incapsulate the entire galaxy.
+            2.5 is what is displayed in the show(show_sepobjects=True)
+            method.
+
+        // host setting
+
+        catid: [float/string/None] -optional-
+            You can force the id for the host by providing it here.
+            If None catid will be ignore and this will run the host-search
+            
+        // host search
+
+        radius: [float/None] -optional-
+            Distance used for the first galaxy search.
+            
+        runits: [string, astropy.units] -optional-
+            unit of the radius.
+
+        max_galdist: [float/None] -optional-
+            Size (in ellipse radius) above which the target is
+            assumed too far away for the nearest host and is consequently
+            assumed hostless.
+            Set this to None to ignore this test.
+            
+        Returns
+        -------
+        int/None
+        (None is returned if no host found, otherwise, the host idx (a int) is returned)
+        """
+        if not self.has_target():
+            raise AttributeError("No 'target' loaded")
+        
+        if not self.has_sepobjects():
+            raise AttributeError("No 'sepobjects' loaded (check the sep_extract() method)")
+
+        return self.sepobjects.get_host_idx(self.target, radius=radius, catid=catid,
+                                           runits=runits, max_galdist=max_galdist)
+        
     def get_host_aperture(self, scaleup=2.5,
                           radius=30, runits="kpc",
                           max_galdist=2., catid=None, **kwargs):
@@ -751,16 +841,13 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         -------
         (float, float, float)
         """
-        if not self.has_target():
-            raise AttributeError("No 'target' loaded")
+        idx = self.get_host_idx(scaleup=scaleup, radius=radius, runits=runits,
+                                max_galdist=max_galdist, catid=catid)
+        if idx is None:
+            warnings.warn("No host idx found for target %s"%self.target.name)
+            return None,None
         
-        if not self.has_sepobjects():
-            raise AttributeError("No 'sepobjects' loaded (check the sep_extract() method)")
-
-        idx = self.sepobjects.get_host_idx(self.target, radius=radius, catid=catid,
-                                           runits=runits, max_galdist=max_galdist)
-        
-        return np.concatenate(self.get_idx_aperture(idx, scaleup=scaleup, **kwargs))
+        return np.concatenate(self.get_idx_aperture( idx, scaleup=scaleup, **kwargs))
 
 
     def get_target_local_noise(self, around=100, a_units=None, xpix=None, ypix=None,

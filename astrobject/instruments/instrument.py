@@ -20,7 +20,7 @@ from . import twomass
 KNOWN_INSTRUMENTS = ["sdss","galex","hst","panstarrs","snifs","ptf","stella","wise","twomass"]
 
 
-def get_instrument(filename, astrotarget=None,**kwargs):
+def get_instrument(filename, target=None, instrument=None, **kwargs):
     """ Reads the given file and open its corresponding Instrument object.
     Known instruments are (might not be exhaustive): SDSS / HST / PTF  / GALEX / SNIFS
 
@@ -29,21 +29,29 @@ def get_instrument(filename, astrotarget=None,**kwargs):
     filename: [string]
         location of the data file to open (a fits file)
 
-    astrotarget: [AstroTarget] -optional-
+    target: [AstroTarget] -optional-
         Target associated to the image. The target should be within the
         image's boundaries.
-
+        
+    instrument= 
     Return
     ------
     Instrument (the corresponding Child's object)
     """
-    for instrument in KNOWN_INSTRUMENTS:
-        if not eval("%s.is_%s_file(filename)"%(instrument,instrument)):
-            continue
-        return eval("%s.%s(filename,astrotarget=astrotarget,**kwargs)"%(instrument,instrument))
+    if instrument is None:
+        instrument="unknown"
+        for instrument_ in KNOWN_INSTRUMENTS:
+            if not eval("%s.is_%s_file(filename)"%(instrument_,instrument_)):
+                continue
+            instrument = instrument_
+            break
 
-    raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
+    if instrument=="unknown":
+        raise ValueError("'filename' does not belong to a known instrument "+"\n"+\
                      "these are:"+", ".join(KNOWN_INSTRUMENTS))
+                     
+    return eval("%s.%s(filename,astrotarget=target,**kwargs)"%(instrument,instrument))
+                    
 
 def which_band_is_file(filename):
     """ Read to filename and return the name of the photometric
