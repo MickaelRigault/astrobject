@@ -1123,9 +1123,11 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         if wcs_coords and not self.has_wcs():
             raise AttributeError("you cannot provide ra,dec coordinate without a wcs solution:"+\
                                  " cannot convert them into pixel coords")
+        
+        x, y = np.atleast_1d(x), np.atleast_1d(y)
         if wcs_coords:
             x,y = self.coords_to_pixel(x,y).T 
-            
+        
         # -------------
         # - SEP Input 
         gain = None if not hasattr(self,"_dataunits_to_electron") else \

@@ -36,13 +36,14 @@ class Instrument( Image ):
     def _aperture_to_photopoint_(self,count,err,flag):
         """ convert the aperture output to a photopoints """
         
-        flux = self.count_to_flux(count)
-        var  = self.count_to_flux(err)**2
+        flux = np.atleast_1d(self.count_to_flux(count))
+        var  = np.atleast_1d(self.count_to_flux(err)**2)
+        is_single = len(flux)
         
         # ------------------
         # - One Photopoint
-        if not is_arraylike(flux):
-            return get_photopoint(lbda=self.lbda, flux=flux, var=var,
+        if is_single:
+            return get_photopoint(lbda=self.lbda, flux=flux[0], var=var[0],
                             source="image",mjd=self.mjd,
                             zp=self.mab0,bandname=self.bandname,
                             instrument_name=self.instrument_name)
