@@ -588,7 +588,7 @@ class Catalogue( WCSHandler ):
         if not wcs_coords and not self.has_wcs():
             raise AttributeError("Needs a wcs solution to get pixel coordinates")
         if not wcs_coords:
-            ra,dec = np.asarray(self.wcs.pix2world(ra,dec)).T
+            ra,dec = np.asarray(self.wcs.all_pix2world(ra,dec, 0)).T
         if not is_arraylike(ra):
             ra = [ra]
             dec = [dec]
@@ -602,8 +602,8 @@ class Catalogue( WCSHandler ):
             
         return coordinates.match_coordinates_sky(skytarget, catsky)[:2]
         
-    def get_idx_around(self,ra,dec,radius,runits="arcsec",wcs_coords=True,
-                       infov=True):
+    def get_idx_around(self,ra, dec, radius, runits="arcsec",
+                           wcs_coords=True, mask=None, infov=True, sorted=True):
         """
         Returns the catalogue indexes of the elements within `radius` `runits`around
         the `ra` `dec` location.
@@ -623,9 +623,19 @@ class Catalogue( WCSHandler ):
             
         skytarget = coordinates.SkyCoord(ra*units.degree,dec*units.degree)
         catsky = self.sky_radec if infov else self._sky_radec
-        return catsky.search_around_sky(skytarget,
+        if mask is not None:
+            catsky = catsky[mask]
+            
+        index, dist = catsky.search_around_sky(skytarget,
                                         radius*units.Unit(runits))[1:3]
-        
+        if mask is not None:
+            index =  np.concatenate(np.argwhere(mask)[index])
+            
+        if sorted:
+            argind = np.argsort(dist)
+            return index[argind],dist[argind]
+        return index, dist
+    
     def get_contour_mask(self, contours, infov=True):
         """  returns a boolean array for the given contours """
         if contours is None:
