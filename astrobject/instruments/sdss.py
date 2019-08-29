@@ -3,7 +3,6 @@
 import numpy as np
 from astropy.io import fits as pf
 from .baseinstrument import Instrument
-from ..utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["sdss","SDSS_INFO"]
 
@@ -192,11 +191,8 @@ class SDSS( Instrument ):
         self._build_properties["bkgdbox"]['bh'] = 200
         self._build_properties["bkgdbox"]['bw'] = 200
         
-    @_autogen_docstring_inheritance(Instrument.set_catalogue,"Image.set_catalogue")
     def set_catalogue(self,catalogue, **kwargs):
-        #
-        # - Add the bandname key_mag setting
-        #
+        """ """
         if catalogue.source_name == "SDSS":
             key_mag = "%smag"%self.bandname[-1]
             key_magerr = "e_%smag"%self.bandname[-1]

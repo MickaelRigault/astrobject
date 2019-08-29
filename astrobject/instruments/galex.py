@@ -11,7 +11,6 @@ from astropy         import time
 # - local dependencies
 from .baseinstrument    import Instrument
 from ..photometry       import get_photopoint
-from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools      import kwargs_update
 
 # filter transmissions from FSPS allfilters.dat

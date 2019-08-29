@@ -4,7 +4,6 @@ import numpy as np
 from astropy.io import fits as pf
 from astropy.table import Table
 from .baseinstrument import Instrument
-from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update
 
 __all__ = ["hst"]
@@ -125,11 +124,8 @@ class HST( Instrument ):
     # ------------------------ #
     # - Speciality           - #
     # ------------------------ #
-    @_autogen_docstring_inheritance(Instrument.set_catalogue,"Instrument.set_catalogue")
     def set_catalogue(self,catalogue,force_it=True,**kwargs):
-        #
-        # - Add the bandname key_mag setting
-        #
+        """ """
         if catalogue.source_name =="SDSS":
             key_mag = "%smag"%"r"
             key_magerr = "e_%smag"%"r"

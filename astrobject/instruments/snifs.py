@@ -4,7 +4,6 @@ import numpy as np
 from astropy.io import fits as pf
 from astropy import time
 from .baseinstrument import Instrument
-from ..utils.decorators import _autogen_docstring_inheritance
 
 __all__ = ["snifs","SNIFS_INFO"]
 

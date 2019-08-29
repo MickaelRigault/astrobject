@@ -3,7 +3,6 @@
 import numpy as np
 from astropy.io import fits as pf
 from .baseinstrument import Instrument
-from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update
 
 __all__  = ["twomass", "TWOMASS_INFO"]

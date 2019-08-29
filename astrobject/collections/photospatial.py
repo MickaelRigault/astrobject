@@ -9,7 +9,6 @@ from ..baseobject       import WCSHandler, CatalogueHandler
 from ..photometry       import get_photopoint
 from ..collection       import BaseCollection, PhotoPointCollection
 from ..utils.tools      import kwargs_update, dump_pkl, load_pkl, is_arraylike
-from ..utils.decorators import _autogen_docstring_inheritance
 
 
 __all__ = ["get_photomap","get_sepobject"]
@@ -510,7 +509,6 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
                 for i in index[bool_]])
                     
         return np.concatenate(self.catmatch["idx_catalogue"][catindexmask])
-                        
         
     def catindex_to_index(self,catindex, cleanindex=False):
         """ give the photomap index corresponding to the given catalogue index.
@@ -555,11 +553,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         
     #  WCS Solution
     # -----------------
-    @_autogen_docstring_inheritance(WCSHandler.set_wcs,"WCSHandler.set_wcs")
     def set_wcs(self, wcs, force_it=False,**kwargs):
-        #
-        #
-        #
+        """ """
         super(PhotoMap, self).set_wcs(wcs, force_it=force_it,**kwargs)
         if not self.has_wcs():
             return
@@ -570,12 +565,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             
     #  Super Catalogue
     # -----------------
-    @_autogen_docstring_inheritance(CatalogueHandler.set_catalogue,"CatalogueHandler.get_indexes")
     def set_catalogue(self,catalogue, reset=True,
                       match_catalogue=True,match_angsep=3*units.arcsec, **kwargs):
-        #
-        # + reset and matching
-        #
+        """ """
         if reset:
             catalogue.reset()
 
@@ -586,14 +578,11 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             self.match_catalogue(deltadist=match_angsep)
 
             
-    @_autogen_docstring_inheritance(CatalogueHandler.download_catalogue,"CatalogueHandler.download_catalogue")
     def download_catalogue(self, source="sdss",
                            set_it=True,force_it=False,
                            radec=None, radius=None,
                            **kwargs):
-        #
-        # default definition of radec and radius
-        #
+        """ """
         if radec is None:
             radec = np.mean(self.radec, axis=0)
             radec = "%s %s"%(radec[0],radec[1])
@@ -709,7 +698,59 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         
         return int(idx[i_nearest])
 
+    def get_nearest(self, ra, dec, max_dist=None, wcs_coords=True,
+                    nnearest=1, relative=True):
+        """ Get the nearest data entry of the PhotoMap 
+        
+        Parameters
+        ----------
+        ra,dec: [float,float]
+            Coordinate [in deg if wcs_coords, else in pixels]
             
+        wcs_coords: [bool] -optional-
+            Are the coordinates RA, Dec [True] or pixels [False]?
+        
+        max_dist: [float/None] -optional-
+            Maximum matching distance.
+            - None: no maximum
+            - float: maximum distance [in arcsec]
+
+        nnearest: [int] -optional-
+            Number of nearest object
+
+        relative: [bool] -optional-
+            Shall the distance be compared in angular distance [False]
+            or in galactic elliptical distance [True]
+
+        Parameters
+        ----------
+        list of id
+        """
+        if not wcs_coords:
+            ra,dec = self.pixel_to_coords(ra,dec)
+        
+        skyradec = coordinates.SkyCoord(*np.asarray(self.radec).T, unit="deg")
+        coord    = coordinates.SkyCoord(ra,dec, unit="deg")
+        ang_dist = skyradec.separation(coord).to('arcsec')
+        # Nearest in angular distance
+        id_sortdist = np.argsort(ang_dist)
+        
+        if max_dist is not None:
+            id_sortdist = id_sortdist[ang_dist<max_dist]
+
+        # Now measure the relative distances
+        x,y,a,b,t = np.asarray(self.get_ellipse_values(id_sortdist))
+        pix_x,pix_y = self.coords_to_pixel( ra, dec)
+        # -> Transformations
+        rot = np.asarray([[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]])
+        xy = np.asarray([pix_x-x,pix_y-y]).T
+        xy_a_aligned = np.asarray([np.dot(rot_,pos_) for rot_,pos_ in zip(rot.T[:,:], xy)])
+        # Measure distance
+        scaleup=3 # typical galaxy size, such that 1 means edge of galaxy
+        dist_relative = np.sqrt(np.sum((xy_a_aligned*np.asarray([1./(a*scaleup),1./(b*scaleup)]).T)**2, axis=1))
+        id_sortdist = id_sortdist[np.argsort(dist_relative)]
+        return id_sortdist[:nnearest]
+        
     def get_nearest_idx(self, ra, dec, wcs_coords=True,
                         catmatch=True, catalogue_idx=False,
                         **kwargs):
@@ -798,8 +839,6 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
                                                 contours=contours, fovmask=True)[\
                                             self.catmatch["idx_catalogue"]]]
                                             
-    
-    
     # ------------- #
     # - PLOTTER   - #
     # ------------- #
@@ -1117,14 +1156,11 @@ class SepObject( PhotoMap ):
     # -------------------------- #
     # Super It                 - #
     # -------------------------- #
-    @_autogen_docstring_inheritance(PhotoMap.get_indexes,"PhotoMap.get_indexes")
     def get_indexes(self,isolated_only=False,stars_only=False,nonstars_only=False,
                     catmag_range=[None,None],contours=None,
                     notwithin_galaxies=False,
                     cat_indexes=False):
-        #
-        # Add the notwithin_galaxies masking
-        #
+        """ """
         catmasking = {"isolated_only":isolated_only,
                       "stars_only":stars_only,"nonstars_only":nonstars_only,
                        "catmag_range":catmag_range,"contours":contours}
@@ -1521,15 +1557,12 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
 
     
     # - Super Mother CatalogueHandler
-    @_autogen_docstring_inheritance(CatalogueHandler.download_catalogue,"CatalogueHandler.download_catalogue")
     def download_catalogue(self, source="sdss",
                            set_it=True,force_it=False,
                            radec=None, radius=None,
                            match_catalogue=True,match_angsep=2*units.arcsec,
                            **kwargs):
-        #
-        # default definition of radec and radius
-        #
+        """ """
         if radec is None or radius is None:
             ra,dec = np.concatenate(self.get(["ra","dec"]), axis=0).T
             
@@ -1548,9 +1581,8 @@ class PhotoMapCollection( BaseCollection, CatalogueHandler ):
 
         return out
     
-    @_autogen_docstring_inheritance(CatalogueHandler.set_catalogue,"CatalogueHandler.set_catalogue")
     def set_catalogue(self, catalogue, force_it=False, **kwargs):
-        # 
+        """ """
         super(PhotoMapCollection, self).set_catalogue( catalogue, force_it=force_it, **kwargs)
         [self.photomaps[id_].set_catalogue(self.catalogue, fast_setup=True, **kwargs)
          for id_ in self.list_id]

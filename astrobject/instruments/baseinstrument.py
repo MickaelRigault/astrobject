@@ -11,7 +11,6 @@ from astropy.io import ascii
 # - local
 from ..photometry import Image, get_photopoint
 from ..baseobject import BaseObject, WCSHandler
-from ..utils.decorators import _autogen_docstring_inheritance
 from ..utils.tools import kwargs_update, mag_to_flux, load_pkl, dump_pkl, is_arraylike
 
 __all__ = ["Instrument"]
@@ -56,13 +55,10 @@ class Instrument( Image ):
                             for flux_,var_ in zip(flux,var)]
     
         
-    @_autogen_docstring_inheritance(Image.get_aperture,"Image.get_aperture")
     def get_photopoint(self,x, y, radius=None, runits="pixels",
                        aptype="circle", wcs_coords=False, getlist=False,
                        **kwargs):
-        #
-        # Returns a PhotoPoint
-        #
+        """ """
         pp = self._aperture_to_photopoint_(*self.get_aperture(x,y,radius=radius,runits=runits,
                                                             aptype=aptype,wcs_coords=wcs_coords,
                                                             **kwargs))
@@ -80,13 +76,9 @@ class Instrument( Image ):
                           if self.has_catalogue() else None,
                         wcs_coords=wcs_coords)
     
-    @_autogen_docstring_inheritance(Image.get_target_aperture,
-                                    "Image.get_target_aperture")
     def get_target_photopoint(self,radius=None, runits="pixels",
                               aptype="circle", **kwargs):
-        #
-        # Returns a PhotoPoint
-        #
+        """ """
         if not self.has_target():
             return AttributeError("No 'target' loaded")
         
@@ -96,12 +88,8 @@ class Instrument( Image ):
         pp.set_target(self.target)
         return pp
     
-    @_autogen_docstring_inheritance(Image.get_host_aperture,
-                                    "Image.get_host_aperture")
     def get_host_photopoint(self,scaleup=2.5,**kwargs):
-        #
-        # Be returns a PhotoPoint
-        #
+        """ """
         if not self.has_target():
             return AttributeError("No 'target' loaded")
         ap_output = self.get_host_aperture(scaleup=scaleup,**kwargs)
