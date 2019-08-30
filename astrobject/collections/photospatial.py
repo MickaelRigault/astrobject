@@ -738,6 +738,9 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         if max_dist is not None:
             id_sortdist = id_sortdist[ang_dist<max_dist]
 
+        if not relative:
+            return id_sortdist[:nnearest], ang_dist[id_sortdist][:nnearest]
+            
         # Now measure the relative distances
         x,y,a,b,t = np.asarray(self.get_ellipse_values(id_sortdist))
         pix_x,pix_y = self.coords_to_pixel( ra, dec)
@@ -748,8 +751,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         # Measure distance
         scaleup=3 # typical galaxy size, such that 1 means edge of galaxy
         dist_relative = np.sqrt(np.sum((xy_a_aligned*np.asarray([1./(a*scaleup),1./(b*scaleup)]).T)**2, axis=1))
-        id_sortdist = id_sortdist[np.argsort(dist_relative)]
-        return id_sortdist[:nnearest]
+        relat_sort_id = np.argsort(dist_relative)
+        return id_sortdist[relat_sort_id][:nnearest], dist_relative[relat_sort_id][:nnearest]
         
     def get_nearest_idx(self, ra, dec, wcs_coords=True,
                         catmatch=True, catalogue_idx=False,
