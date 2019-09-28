@@ -699,7 +699,7 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         return int(idx[i_nearest])
 
     def get_nearest(self, ra, dec, max_dist=None, wcs_coords=True,
-                    nnearest=1, relative=True):
+                    nnearest=1, relative=True, scaleup=3):
         """ Get the nearest data entry of the PhotoMap 
         
         Parameters
@@ -749,7 +749,6 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
         xy = np.asarray([pix_x-x,pix_y-y]).T
         xy_a_aligned = np.asarray([np.dot(rot_,pos_) for rot_,pos_ in zip(rot.T[:,:], xy)])
         # Measure distance
-        scaleup=3 # typical galaxy size, such that 1 means edge of galaxy
         dist_relative = np.sqrt(np.sum((xy_a_aligned*np.asarray([1./(a*scaleup),1./(b*scaleup)]).T)**2, axis=1))
         relat_sort_id = np.argsort(dist_relative)
         return id_sortdist[relat_sort_id][:nnearest], dist_relative[relat_sort_id][:nnearest]

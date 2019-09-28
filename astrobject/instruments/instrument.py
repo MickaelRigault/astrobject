@@ -17,7 +17,7 @@ from . import wise
 from . import twomass
 
 
-KNOWN_INSTRUMENTS = ["sdss","galex","hst","panstarrs","snifs","ptf","stella","wise","twomass"]
+KNOWN_INSTRUMENTS = ["sdss","galex","hst","panstarrs","snifs","ptf","wise","twomass"]
 
 
 def get_instrument(filename, target=None, instrument=None, **kwargs):

@@ -90,29 +90,97 @@ def fitsrec_to_dict(data):
 # --------------------------- #
 # - Conversion Tools        - #
 # --------------------------- #
-def flux_to_mag(flux,dflux,wavelength):
-    """ Converts fluxes (erg/s/cm2/A) into AB magnitudes """
-    F_Lxlambda2  = flux * wavelength**2
+def flux_to_mag(flux, dflux, wavelength=None, zp=None):
+    """ Converts fluxes (erg/s/cm2/A) into AB or zp magnitudes
+
+
+    Parameters
+    ----------
+    flux, fluxerr: [float or array]
+        flux and its error 
+
+    units: [string] -optional-
+        Unit system in which to return the flux:
+        - 'zp':   units base on zero point as required for sncosmo fits 
+        - 'phys': physical units [erg/s/cm^2/A)
+
+    zp: [float or array] -optional-
+        zero point of for flux;
+        *If a wavelength is provided, zp is ignored*
+
+    wavelength: [float or array] -optional-
+        central wavelength of the photometric filter.
+        In Angstrom; 
+        *If a wavelength is provided, zp is ignored*
+
+    Returns
+    -------
+    - float or array (if magerr is None)
+    - float or array, float or array (if magerr provided)
+    
+    """
+    if zp is None and wavelength is None:
+        raise ValueError("zp or wavelength must be provided")
+    if zp is None:
+        zp = -2.406
+    else:
+        wavelength=1
+
     if dflux is None:
-        return -2.5*np.log10(F_Lxlambda2) - 2.406, None
+        return -2.5*np.log10(flux*wavelength**2) + zp, None
     
     err = -2.5/np.log(10) * dflux / flux
     
-    return -2.5*np.log10(F_Lxlambda2) - 2.406, np.abs(err)
+    return -2.5*np.log10(flux*wavelength**2) + zp, np.abs(err)
 
-def mag_to_flux(mag,magerr,wavelength):
+def mag_to_flux(mag, magerr=None, wavelength=None, zp=None):
+    """ converts magnitude into flux
+
+    Parameters
+    ----------
+    mag: [float or array]
+        AB magnitude(s)
+
+    magerr: [float or array] -optional-
+        magnitude error if any
+
+    units: [string] -optional-
+        Unit system in which to return the flux:
+        - 'zp':   units base on zero point as required for sncosmo fits 
+        - 'phys': physical units [erg/s/cm^2/A)
+
+    zp: [float or array] -optional-
+        zero point of for flux; required if units == 'zp'
+        *If a wavelength is provided, zp is ignored*
+
+    wavelength: [float or array] -optional-
+        central wavelength of the photometric filter.
+        In Angstrom; required if units == 'phys'
+        *If a wavelength is provided, zp is ignored*
+
+    Returns
+    -------
+    - float or array (if magerr is None)
+    - float or array, float or array (if magerr provided)
     """
-    mag must be ABmag
-    wavelength in Angstrom
-    return Flux in erg/s/cm2/A
-    """
-    F_Lxlambda2 = 10**(-(mag+2.406)/2.5)
-    flux = F_Lxlambda2/wavelength**2
+    if zp is None and wavelength is None:
+        raise ValueError("zp or wavelength must be provided")
+    if zp is None: # Has wavelength
+        zp = -2.406
+    else: # Has zp
+        wavelength=1
+
+    
+    flux = 10**(-(mag+2.406)/2.5) / wavelength**2
+
     if magerr is None:
-        return flux
+        return flux, None
     
     dflux = np.abs(flux*(-magerr/2.5*np.log(10))) # df/f = dcount/count
-    return flux,dflux
+    return flux, dflux
+
+
+
 
 def hourangle_2_degree(ra_hours,dec_hours,obstime="J2000"):
     """given the coordinate of the target in hours units

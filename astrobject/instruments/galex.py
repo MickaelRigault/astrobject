@@ -115,10 +115,10 @@ class GALEX( Instrument ):
         
         # ------------------
         # - One Photopoint
-        if "__iter__" not in dir(datacounts):
+        if len(np.atleast_1d(datacounts))==1:
             return get_photopoint(lbda=self.lbda,
-                                  datacounts=datacounts,
-                                  bkgdcounts=bkgdcounts,
+                                  datacounts=np.atleast_1d(datacounts)[0],
+                                  bkgdcounts=np.atleast_1d(bkgdcounts)[0],
                                   exptime=self.exposuretime,
                                   source="image",mjd=self.mjd,
                                   zp=self.mab0,

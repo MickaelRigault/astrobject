@@ -256,7 +256,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ------------------- #
     def load(self,filename, index=None, mask=None,
              force_it=False, background=None,
-             dataslice0=None,dataslice1=None,**kwargs):
+             dataslice0=None,dataslice1=None, ascopy=False,
+                 **kwargs):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
@@ -299,16 +300,19 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # -------------------------- #
         #  fits file and wcs         #
         # -------------------------- #
-        fits = pf.open(filename, **kwargs)
+        self._ascopy = ascopy
+        fits = pf.open(filename, **kwargs) if not ascopy else filename
         self._properties["filename"] = filename
         self._load_fits_(fits, mask=mask, index=index,
                              force_it=force_it, background=background,
-                             dataslice0=dataslice0,dataslice1=dataslice1)
+                             dataslice0=dataslice0,dataslice1=dataslice1,
+                             ascopy=ascopy)
 
     def _load_fits_(self, fits,
                     mask=None, index=0,
                     force_it=False, background=None,
-                    dataslice0=None,dataslice1=None):
+                    dataslice0=None,dataslice1=None,
+                    ascopy=False):
         """
         This enables to load a fitsfile image and will create
         the basic data and wcs solution if possible.
@@ -354,19 +358,28 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # ---------- #
         #if dataslice0 is None and dataslice1 is None:
         #    _slicing = False
+        if type(fits)=="str":
+            ascopy = True
 
-        wcsinput = fits[index].header
+        if ascopy:
+            from astropy.io import fits as pf
+            
+        header = fits[index].header if not ascopy else pf.getheader(fits, index)
         
         if dataslice0 is not None or dataslice1 is not None:
             if dataslice0 is None:
                 dataslice0 = [0,-1]
             if dataslice1 is None:
                 dataslice1 = [0,-1]
-                
-            data = fits[index].data[dataslice0[0]:dataslice0[1],
+
+            if not ascopy:
+                data = fits[index].data[dataslice0[0]:dataslice0[1],
+                                    dataslice1[0]:dataslice1[1]]
+            else:
+                data = pf.getdata(fits,index)[dataslice0[0]:dataslice0[1],
                                     dataslice1[0]:dataslice1[1]]
         else:
-            data = fits[index].data
+            data = fits[index].data if not ascopy else pf.getdata(fits,index)
             dataslice0 = [0,np.shape(data)[0]]
             dataslice1 = [0,np.shape(data)[1]]
             
@@ -375,9 +388,10 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # -------------------------- #
         #  Everythin looks good !    #
         # -------------------------- #
-        self.create(data, None, wcsinput, mask=mask,
+        self.create(data,
+                    None, header, mask=mask,
                     background=background,
-                    header=fits[index].header,
+                    header=header,
                     fits=fits,
                     force_it=True)
         
@@ -1011,11 +1025,8 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """
         if not self.has_sepobjects():
             raise AttributeError("sepobjects has not been set. Run sep_extract()")
-
-        if not is_arraylike(idx):
-            idx = [idx]
             
-        x, y, a, b, theta = self.sepobjects.get(["x","y","a","b","theta"], mask=idx).T
+        x, y, a, b, theta = self.sepobjects.get(["x","y","a","b","theta"], mask=np.atleast_1d(idx)).T
         return self.get_aperture(x,y, radius=scaleup, runits="pixels",
                                  ellipse_args=dict(a=a, b=b, theta=theta),
                                  aptype="ellipse", **kwargs)
@@ -2168,7 +2179,7 @@ class PhotoSamplers( Samplers ):
 
     def derive_magsamples(self, negative_fluxmag=None):
         """ Builds self.magsamples based on samplers(fluxes) and lbda using `flux_to_mag` """
-        mags = flux_to_mag(self.samplers,None,self.lbda)[0]
+        mags = flux_to_mag(self.samplers, None, wavelength=self.lbda)[0]
         self._side_properties["negative_fluxmag"] = negative_fluxmag
         
         if negative_fluxmag is None:
@@ -2606,7 +2617,19 @@ class PhotoPoint( BasePhotoPoint ):
                                         lbda=lbda, mjd=mjd,
                                         bandname=bandname, zp=zp,
                                         **kwargs)
-            
+
+    @classmethod
+    def from_mag(cls, mag, magerr, lbda=None, zp=None,
+                     mjd=None, bandname=None, **kwargs):
+        """ load the Photopoint assuming gaussian error for the magnitude.
+        
+        """
+        from .utils.tools import mag_to_flux
+        flux, dflux = mag_to_flux(mag, magerr, wavelength=lbda, zp=zp)
+        return cls(flux, var=dflux**2 if dflux is not None else None,
+                       lbda=lbda, zp=zp,
+                       mjd=mjd, bandname=bandname, **kwargs)
+    
     # ===================== #
     #   Main Methods        #
     # ===================== #
@@ -2658,8 +2681,6 @@ class PhotoPoint( BasePhotoPoint ):
                                        mjd=mjd, zp=zp, bandname=bandname, zpsys=zpsys,
                                        **meta)
         self.set_flux(flux, var)
-
-
         
     def set_flux(self, flux, var):
         """ Define the flux of the photopoint. This defines the rest of the object
@@ -2667,7 +2688,6 @@ class PhotoPoint( BasePhotoPoint ):
         self._properties["flux"] = np.float(flux)
         self._properties["var"]  = np.float(var) if var is not None else np.NaN
         self._reset_derived_prop_()
-        
         
     def remove_flux(self, flux, var=None):
         """ this flux quantity will be removed from the current flux"""

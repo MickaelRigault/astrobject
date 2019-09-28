@@ -100,7 +100,15 @@ class Instrument( Image ):
         pp.set_target(self.target)
         return pp
 
-    
+    def get_idx_photopoint(self, idx, scaleup=2.5, **kwargs):
+        """ """
+        ap_output = self.get_idx_aperture(idx, scaleup=scaleup, **kwargs)
+        if ap_output is None:
+            return None
+        
+        pp = self._aperture_to_photopoint_(*ap_output)
+        pp.set_target(self.target)
+        return pp
     # =========================== #
     # = Main Methods            = #
     # =========================== #
@@ -108,6 +116,10 @@ class Instrument( Image ):
         """ converts counts into flux """
         return counts * 10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2)
 
+    def flux_to_count(self, flux):
+        """ """
+        return flux / (10**(-(2.406+self.mab0) / 2.5 ) / (self.lbda**2))
+    
     # =========================== #
     # = Internal Catalogue      = #
     # =========================== #
