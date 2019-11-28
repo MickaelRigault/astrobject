@@ -381,7 +381,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
     # --------- #
     #  OTHERS   #
     # --------- #
-    def draw_samplers(self, nsamplers=None):
+    def draw_samplers(self, nsamplers=None, distmpc=None):
         """ Return a monte-carlo distribution of the masses
         based on Taylor et al. 2011 relation and the given
         photopoints magnitudes
@@ -394,13 +394,15 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
             self.nsamplers = nsamplers
 
         self._set_color_samplers_()
+        if distmpc is None:
+            distmpc = self.target.distmpc
         i_ = self.photopoints["i"].photosamplers.mag[:self.nsamplers]
         # -- Convert that to masses    
         nodisp_sampler   = taylor_mass_relation(i_,self.gi_priored_sample,
-                                                self.target.distmpc)
+                                                distmpc)
         
         nodisp_samplernp = taylor_mass_relation(i_,self.gi_samplers.samplers,
-                                                self.target.distmpc)
+                                                distmpc)
         
         addon_dispersion = np.random.normal(loc=0, scale=self.taylordispersion,
                                             size=self.nsamplers)

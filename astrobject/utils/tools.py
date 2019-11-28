@@ -147,7 +147,7 @@ def mag_to_flux(mag, magerr=None, wavelength=None, zp=None):
     units: [string] -optional-
         Unit system in which to return the flux:
         - 'zp':   units base on zero point as required for sncosmo fits 
-        - 'phys': physical units [erg/s/cm^2/A)
+        - 'phys': physical units [erg/s/cm^2/A]
 
     zp: [float or array] -optional-
         zero point of for flux; required if units == 'zp'

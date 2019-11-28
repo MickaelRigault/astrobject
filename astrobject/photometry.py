@@ -523,7 +523,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         
         if test_inclusion:
             if not self.is_target_in(newtarget):
-                raise ValueError("The new 'target' is not inside the image "+\
+                warnings.warn("The new 'target' is not inside the image "+\
                                      " boundaries"+ "\n"+\
                                      "--> object radec: %.4f,%+.4f"%(newtarget.ra,
                                                                      newtarget.dec))
@@ -1401,6 +1401,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
              ax=None,show=True,zoomon=None,zoom=200,zunits="pixels",
              show_sepobjects=False,propsep={},
              show_catalogue=False,proptarget={},
+             show_target=True,
              localcircle=[None,"arcsec"],
              add_colorbar=False,
              **kwargs):
@@ -1534,7 +1535,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         im = ax.imshow(x,**prop)
         
         # - add target
-        pl_tgt = None if self.has_target() is False \
+        pl_tgt = None if self.has_target() is False or not show_target \
           else self.display_target(ax,wcs_coords=False,localcircle=localcircle,
                                    **proptarget)
 

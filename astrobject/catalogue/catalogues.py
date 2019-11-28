@@ -7,7 +7,7 @@ import numpy as np
 from .basecatalogue import Catalogue, coordinates, units
 # -- here load all the object that could be parsed
 from ..utils.tools import kwargs_update
-from ..utils.decorators import _autogen_docstring_inheritance, make_method
+from ..utils.decorators import make_method
 
 def fetch_catalogue(source, radec, radius, extracolumns=[], column_filters={"rmag":"5..25"},**kwargs):
     """ Download a catalogue from internet (Vizier)
@@ -327,7 +327,6 @@ class GAIACatalogue( Catalogue ):
         if catalogue_file is not None:
             self.load(catalogue_file,**kwargs)
     
-    @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
         #
         # add lbda def
@@ -421,7 +420,6 @@ class SDSSCatalogue( Catalogue ):
             
         self.set_starsid("cl",6)
     
-    @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
         #
         # add lbda def
@@ -515,7 +513,6 @@ class MASSCatalogue( Catalogue ):
         if catalogue_file is not None:
             self.load(catalogue_file,**kwargs)        
         
-    @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
         #
         # add lbda def
@@ -643,7 +640,6 @@ class WISECatalogue( Catalogue ):
         if catalogue_file is not None:
             self.load(catalogue_file,**kwargs)  
     
-    @_autogen_docstring_inheritance(Catalogue.set_mag_keys,"Catalogue.set_mag_keys")
     def set_mag_keys(self,key_mag,key_magerr):
         #
         # add lbda def
