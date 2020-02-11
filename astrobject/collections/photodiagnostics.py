@@ -591,7 +591,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         # -- and draw the priored sampling (could be done automatically be here it is explicit)
         self._derived_properties["gi_priored_sample"] = \
           self.gi_samplers.resample(self.nsamplers, prior=self.gi_prior,
-                                    xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=1e3)
+                                    xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=1000)
 
     def change_gi_prior(self, prior, redraw=True):
         """ Set a new prior function. 
