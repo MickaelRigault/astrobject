@@ -227,7 +227,7 @@ class poissoncont_gen( stats._discrete_distns.poisson_gen ):
             """
             # faster than resample
             xrange = self._xrange_nonzero_(mu)
-            x = np.linspace(xrange[0], xrange[1], nsample)
+            x = np.linspace(xrange[0], xrange[1], int(nsample))
             return np.random.choice(x, p= self.pdf(x, mu) / self.pdf(x, mu).sum(), size=size)
 
     def cdf(self, x, mu, **kwargs):
