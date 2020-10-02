@@ -446,7 +446,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
                                             ec=mpl.cm.Greens(0.8),fill=False,
                                             bins=prop["bins"], show_estimate=False,xscale=False)
         # - Main g-i
-        x = np.linspace(-1,3,1e3)
+        x = np.linspace(-1,3,int(1e3))
 
         # - likelihood        
         axcolor.hist(self.gi_samplers.samplers, label=r"$\mathrm{Likelihood}$",**prop)
