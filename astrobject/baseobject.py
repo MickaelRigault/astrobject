@@ -275,7 +275,7 @@ class Samplers( BaseObject ):
             xrange = np.log10(med)-np.abs((np.log10(med)-np.log10(med-lowmed)))*7,\
               np.log10(med)+np.abs((np.log10(med)-np.log10(med+highmed)))*7
             
-        x = np.linspace(xrange[0],xrange[1],1e3)
+        x = np.linspace(xrange[0],xrange[1],int(1e3))
         
         if not self.has_samplers():
             warnings.warn("Samplers created for the plot method")
