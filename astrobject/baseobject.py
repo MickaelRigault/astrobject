@@ -254,7 +254,7 @@ class Samplers( BaseObject ):
         # -------------
         # - Prop
         if not kde:
-            prop = kwargs_update(dict(histtype="step", bins=40, normed=True,
+            prop = kwargs_update(dict(histtype="step", bins=40, density=True,
                         lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
                         ec=mpl.cm.Blues(1.,1.)),
                         **kwargs)
