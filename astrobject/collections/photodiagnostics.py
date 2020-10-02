@@ -430,7 +430,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         axmass  = fig.add_axes([0.65,0.15,0.3,0.73])
         # -----------
         # - Property
-        prop = kwargs_update(dict(histtype="step", bins=20, normed=True, 
+        prop = kwargs_update(dict(histtype="step", bins=20, density=True, 
                             lw="2",fill=False,
                             ec=mpl.cm.binary(0.8,1.), zorder=6), **kwargs)
         
