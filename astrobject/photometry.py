@@ -2642,7 +2642,7 @@ class PhotoPoint( BasePhotoPoint ):
     """This Class hold the basic information associated to
     a photometric point"""
     
-    PROPERTIES         = []
+    #PROPERTIES         = []
     
     # =========================== #
     # = Constructor             = #
