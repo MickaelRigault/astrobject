@@ -8,7 +8,7 @@ from ..utils.tools import kwargs_update
 __all__  = ["wise", "WISE_INFO"]
 
 """ 
-unWISE images have Vega ZP=22.5. Need to add AB offsets from
+WISE images have Vega ZP=22.5. Need to add AB offsets from
 http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
 Filter transmissions from FSPS allfilters.dat
 Effective wavelength from sncosmo
@@ -33,22 +33,17 @@ def wise(*args, **kwargs):
     return WISE(*args, **kwargs)
 
 def is_wise_file(filename):
-    """This test if the input file is an unWISE file"""
-    # No useful info in the header! So must rely on filename itself
-    return "unwise" in filename
+    """This test if the input file is a WISE file"""
+    return "WISE" in pf.getheader(filename).get("ORIGIN")
 
 def which_band_is_file(filename):
     """This returns the band of the given file if it is WISE"""
     if not is_wise_file(filename):
         return None
-    if   "-w1-" in filename: return "wisew1"
-    elif "-w2-" in filename: return "wisew2"
-    elif "-w3-" in filename: return "wisew3"
-    elif "-w4-" in filename: return "wisew4"
-    else: return "unknown"
+    return f"w{pf.getheader(filename).get('BAND')}"
 
 def which_obs_mjd(filename):
-    """unWISE FITS files are coadds so no MJD info"""
+    """WISE FITS files are coadds so no MJD info"""
     return None
 
 #######################################
@@ -66,6 +61,46 @@ class WISE( Instrument ):
     
     instrument_name = "WISE"
     INFO            = WISE_INFO
+    
+    def __init__(self, filename=None, uncfilename=None, 
+                 astrotarget=None,data_index=0,
+                 dataslice0=None,dataslice1=None,
+                 empty=False, **kwargs):
+        """
+        Initalize the image by giving its filelocation (*filename*). This
+        will load it using the load() method.
+
+        Parameters
+        ----------
+        filename: [string.fits]    fits file from where the image will be loaded
+                                   - Trick - Set None and no image will be loaded
+        
+        uncfilename: [string.fits] fits file from where the error map will be loaded
+                                   - Trick - Set None and no image will be loaded
+
+        astrotarget: [AstroTarget] An AstroTarget object you which to associate
+                                   to this image. 
+                                   
+        empty: [bool]              Does not do anything, just loads an empty object.
+                                   (Careful with that)
+
+        Returns
+        -------
+        Void
+        """
+        super(WISE,self).__init__(filename=filename, astrotarget=astrotarget, data_index=data_index, 
+                                  dataslice0=dataslice0, dataslice1=dataslice1, empty=empty, **kwargs)
+        if uncfilename:
+            self.set_var(uncfilename)
+
+    def set_var(self, filename):
+        """ Get the error map from separate file 
+        which should have the same file name as the image file 
+        except with 'int' replaced with 'unc'. """
+        self._properties["var"] = pf.getdata(filename).byteswap().newbyteorder()
+        
+    
+    
     # ================== #
     #   Properties       #
     # ================== #        
@@ -73,11 +108,9 @@ class WISE( Instrument ):
     def bandname(self):
         """ band of the instrument. Change it using set_bandname() """
         if self._properties['bandname'] is None:
-            self._properties['bandname'] = "wisew1" if "-w1-" in self.filename \
-                            else "wisew2" if "-w2-" in self.filename \
-                            else "wisew3" if "-w3-" in self.filename \
-                            else "wisew4" if "-w4-" in self.filename \
-                            else "unknown"
+            if self.header is None:
+                raise AttributeError("no header loaded")
+            self._properties['bandname'] = f"wisew{self.header['BAND']}"
         return self._properties['bandname']
 
     @property
@@ -101,11 +134,5 @@ class WISE( Instrument ):
     def _gain(self):
         """ The gain of the instrument """
         return None
-
-    def set_invvar(self, filename):
-        """ Get the inverse-variance map from separate file 
-        which should have the same file name as the image file 
-        except with '-img-' replace with '-invar-'. """
-        self._properties["var"] = 1.0/pf.getdata(filename)
 
     
