@@ -97,7 +97,8 @@ class WISE( Instrument ):
         """ Get the error map from separate file 
         which should have the same file name as the image file 
         except with 'int' replaced with 'unc'. """
-        self._properties["var"] = pf.getdata(filename).byteswap().newbyteorder()
+        _var = pf.getdata(filename).byteswap().newbyteorder()
+        self._properties["var"] = _var**2
         
     
     
