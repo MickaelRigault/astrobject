@@ -3,6 +3,7 @@
 """This module gather the basic tools used in a lot of methods"""
 
 import numpy as np
+from astropy import constants
 
 __all__ = ["kwargs_update","kwargs_extract",
            "load_pkl","dump_pkl","is_arraylike"]
@@ -178,6 +179,93 @@ def mag_to_flux(mag, magerr=None, wavelength=None, zp=None):
     
     dflux = np.abs(flux*(-magerr/2.5*np.log(10))) # df/f = dcount/count
     return flux, dflux
+
+def flux_aa_to_hz(flux, wavelength):
+    """
+    Convert fluxes from erg/s/cm2/AA to erg/s/cm2/Hz.
+    
+    Parameters
+    ----------
+    flux_aa : [float or array]
+        Flux(es) in erg/s/cm2/AA.
+    
+    wavelength : [float or array]
+        Central wavelength(s) [in AA] of the photometric filter(s).
+    
+    
+    Returns
+    -------
+    float or array
+    """
+    return flux * (wavelength**2 / constants.c.to("AA/s").value)
+    
+def flux_hz_to_aa(flux, wavelength):
+    """
+    Convert fluxes from erg/s/cm2/Hz to erg/s/cm2/AA.
+    
+    Parameters
+    ----------
+    flux_aa : [float or array]
+        Flux(es) in erg/s/cm2/Hz.
+    
+    wavelength : [float or array]
+        Central wavelength(s) [in AA] of the photometric filter(s).
+    
+    
+    Returns
+    -------
+    float or array
+    """
+    return flux / (wavelength**2 / constants.c.to("AA/s").value)
+
+def convert_flux_unit(flux, unit_in, unit_out, wavelength=None):
+    """
+    Convert fluxes' unit.
+    Available units are:
+        - "Hz": erg/s/cm2/Hz
+        - "AA": erg/s/cm2/AA
+        - "mgy": maggies
+        - "Jy": Jansky
+    
+    Parameters
+    ----------
+    flux : [float or array]
+        Flux(es) to convert.
+    
+    unit_in : [string]
+        Input flux unit.
+        Must be either "Hz", "AA", "mgy" or "Jy".
+    
+    unit_out : [string]
+        Desired output flux unit.
+        Must be either "Hz", "AA", "mgy" or "Jy".
+    
+    wavelength : [string]
+        Wavelengths corresponding to the given fluxes.
+        Not necessary in every conversions.
+        Default is None.
+    
+    
+    Returns
+    -------
+    float or array
+    """
+    if unit_in == unit_out:
+        return flux
+    
+    _flux = np.atleast_1d(flux).copy()
+    _flux = _flux[0] if len(_flux) == 1 else _flux
+    if unit_in == "AA":
+        _flux = flux_aa_to_hz(flux=_flux, wavelength=wavelength)
+    elif unit_in in ["mgy", "Jy"]:
+        _flux *= 1e-23 * (3631 if unit_in == "mgy" else 1)
+    
+    if unit_out == "AA":
+        return flux_hz_to_aa(flux=_flux, wavelength=wavelength)
+    elif unit_out in ["mgy", "Jy"]:
+        _flux *= 1e23
+        return _flux / 3631 if unit_out == "mgy" else _flux
+    return _flux
 
 
 
