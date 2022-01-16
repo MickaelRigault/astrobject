@@ -35,6 +35,10 @@ def check_dependencies():
         import astropy
     except ImportError:
         install_requires.append('astropy')
+    try:
+        import sep
+    except ImportError:
+        install_requires.append('sep')
 
     return install_requires
 

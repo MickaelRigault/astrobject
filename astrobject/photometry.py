@@ -2301,7 +2301,7 @@ class BasePhotoPoint( TargetHandler ):
     """
     __nature__ = "PhotoPoint" # To Be Removed
 
-    PROPERTIES         = ["lbda","mjd","bandname","zp"] # flux/err or Counts
+    PROPERTIES         = ["lbda","mjd","bandname","zp","flux","var"] # flux/err or Counts
     SIDE_PROPERTIES    = ["source","intrument_name","zpsys","meta"]
     DERIVED_PROPERTIES = ["photosamplers"]
 
@@ -2415,6 +2415,38 @@ class BasePhotoPoint( TargetHandler ):
                 raise ValueError("No instance or meta key %s "%key)
             warnings.warn("No instance or meta key %s. NaN returned"%key)
             return np.NaN
+                      
+    def apply_extinction(self, ebmv, r_v=3.1, law="fitzpatrick99"):
+        """ correct the flux and variance for the given extinction.
+        if embv is negative, this will remove flux (i.e. simulate dust absorption).
+        use a positive ebmv to correct for dust extinction.
+        The resulting flux will be higher.
+        """
+        # - Do you have extinction installed
+        try:
+            import extinction
+        except ImportError:
+            raise ImportError("install the python library 'extinction', pip install extinction. See http://extinction.readthedocs.io")
+        
+        # - Select the extinction law
+        law= law.lower()
+        if law not in extinction.__all__:
+            raise ValueError("Unknown extinction law. This are available"+", ".join([l for l in extinction.__all__ if l not in ["apply,Fitzpatrick99"]]))
+
+        dustlaw = eval("extinction.%s"%law)
+        if law == "fitzpatrick99":
+            base_rv = extinction.Fitzpatrick99().r_v
+            if r_v != base_rv:
+                warnings.warn("Fitzpatrick99 have fixed r_v of %.1f"%base_rv)
+            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv)
+        else:
+            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv, base_rv)
+
+        # - Correction factor
+        flux_corr = extinction.apply(ext_mag, [1])
+        
+        # - Correct the current flux
+        self.set_flux(self.flux/flux_corr[0], self.var/flux_corr[0]**2)
 
     # ------------ #
     #  Plotter     #
@@ -2462,6 +2494,13 @@ class BasePhotoPoint( TargetHandler ):
     def _reset_derived_prop_(self):
         """ reset the derived and recorded properties """
         self._derived_properties["photosamplers"] = None
+        
+    def set_flux(self, flux, var):
+        """ Define the flux of the photopoint. This defines the rest of the object
+        """
+        self._properties["flux"] = np.float(flux)
+        self._properties["var"]  = np.float(var) if var is not None else np.NaN
+        self._reset_derived_prop_()
 
     # ==================== #
     #   Properties         #
@@ -2514,6 +2553,14 @@ class BasePhotoPoint( TargetHandler ):
                 raise TypeError("The bandname must be a string", type(value))
         
         self._properties["bandname"] = value
+    
+    @property
+    def flux(self):
+        return self._properties["flux"]
+    
+    @property
+    def var(self):
+        return self._properties["var"]
 
     # ------------
     # - Side
@@ -2595,7 +2642,7 @@ class PhotoPoint( BasePhotoPoint ):
     """This Class hold the basic information associated to
     a photometric point"""
     
-    PROPERTIES         = ["flux","var"]
+    #PROPERTIES         = []
     
     # =========================== #
     # = Constructor             = #
@@ -2683,50 +2730,11 @@ class PhotoPoint( BasePhotoPoint ):
                                        **meta)
         self.set_flux(flux, var)
         
-    def set_flux(self, flux, var):
-        """ Define the flux of the photopoint. This defines the rest of the object
-        """                    
-        self._properties["flux"] = np.float(flux)
-        self._properties["var"]  = np.float(var) if var is not None else np.NaN
-        self._reset_derived_prop_()
-        
     def remove_flux(self, flux, var=None):
         """ this flux quantity will be removed from the current flux"""
         self.set_flux(self._properties["flux"] - flux,
                       self._properties["var"] - var if var is not None else\
                       self.var)
-                      
-    def apply_extinction(self, ebmv, r_v=3.1, law="fitzpatrick99"):
-        """ correct the flux and variance for the given extinction.
-        if embv is negative, this will remove flux (i.e. simulate dust absorption).
-        use a positive ebmv to correct for dust extinction.
-        The resulting flux will be higher.
-        """
-        # - Do you have extinction installed
-        try:
-            import extinction
-        except ImportError:
-            raise ImportError("install the python library 'extinction', pip install extinction. See http://extinction.readthedocs.io")
-        
-        # - Select the extinction law
-        law= law.lower()
-        if law not in extinction.__all__:
-            raise ValueError("Unknown extinction law. This are available"+", ".join([l for l in extinction.__all__ if l not in ["apply,Fitzpatrick99"]]))
-
-        dustlaw = eval("extinction.%s"%law)
-        if law == "fitzpatrick99":
-            base_rv = extinction.Fitzpatrick99().r_v
-            if r_v != base_rv:
-                warnings.warn("Fitzpatrick99 have fixed r_v of %.1f"%base_rv)
-            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv)
-        else:
-            ext_mag = dustlaw(np.asarray([self.lbda]), ebmv*base_rv, base_rv)
-
-        # - Correction factor
-        flux_corr = extinction.apply(ext_mag, [1])
-        
-        # - Correct the current flux
-        self.set_flux(self.flux/flux_corr[0], self.var/flux_corr[0]**2)
                 
     # =========================== #
     # = Properties and Settings = #
@@ -2739,13 +2747,7 @@ class PhotoPoint( BasePhotoPoint ):
             dico[d_] = self.get(d_)
         return dico
 
-    @property
-    def flux(self):
-        return self._properties["flux"]
     
-    @property
-    def var(self):
-        return self._properties["var"]
 
 # ========================== #
 #                            #
@@ -2809,6 +2811,7 @@ class CountsPhotoPoint( BasePhotoPoint ):
                                        mjd=mjd, zp=zp, bandname=bandname, zpsys=zpsys,
                                        **meta)
         self.set_counts(datacounts, bkgdcounts, exptime)
+        self.set_flux(self.cps_to_flux(self.cps), self.cps_to_flux(self.cps_err)**2)
         
     # --------- #
     #  SETTER   #
@@ -2877,14 +2880,6 @@ class CountsPhotoPoint( BasePhotoPoint ):
     def cps_err(self):
         """ Errors of counts per seconds """
         return np.sqrt(self.totalcounts) / self.exptime
-    
-    @property
-    def flux(self):
-        return self.cps_to_flux(self.cps)
-
-    @property
-    def var(self):
-        return self.cps_to_flux(self.cps_err)**2
 
     
 

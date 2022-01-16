@@ -9,9 +9,9 @@ __all__  = ["twomass", "TWOMASS_INFO"]
 
 # filter transmission from FSPS allfilters.dat
 # effective wavelength from sncosmo
-TWOMASS_INFO= {"2massJ":{"lbda":12408.375977},
-               "2massH":{"lbda":16513.664599},
-               "2massKs":{"lbda":21655.392611},
+TWOMASS_INFO= {"2massJ":{"lbda":12408.375977, "MAGZP":20.93},
+               "2massH":{"lbda":16513.664599, "MAGZP":20.67},
+               "2massKs":{"lbda":21655.392611, "MAGZP":20.03},
                "bands":["2massJ","2massH","2massKs"],
                "telescope":{
                    "lon": None,
@@ -80,9 +80,12 @@ class TWOMASS( Instrument ):
         if self._properties['bandname'] is None:
             if self.header is None:
                 raise AttributeError("no header loaded")
-            self._properties['bandname'] = "2massJ" if self.header['FILTER']=='j' \
-                            else "2massH" if self.header['FILTER']=='h' \
-                            else "2massKs" 
+            try:
+                _filter = self.header['FILTER']
+            except KeyError:
+                _filter = self.header['SURVEY'].split("Two Micron All Sky Survey: ")[1][0].lower()
+            self._properties['bandname'] = "2massJ" if _filter=='j' else "2massH" if _filter=='h' else "2massKs" 
+                
         return self._properties['bandname']
 
     @property
@@ -99,10 +102,11 @@ class TWOMASS( Instrument ):
         but must also convert Vega -> AB (from Brown et al. 2014)
         [0.89, 1.37, 1.84], # Vega->AB, Brown 2014
         """
-        imageZP = self.header['MAGZP']
-        Vega2AB = 0.89 if self.header['FILTER']=='j' \
-                else 1.37 if self.header['FILTER']=='h' \
-                else 1.84 
+        try:
+            imageZP = self.header['MAGZP']
+        except KeyError:
+            imageZP = self.INFO[self.bandname]["MAGZP"]
+        Vega2AB = 0.89 if self.bandname=='2massJ' else 1.37 if self.bandname=='2massH' else 1.84 
         return imageZP + Vega2AB
     
     # - Low Level image information
