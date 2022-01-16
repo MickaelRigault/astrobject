@@ -137,7 +137,7 @@ def taylor_mass_relation(mag_i, gi_color, distmpc):
 ######################
 def draw_prior_sample(size, prior="snhost", value_range=[-1,2.5], bins=5000):
     """ """
-    x = np.linspace(*value_range, bins)
+    x = np.linspace(*value_range, int(bins))
     pdf = g_i_prior(x, which=prior) if type(prior) == str else prior(x)
     return np.random.choice(x, p= pdf / pdf.sum(), size=size)
 
@@ -430,7 +430,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         axmass  = fig.add_axes([0.65,0.15,0.3,0.73])
         # -----------
         # - Property
-        prop = kwargs_update(dict(histtype="step", bins=20, normed=True, 
+        prop = kwargs_update(dict(histtype="step", bins=20, density=True, 
                             lw="2",fill=False,
                             ec=mpl.cm.binary(0.8,1.), zorder=6), **kwargs)
         
@@ -446,7 +446,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
                                             ec=mpl.cm.Greens(0.8),fill=False,
                                             bins=prop["bins"], show_estimate=False,xscale=False)
         # - Main g-i
-        x = np.linspace(-1,3,1e3)
+        x = np.linspace(-1,3,int(1e3))
 
         # - likelihood        
         axcolor.hist(self.gi_samplers.samplers, label=r"$\mathrm{Likelihood}$",**prop)
@@ -591,7 +591,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         # -- and draw the priored sampling (could be done automatically be here it is explicit)
         self._derived_properties["gi_priored_sample"] = \
           self.gi_samplers.resample(self.nsamplers, prior=self.gi_prior,
-                                    xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=1e3)
+                                    xrange=self.gi_samplers._default_sampling_xrange, rand_nsample=int(1e3))
 
     def change_gi_prior(self, prior, redraw=True):
         """ Set a new prior function. 

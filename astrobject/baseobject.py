@@ -23,8 +23,8 @@ __all__     = ["get_target"]
 #                                     #
 #######################################
 
-def get_target(name=None,zcmb=None, ra=None, dec=None, mjd=None,
-               type_=None, mwebmv=None,zcmb_err=None, 
+def get_target(name=None, zcmb=None, ra=None, dec=None, mjd=None,
+               type_=None, mwebmv=None, zcmb_err=None, 
                **kwargs):
     """ Create an AstroTarget
 
@@ -73,7 +73,7 @@ def get_target(name=None,zcmb=None, ra=None, dec=None, mjd=None,
     ra = kwargs.pop("Ra",ra)
     empty = kwargs.pop("empty",False)
     
-    return AstroTarget(name=name,zcmb=zcmb,
+    return AstroTarget(name=name, zcmb=zcmb,
                        ra=ra,dec=dec,mjd=mjd,
                        type_=type_,
                        forced_mwebmv=forced_mwebmv,
@@ -155,7 +155,7 @@ class Samplers( BaseObject ):
             xrange = self._default_sampling_xrange
             
         # - The random sampler seed
-        x = np.linspace(xrange[0],xrange[1],rand_nsample)
+        x = np.linspace(xrange[0],xrange[1], int(rand_nsample))
         # the new pdf
         
         pdf = self.pdf(x) * prior(x, **kwargs)
@@ -254,7 +254,7 @@ class Samplers( BaseObject ):
         # -------------
         # - Prop
         if not kde:
-            prop = kwargs_update(dict(histtype="step", bins=40, normed=True,
+            prop = kwargs_update(dict(histtype="step", bins=40, density=True,
                         lw="2",fill=True, fc=mpl.cm.Blues(0.5,0.4),
                         ec=mpl.cm.Blues(1.,1.)),
                         **kwargs)
@@ -275,7 +275,7 @@ class Samplers( BaseObject ):
             xrange = np.log10(med)-np.abs((np.log10(med)-np.log10(med-lowmed)))*7,\
               np.log10(med)+np.abs((np.log10(med)-np.log10(med+highmed)))*7
             
-        x = np.linspace(xrange[0],xrange[1],1e3)
+        x = np.linspace(xrange[0],xrange[1],int(1e3))
         
         if not self.has_samplers():
             warnings.warn("Samplers created for the plot method")
@@ -393,7 +393,7 @@ class Samplers( BaseObject ):
                 scale = np.nanmax(kde.dataset) - np.nanmin(kde.dataset)
                 xrange = np.nanmin(kde.dataset) - scale*0.1, np.nanmax(kde.dataset) + scale*0.1
             
-            x = np.linspace(xrange[0], xrange[1], nsample)
+            x = np.linspace(xrange[0], xrange[1], int(nsample))
             return np.random.choice(x, p= kde.pdf(x) / kde.pdf(x).sum(), size=size)
             
         return kde
@@ -513,7 +513,7 @@ class AstroTarget( BaseObject ):
             self.load(load_from,**kwargs)
             return
 
-        self.define(name,zcmb,ra,dec,mjd=mjd,
+        self.define(name, zcmb,ra,dec,mjd=mjd,
                     cosmo=cosmo,type_=type_,sfd98_dir=sfd98_dir,
                     **kwargs)
         return

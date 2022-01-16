@@ -140,7 +140,7 @@ def gaussian_kde(*arg,**kwargs):
             scale = np.nanmax(kde.dataset) - np.nanmin(kde.dataset)
             xrange = np.nanmin(kde.dataset) - scale*0.1, np.nanmax(kde.dataset) + scale*0.1
             
-        x = np.linspace(xrange[0], xrange[1], nsample)
+        x = np.linspace(xrange[0], xrange[1], int(nsample))
         return np.random.choice(x, p= kde.pdf(x) / kde.pdf(x).sum(), size=size)
             
     return kde
@@ -227,7 +227,7 @@ class poissoncont_gen( stats._discrete_distns.poisson_gen ):
             """
             # faster than resample
             xrange = self._xrange_nonzero_(mu)
-            x = np.linspace(xrange[0], xrange[1], nsample)
+            x = np.linspace(xrange[0], xrange[1], int(nsample))
             return np.random.choice(x, p= self.pdf(x, mu) / self.pdf(x, mu).sum(), size=size)
 
     def cdf(self, x, mu, **kwargs):

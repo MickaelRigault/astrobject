@@ -1482,7 +1482,7 @@ class PhotoPointCollection( Collection ):
         dict/table (see format) or None if no data available
         """
         if not self.fromtable:
-            data = self.data_complet.copy() if which is "complet" else \
+            data = self.data_complet.copy() if which == "complet" else \
             self.data.copy() 
         else:
             data = self._table.copy()

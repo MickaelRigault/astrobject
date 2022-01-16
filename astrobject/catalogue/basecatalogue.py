@@ -486,7 +486,7 @@ class Catalogue( WCSHandler ):
     def get_mask(self,catmag_range=[None,None],stars_only=False,
                  isolated_only=False, nonstars_only=False,
                  contours=None, notingalaxy=False, matched=False,
-                 fovmask=True):
+                 fovmask=True, asindex=False):
         """ This returns a bolean mask following the argument cuts. """
         
         mask = np.ones(self.nobjects_in_fov, dtype="bool") if fovmask else\
@@ -499,6 +499,7 @@ class Catalogue( WCSHandler ):
             if stars_only:
                 warnings.warn("WARNING you ask for both stars_only and nonstars_only !!!")
             mask *= ~self.starmask if fovmask else ~self._starmask
+            
         # - isolation
         if isolated_only:
             mask *= self.isolatedmask if fovmask else self._isolatedmask
@@ -530,6 +531,7 @@ class Catalogue( WCSHandler ):
         # - contours
         if contours is not None:
             mask *= self.get_contour_mask(contours,infov=fovmask)
+            
         # - magcut
         if catmag_range[0] is not None or catmag_range[1] is not None:
             if catmag_range[0] is None:
@@ -541,7 +543,9 @@ class Catalogue( WCSHandler ):
               if fovmask \
               else (self._mag>=catmag_range[0]) * (self._mag<=catmag_range[1])
             mask *= magmask
-         
+
+        if asindex:
+            return self.data.index[self.fovmask][mask] if fovmask else self.data.index[mask]
         return mask
 
     def get_mask_around(self,ra,dec,radius,runits="arcsec",wcs_coords=True,

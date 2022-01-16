@@ -462,8 +462,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
                 self.catalogue.set_fovmask(wcs=self.wcs)
         
         if reload_sep: self.sep_extract()
-
-
+            
     def get_subimage(self, xmin, xmax, ymin, ymax):
         """ Provide x and y contours (as in show, i.e. x = abscise).
         A new Image object will be created. rawdata, background, header, wcs solution and catalog (if any) 
@@ -1388,10 +1387,11 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
     # ------------------- #
     # - I/O Methods     - #
     # ------------------- #
-    def writeto(self):
-        """
-        """
-        print("to be done")
+    def writeto(self, filename, overwrite=True, **kwargs):
+        """ Storing self.data and self.header """
+        from astropy.io import fits
+        return fits.writeto( filename, self.data, header=self.header,
+                                 overwrite=overwrite, **kwargs)
 
 
     # ------------------- #

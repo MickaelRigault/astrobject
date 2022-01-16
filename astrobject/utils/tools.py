@@ -171,7 +171,7 @@ def mag_to_flux(mag, magerr=None, wavelength=None, zp=None):
         wavelength=1
 
     
-    flux = 10**(-(mag+2.406)/2.5) / wavelength**2
+    flux = 10**(-(mag-zp)/2.5) / wavelength**2
 
     if magerr is None:
         return flux, None
