@@ -267,8 +267,12 @@ class GALEX( Instrument ):
             print("WARNING: could not test if the target is in the image since you do not have SHAPELY")
             return True
         from ..utils.shape import Point
-        centroid = self.get_centroid(system="radec")
-        return Point(*centroid).buffer(0.6-buffer_safe_width).contains( Point(newtarget.radec) )
+
+        centroid = self.get_centroid(system="xy")
+        radius_pixels = (0.6-buffer_safe_width)* self.units_to_pixels("deg").value
+        fov = geometry.Point(*centroid).buffer(radius_pixels)
+        targetloc = geometry.Point(*self.coords_to_pixel(*newtarget.radec))
+        return fov.contains(targetloc)
 
 
     def get_centroid(self, system="xy", adjust=True):
