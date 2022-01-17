@@ -270,8 +270,8 @@ class GALEX( Instrument ):
 
         centroid = self.get_centroid(system="xy")
         radius_pixels = (0.6-buffer_safe_width)* self.units_to_pixels("deg").value
-        fov = geometry.Point(*centroid).buffer(radius_pixels)
-        targetloc = geometry.Point(*self.coords_to_pixel(*newtarget.radec))
+        fov = Point(*centroid).buffer(radius_pixels)
+        targetloc = Point(*self.coords_to_pixel(*newtarget.radec))
         return fov.contains(targetloc)
 
 
