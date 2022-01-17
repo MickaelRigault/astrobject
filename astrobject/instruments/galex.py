@@ -287,7 +287,9 @@ class GALEX( Instrument ):
         if system == "xy":
             return centroid_x,centroid_y
         if system == "radec":
-            return self.pixels_to_coords(centroid_x,centroid_y)
+            return self.pixel_to_coords(centroid_x,centroid_y)
+        
+        raise NotImplementedError(f"Only the systems 'xy' or 'radec' hhave been implemented ; {system} given")
 
 
         
