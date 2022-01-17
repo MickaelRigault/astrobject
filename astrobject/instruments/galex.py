@@ -241,7 +241,7 @@ class GALEX( Instrument ):
         return [super(GALEX, self).get_aperture( x, y, on="rawdata",var=var, **propfit),
                 super(GALEX, self).get_aperture( x, y, on="sky.rawdata",var=var, **propfit)]
 
-    def is_target_in(self, newtarget, buffer_safe_width=0.05):
+    def is_target_in(self, newtarget, buffer_safe_width=0.025):
         """ This method enables to test if the given target is inside the image. 
         This is based on shapely.
         It assumes GALEX image is centered on header's ["RA_CENT","DEC_CENT"] and has a radius on 0.6 degree.
