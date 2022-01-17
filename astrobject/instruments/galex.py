@@ -267,7 +267,29 @@ class GALEX( Instrument ):
             print("WARNING: could not test if the target is in the image since you do not have SHAPELY")
             return True
         from ..utils.shape import Point
-        return Point(self.header["RA_CENT"], self.header["DEC_CENT"]).buffer(0.6-buffer_safe_width).contains( Point(newtarget.radec) )
+        centroid = self.get_centroid(system="radec")
+        return Point(*centroid).buffer(0.6-buffer_safe_width).contains( Point(newtarget.radec) )
+
+
+    def get_centroid(self, system="xy", adjust=True):
+        """ """
+        centroid_x,centroid_y = 1919.5,1919.5
+        if adjust:
+            radius_galex_pixesl = 1440 #(0.6deg to pixels)
+            # sometime galex has offset issues, let's manually adjust
+            start_x = self.data.sum(axis=0)[:1000]
+            start_y = self.data.sum(axis=1)[:1000]
+            delta_x = centroid_x-radius_galex_pixesl-len(start_x[start_x==0])
+            delta_y = centroid_y-radius_galex_pixesl-len(start_y[start_y==0])
+            centroid_x -= delta_x
+            centroid_y -= delta_y
+
+        if system == "xy":
+            return centroid_x,centroid_y
+        if system == "radec":
+            return self.pixels_to_coords(centroid_x,centroid_y)
+
+
         
     # ================== #
     #   Internal         #
