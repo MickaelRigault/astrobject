@@ -144,6 +144,11 @@ class PanSTARRS( Instrument ):
         super(PanSTARRS, self).__build__(*args, **kwargs)
         self._build_properties["bkgdbox"] = {"bh":100,"bw":100,"fh":3,"fw":3}
 
+    def writeto(self, filename, overwrite=True, **kwargs):
+        """ Storing self.data and self.header """
+        from astropy.io import fits
+        return fits.writeto( filename, self._sourcedata, header=self.header,
+                                 overwrite=overwrite, **kwargs)
                 
     def set_weightimage(self, weightmap):
         """ Attach the Weight Maps of the Warps images. 
@@ -199,7 +204,7 @@ class PanSTARRS( Instrument ):
     @property
     def _sourcedata(self):
         """ The data in the PanStarrs images are not per second. """
-        return super(PanSTARRS,self).rawdata
+        return super().rawdata
     
     @property
     def rawdata(self):
