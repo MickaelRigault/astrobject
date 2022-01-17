@@ -168,9 +168,9 @@ class PanSTARRS( Instrument ):
         """ The filename of the data containing the mask or the mask itself"""
         if type(maskmap) == str:
             mask = PanSTARRS(maskmap,  background=0)
-            super(PanSTARRS,self).set_datamask(mask._sourcedata)
+            super().set_datamask(mask._sourcedata)
         else:
-            super(PanSTARRS,self).set_datamask(maskmap)
+            super().set_datamask(maskmap)
         
     # ---------------------
     # - PS structure with wt
@@ -213,6 +213,13 @@ class PanSTARRS( Instrument ):
         return self._sourcedata / self.exposuretime
         #v_per_sec = self._bzero + self._bscale * self._sourcedata / self.exposuretime
         #return self._boffset + self._bsoften * (10**(0.4*v) - 10**(-0.4*v))
+
+    @property
+    def datamask(self):
+        """ """
+        if self._side_properties["datamask"] is None:
+            self._side_properties["datamask"] = np.isnan(self.data)
+        return self._side_properties["datamask"]
     
     @property
     def var(self):
