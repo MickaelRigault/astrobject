@@ -529,11 +529,14 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # -- Seems Ok -- #
         self._side_properties["target"] = newtarget.copy()
 
-    def set_wcs(self,wcs,force_it=False):
+    def set_wcs(self, wcs, force_it=False):
         """ Attach a wcs solution to the current object """
-        super(Image, self).set_wcs(wcs, force_it=force_it)
-        if self.has_wcs():
-            self.wcs.set_offset(*self._dataslicing)
+        try:
+            super(Image, self).set_wcs(wcs, force_it=force_it)
+            if self.has_wcs():
+                self.wcs.set_offset(*self._dataslicing)
+        except:
+            self._wcs = None
         
     def set_catalogue(self, catalogue, force_it=False,
                       match_angsep=3, **kwargs):
@@ -642,10 +645,10 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             
         # Shape test
         if not is_arraylike(background):
-            background = np.ones(np.shape(self.rawdata))*np.float(background)
+            background = np.ones(np.shape(self.rawdata))* float(background)
             
         if self.rawdata is not None and np.shape(background) != self.shape:
-            raise ValueError("The given background must have rawdata's shape")
+            raise ValueError(f"The given background must have rawdata's shape {np.shape(background)} vs. {self.shape}")
         
         # -- Looks good
         
@@ -1869,7 +1872,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             # -- It has not be set manually, maybe check the header
             if self._build_properties["header_exptime"] in self.header:
                 self._side_properties['exptime'] = \
-                  np.float(self.header[self._build_properties["header_exptime"]])
+                  float(self.header[self._build_properties["header_exptime"]])
         # -- You have it ? This will stay None if not
         return self._side_properties['exptime']
     # ----------------------
@@ -2380,7 +2383,7 @@ class BasePhotoPoint( TargetHandler ):
         -------
         Void        
         """
-        self._properties["lbda"] = np.float(lbda) if lbda is not None else None
+        self._properties["lbda"] = float(lbda) if lbda is not None else None
         self._side_properties["source"] = source
         self._side_properties["instrument_name"] = instrument_name
         self._side_properties["meta"] = meta
@@ -2498,8 +2501,8 @@ class BasePhotoPoint( TargetHandler ):
     def set_flux(self, flux, var):
         """ Define the flux of the photopoint. This defines the rest of the object
         """
-        self._properties["flux"] = np.float(flux)
-        self._properties["var"]  = np.float(var) if var is not None else np.NaN
+        self._properties["flux"] = np.asarray(flux, dtype="float")
+        self._properties["var"]  = np.asarray(var, dtype="float") if var is not None else np.NaN
         self._reset_derived_prop_()
 
     # ==================== #

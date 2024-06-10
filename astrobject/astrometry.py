@@ -12,7 +12,7 @@ import warnings
 from astropy     import units
 from astropy.wcs import WCS as astropyWCS
 from astropy.io  import fits
-from astropy.coordinates.angle_utilities import angular_separation
+from astropy.coordinates import angular_separation
     
 # - local
 from .utils import shape
