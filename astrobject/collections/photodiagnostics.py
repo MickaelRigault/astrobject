@@ -608,7 +608,7 @@ class MassEstimate( Samplers, TargetPhotoPointCollection ):
         """ PhotoPoint Collections and samplers data """
 
         if "i" not in self.photopoints.keys() or "g" not in self.photopoints.keys():
-            return {"estimate": [np.NaN,np.NaN,np.NaN],
+            return {"estimate": [np.nan,np.nan,np.nan],
                     "samplers":None,
                     "g": None if "g" not in self.photopoints.keys() else
                     self.photopoints["g"].data,

@@ -715,10 +715,10 @@ class AstroTarget( BaseObject ):
         Returns:
         --------
         [-lower, +upper] (both in absolute value).
-        (np.NaN,np.NaN are returned if no error on the redshift
+        (np.nan,np.nan are returned if no error on the redshift
         """
         if self.zcmb is None or self.zcmb_err is None:
-            return np.NaN,np.NaN
+            return np.nan,np.nan
         
         return np.asarray([
           self.cosmo.luminosity_distance(self.zcmb-self.zcmb_err).value-self.distmpc,

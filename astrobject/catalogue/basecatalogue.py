@@ -360,7 +360,7 @@ class Catalogue( WCSHandler ):
         """
         
         # -- Sarting points
-        galmask = np.asarray([np.NaN]*self.nobjects) \
+        galmask = np.asarray([np.nan]*self.nobjects) \
           if not self.has_ingalaxymask() or reset else self._ingalaxymask
         
         # -- ID to work with, i.e. are not None and are in the FoV

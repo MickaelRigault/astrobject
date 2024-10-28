@@ -1504,7 +1504,7 @@ class PhotoPointCollection( Collection ):
         """Loop over the photopoints (following the list_id sorting) to get the
          parameters using the photopoint.get() method.
 
-        If safeexit is True NaN will be set to cases where the get(key) does not exist.
+        If safeexit is True nan will be set to cases where the get(key) does not exist.
         Otherwise this raises a ValueError.
         
         Returns

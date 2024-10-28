@@ -271,7 +271,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
 
             
         mask: [boolean array] -optional-
-            Data that will be set to NaN.
+            Data that will be set to nan.
             
 
         dataslice0, dataslice1: [2D-array, 2D-array] -optional-
@@ -325,7 +325,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
             fits-format data
 
         mask: [boolean array] -optional-
-            Data that will be set to NaN.
+            Data that will be set to nan.
             
 
         dataslice0, dataslice1: [2D-array, 2D-array] -optional-
@@ -1666,7 +1666,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         # - What      #
         backgroudsource = self.rawdata.copy()
         if self.backgroundmask is not None:
-            backgroudsource[self.backgroundmask] = np.NaN
+            backgroudsource[self.backgroundmask] = np.nan
         # ----------- #
         # - How
         # -- labels
@@ -1707,7 +1707,7 @@ class Image( TargetHandler, WCSHandler, CatalogueHandler ):
         """ """
         backgroudsource = self.data.copy()
         if self.backgroundmask is not None:
-            backgroudsource[self.backgroundmask] = np.NaN
+            backgroudsource[self.backgroundmask] = np.nan
         return self.show(backgroudsource, **kwargs)
     
         
@@ -2085,7 +2085,7 @@ class ImageBackground( BaseObject ):
         """ Provide the image that is used to derive the background """
         self._properties["imagedata"] = imagedata
         if masking is not None:
-            self.imagedata[masking] = np.NaN
+            self.imagedata[masking] = np.nan
 
             
     def set_background(self, background):
@@ -2416,8 +2416,8 @@ class BasePhotoPoint( TargetHandler ):
                 return self.meta[key]
             elif not safeexit:
                 raise ValueError("No instance or meta key %s "%key)
-            warnings.warn("No instance or meta key %s. NaN returned"%key)
-            return np.NaN
+            warnings.warn("No instance or meta key %s. nan returned"%key)
+            return np.nan
                       
     def apply_extinction(self, ebmv, r_v=3.1, law="fitzpatrick99"):
         """ correct the flux and variance for the given extinction.
@@ -2502,7 +2502,7 @@ class BasePhotoPoint( TargetHandler ):
         """ Define the flux of the photopoint. This defines the rest of the object
         """
         self._properties["flux"] = np.asarray(flux, dtype="float")
-        self._properties["var"]  = np.asarray(var, dtype="float") if var is not None else np.NaN
+        self._properties["var"]  = np.asarray(var, dtype="float") if var is not None else np.nan
         self._reset_derived_prop_()
 
     # ==================== #

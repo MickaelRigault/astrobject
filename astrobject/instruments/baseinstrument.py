@@ -177,7 +177,7 @@ class Instrument( Image ):
             
         if use_default_bandpass:
             wave_eff = self.INFO[self.bandname]["lbda"] \
-              if self.bandname in self.INFO else np.NaN
+              if self.bandname in self.INFO else np.nan
             self._derived_properties["bandpass"] = _DefaultBandpass_(self.bandname, wave_eff)
             
         return self._derived_properties["bandpass"]

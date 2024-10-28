@@ -17,8 +17,8 @@ _FWHM_WFC3 = Table(data=[[2000,3000,4000,5000,6000,7000,8000,9000,10000,11000],
 # transmission from SYNPHOT (STSci software)
 HST_INFO = {
     "telescope":{
-                 "lon":np.NaN,
-                 "lat":np.NaN},
+                 "lon":np.nan,
+                 "lat":np.nan},
     # Windhorst et al 2010
     "f225w":{"lbda":2372.069991, "fwhm":0.092,
              "ABmag0":24.06, # abmag @ e-/s

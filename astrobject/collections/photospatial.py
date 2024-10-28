@@ -346,8 +346,8 @@ class PhotoMap( PhotoPointCollection, WCSHandler, CatalogueHandler ):
             raise AttributeError("No catalogue matched")
         
         # - output array  
-        values_out = np.ones([len(catindex), len(param)])*np.NaN if is_arraylike(param) else\
-          np.ones(len(catindex))*np.NaN
+        values_out = np.ones([len(catindex), len(param)])*np.nan if is_arraylike(param) else\
+          np.ones(len(catindex))*np.nan
         # - flag has data
         flag_hasidx = self.is_catindex_detected(catindex)
         # - value within the maskin are filled
